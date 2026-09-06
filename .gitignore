@@ -1,0 +1,27 @@
+﻿# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# Konfiguracija sa tajnama
+.env
+appsettings.Development.json
+
+# Flutter
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/android/.gradle/
+**/android/local.properties
+**/windows/flutter/ephemeral/
+
+# Uploads i generisani fajlovi
+uploads/
+*.pdf
+
+# IDE
+.vs/
+.idea/
+.vscode/
