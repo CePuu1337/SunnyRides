@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.git/
+**/.gitignore
+sunnyrides_desktop/
+sunnyrides_mobile/
+uploads/
+.env

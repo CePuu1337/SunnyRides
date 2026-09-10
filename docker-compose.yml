@@ -1,0 +1,72 @@
+services:
+  sunnyrides-db:
+    image: mcr.microsoft.com/mssql/server:2022-CU12-ubuntu-22.04
+    container_name: sunnyrides-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${DB_SA_PASSWORD}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sunnyrides-dbdata:/var/opt/mssql
+    networks: [sunnyrides-net]
+
+  sunnyrides-rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: sunnyrides-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [sunnyrides-net]
+
+  sunnyrides-api:
+    build:
+      context: .
+      dockerfile: SunnyRides.API/Dockerfile
+    container_name: sunnyrides-api
+    env_file: .env
+    environment:
+      CONNECTION_STRING: "Server=sunnyrides-db,1433;Database=220182;User=sa;Password=${DB_SA_PASSWORD};TrustServerCertificate=True;"
+      RABBITMQ_HOST: sunnyrides-rabbitmq
+    ports:
+      - "5000:8080"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      sunnyrides-db:
+        condition: service_started
+      sunnyrides-rabbitmq:
+        condition: service_healthy
+    networks: [sunnyrides-net]
+
+  sunnyrides-subscriber:
+    build:
+      context: .
+      dockerfile: SunnyRides.Subscriber/Dockerfile
+    container_name: sunnyrides-subscriber
+    env_file: .env
+    environment:
+      CONNECTION_STRING: "Server=sunnyrides-db,1433;Database=220182;User=sa;Password=${DB_SA_PASSWORD};TrustServerCertificate=True;"
+      RABBITMQ_HOST: sunnyrides-rabbitmq
+    depends_on:
+      sunnyrides-db:
+        condition: service_started
+      sunnyrides-rabbitmq:
+        condition: service_healthy
+    networks: [sunnyrides-net]
+
+volumes:
+  sunnyrides-dbdata:
+
+networks:
+  sunnyrides-net:
+    driver: bridge

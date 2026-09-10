@@ -1,0 +1,21 @@
+* text=auto
+
+# Moraju ostati LF - koriste se unutar Linux kontejnera
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+.dockerignore text eol=lf
+.env.example text eol=lf
+
+# Windows alati
+*.sln text eol=crlf
+*.csproj text eol=crlf
+*.ps1 text eol=crlf
+
+# Binarni sadrzaj
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.apk binary
