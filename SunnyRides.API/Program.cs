@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using SunnyRides.API.Extensions;
+using SunnyRides.API.Filters;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Seed;
+using SunnyRides.Services.Mapping;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,9 +23,71 @@ var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
 builder.Services.AddDbContext<SunnyRidesDbContext>(options =>
     options.UseSqlServer(connectionString));
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// Kes za sifrarnike i cjenovnik - podaci koji se citaju pri svakoj pretrazi,
+// a mijenjaju rijetko. Na servisnom nivou, ne kao Dictionary u servisu.
+builder.Services.AddMemoryCache();
+
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.DodajServise();
+
+MapsterKonfiguracija.Registruj();
+
+builder.Services.AddControllers(options =>
+{
+    // Jedno mjesto koje pretvara izuzetke u HTTP odgovore.
+    options.Filters.Add<ExceptionFilter>();
+});
+
+// CORS se konfigurise jednom, sa izricito navedenim origin-ima.
+const string CorsPolitika = "SunnyRidesCors";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(CorsPolitika, policy => policy
+        .WithOrigins(
+            "http://localhost:5000",
+            "http://localhost:3000",
+            "http://10.0.2.2:5000")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
+// Swagger ide kroz Swashbuckle, a ne kroz ugradjeni AddOpenApi(), jer nam treba
+// Swagger UI sa dugmetom za unos Bearer tokena.
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "SunnyRides API",
+        Version = "v1",
+        Description = "Sistem za rezervaciju i najam skutera, motocikala i quadova."
+    });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Unesite token dobijen na /api/auth/login. Prefiks \"Bearer\" se dodaje sam."
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 
@@ -29,6 +95,8 @@ await PripremiBazuAsync(app);
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseCors(CorsPolitika);
 
 app.UseAuthorization();
 app.MapControllers();

@@ -25,7 +25,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 |---|---|---|
 | 0–3 | Okruženje, repozitorij, skeleton solutiona, Docker Compose | ✅ |
 | 4 | Model baze i prva migracija | ✅ |
-| 4 | Seed podaci | ⬜ |
+| 4 | Seed podaci | ✅ |
 | 5 | Bazni servisi, paginacija, `ExceptionFilter`, Mapster, Swagger | ⬜ |
 | 6 | Prijava, JWT, uloge, opoziv tokena | ⬜ |
 | 7 | CRUD referentnih podataka | ⬜ |
@@ -258,6 +258,64 @@ Umjesto toga default vrijednosti stoje kao inicijalizatori u C# klasama:
 ```csharp
 public bool Aktivan { get; set; } = true;
 ```
+
+### Seed podaci
+
+Seed je **runtime, a ne `HasData`**. Razlog je obim: oko tisuću zapisa sa
+medjusobnim vezama i datumima racunatim od danasnjeg dana. Uputstvo (sekcija 3.1)
+izricito dozvoljava da se podaci kreiraju pri pokretanju aplikacije.
+
+Zivi u `SunnyRides.Services/Database/Seed/`, podijeljen u vise dijelova jedne
+`partial` klase: sifrarnici, korisnici, flota, poslovanje, placanja i ostalo.
+`Program.cs` ga poziva nakon `MigrateAsync()`, pa se aplikacija podize sa
+`docker compose up --build` bez ijedne rucne komande.
+
+Sjeme slucajnog generatora je fiksno (`220182`), pa svako pokretanje daje isti
+raspored podataka. Seeder na pocetku provjerava postoji li ijedan korisnik i
+preskace posao ako baza vec nije prazna.
+
+Sta se upisuje:
+
+| Entitet | Koliko |
+|---|---|
+| Korisnici | 20 (4 osoblje, 16 klijenata) |
+| Vozila | 35, svako sa slikom i thumbnailom |
+| Rezervacije | 95, kroz sest mjeseci unazad i dva mjeseca unaprijed, u sva cetiri statusa |
+| Placanja | 92 |
+| Refundi | 87 |
+| Primopredaje | 160 (80 zavrsenih najmova, izdavanje i povrat) |
+| Recenzije | 57 |
+| Notifikacije | 298 |
+| Historija pretraga | 140 |
+
+Tri stvari u seedu nisu slucajne nego namjerne:
+
+**Rezervacije se ne preklapaju.** Generisu se po vozilu, redom kroz vrijeme, sa
+razmakom izmedju termina. Da nije tako, kalendar flote bi vec prvog dana prikazivao
+nemoguce stanje.
+
+**Klijent dobija samo vozila koja smije voziti.** Rezervacija se ne dodjeljuje
+klijentu cija dozvola ne pokriva kategoriju vozila. Klijenti sa dozvolom u statusu
+`NaCekanju` ili `Odbijena` nemaju nijednu rezervaciju - kao sto ni u stvarnosti ne
+bi mogli rezervisati.
+
+**Raspodjela kategorija je namjerno neravnomjerna.** Sest modela trazi A1, dva A,
+dva B. Zbog toga se u pretrazi stvarno vidi razlika kad se prijavi klijent sa
+drugom dozvolom; da su svi modeli u istoj kategoriji, filtriranje se ne bi imalo
+na cemu pokazati.
+
+Lozinke se hashiraju BCrypt-om jednom, pri pokretanju seeda, i taj isti algoritam
+koristi prijava (`BCrypt.Verify`) - formati se poklapaju po konstrukciji.
+
+### Design-time factory
+
+`SunnyRidesDbContextFactory` postoji zbog jednog konkretnog problema: bez nje bi
+`dotnet ef` radi migracija podizao cijeli API host, a time bi se pri svakoj komandi
+izvrsio i kod iza `builder.Build()` - ukljucujuci migriranje i seed. Sa njom EF
+dobije samo `DbContext` i nista vise.
+
+Ista klasa cita `CONNECTION_STRING` iz environment varijable, a ako je nema, trazi
+`.env` penjuci se od trenutnog foldera prema korijenu repozitorija.
 
 ### Enumi
 
