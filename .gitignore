@@ -1,4 +1,4 @@
-﻿# .NET
+# .NET
 bin/
 obj/
 *.user
@@ -17,8 +17,12 @@ appsettings.Development.json
 **/android/local.properties
 **/windows/flutter/ephemeral/
 
-# Uploads i generisani fajlovi
-uploads/
+# Uploads: korisnicki upload se ne commita, seed slike se commitaju
+# jer bez njih projekat nakon ciste klone nema sta prikazati
+uploads/*
+!uploads/seeds/
+
+# Generisani PDF izvjestaji
 *.pdf
 
 # IDE
