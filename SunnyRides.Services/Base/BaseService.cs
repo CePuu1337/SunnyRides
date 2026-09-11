@@ -45,15 +45,16 @@ public abstract class BaseService<TModel, TSearch, TEntity> : IService<TModel, T
         var upit = Context.Set<TEntity>().AsQueryable();
 
         upit = AddFilter(search, upit);
-        upit = AddInclude(search, upit);
 
-        // Broj se racuna prije paginacije, i samo ako je klijent trazio.
+        // Broj se racuna prije paginacije i prije Include-a - brojanju povezani
+        // zapisi ne trebaju, a nosili bi nepotrebne JOIN-ove.
         int? ukupno = null;
         if (search.IncludeTotalCount)
         {
             ukupno = await upit.CountAsync(ct);
         }
 
+        upit = AddInclude(search, upit);
         upit = AddSort(search, upit);
 
         var stranica = Math.Max(search.Page ?? 0, 0);
@@ -149,12 +150,37 @@ public abstract class BaseService<TModel, TSearch, TEntity> : IService<TModel, T
     }
 
     /// <summary>Uslov po primarnom kljucu, gradjen izrazom da ostane na bazi.</summary>
-    protected static Expression<Func<TEntity, bool>> NadjiPoId(int id)
+    protected static Expression<Func<TEntity, bool>> NadjiPoId(int id) => UslovPoId<TEntity>(id);
+
+    /// <summary>Isti uslov, ali za bilo koji entitet - treba pri provjeri stranih kljuceva.</summary>
+    protected static Expression<Func<T, bool>> UslovPoId<T>(int id)
     {
-        var parametar = Expression.Parameter(typeof(TEntity), "x");
+        var parametar = Expression.Parameter(typeof(T), "x");
         var svojstvo = Expression.Property(parametar, "Id");
         var poredjenje = Expression.Equal(svojstvo, Expression.Constant(id));
-        return Expression.Lambda<Func<TEntity, bool>>(poredjenje, parametar);
+        return Expression.Lambda<Func<T, bool>>(poredjenje, parametar);
+    }
+
+    /// <summary>
+    /// Provjerava da zapis na koji zahtjev pokazuje stvarno postoji.
+    ///
+    /// Bez ove provjere strani kljuc koji ne postoji prolazi kroz servis i puca tek
+    /// u bazi, pa klijent dobije 500 sa porukom o krsenju FK ogranicenja. Ovako
+    /// dobije 400 i recenicu koja mu kaze sta da popravi.
+    ///
+    /// Namjerno je BusinessException a ne NotFoundException: nije trazeni resurs taj
+    /// koji ne postoji, nego je zahtjev pogresan - 404 bi znacio da endpoint ne
+    /// postoji, a on postoji.
+    /// </summary>
+    protected async Task ObaveznoPostojiAsync<TStrani>(
+        int id, string naziv, CancellationToken ct) where TStrani : class
+    {
+        var postoji = await Context.Set<TStrani>().AnyAsync(UslovPoId<TStrani>(id), ct);
+
+        if (!postoji)
+        {
+            throw new BusinessException($"{naziv} sa identifikatorom {id} ne postoji.");
+        }
     }
 
     /// <summary>

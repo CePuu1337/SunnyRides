@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SunnyRides.API.Auth;
@@ -27,7 +28,16 @@ var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
         "CONNECTION_STRING nije postavljen. Provjeri .env fajl ili environment varijable.");
 
 builder.Services.AddDbContext<SunnyRidesDbContext>(options =>
-    options.UseSqlServer(connectionString));
+{
+    options.UseSqlServer(connectionString);
+
+    // Krsenje jedinstvenog indeksa je ocekivan ishod, ne kvar sistema - servis ga
+    // hvata i pretvara u razumljivu poruku sa statusom 400. Bez ove linije EF isti
+    // dogadjaj prijavljuje kao Error sa punim stack traceom, pa u logu izgleda kao
+    // da je aplikacija pala, iako je uredno odgovorila. Dogadjaj se i dalje biljezi,
+    // samo na Debug nivou.
+    options.ConfigureWarnings(w => w.Log((CoreEventId.SaveChangesFailed, LogLevel.Debug)));
+});
 
 // Kes za sifrarnike i cjenovnik - podaci koji se citaju pri svakoj pretrazi,
 // a mijenjaju rijetko. Na servisnom nivou, ne kao Dictionary u servisu.

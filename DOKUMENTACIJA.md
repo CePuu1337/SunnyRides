@@ -28,7 +28,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 4 | Seed podaci | ✅ |
 | 5 | Bazni servisi, paginacija, `ExceptionFilter`, Mapster, Swagger | ✅ |
 | 6 | Prijava, JWT, uloge, opoziv tokena | ✅ |
-| 7 | CRUD referentnih podataka | ⬜ |
+| 7 | CRUD referentnih podataka | ✅ |
 | 8 | Vozila, slike, blokade, cjenovnik | ⬜ |
 | 9 | Obračun cijene i provjera dostupnosti | ⬜ |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ⬜ |
@@ -458,9 +458,160 @@ ostaje bez ijedne zavisnosti prema ASP.NET Core-u.
 |---|---|---|
 | Prijava `administrator` / `test` | token + uloga Administrator | ✅ |
 | `GET /api/drzave` bez tokena | 401 | ✅ |
-| `GET /api/drzave` sa klijentskim tokenom | 403 | ✅ |
+| `POST /api/drzave` sa klijentskim tokenom | 403 | ✅ |
 | `GET /api/drzave` sa admin tokenom | 200 | ✅ |
 | Odjava, pa isti token ponovo | 401 | ✅ |
+
+> Test za 403 je u fazi 7 prebačen sa `GET` na `POST`. Razlog je opisan u sekciji o
+> šifrarnicima: čitanje šifrarnika otvoreno je svakom prijavljenom korisniku, jer ga
+> mobilna aplikacija treba za padajuće liste, dok je izmjena ostala administratorska.
+> Provjera uloge time nije oslabljena nego pomjerena tamo gdje stvarno pripada.
+
+---
+
+## Šifrarnici
+
+Jedanaest referentnih tabela — države, gradovi, poslovnice, tipovi vozila, marke,
+modeli, tipovi goriva, kategorije dozvola, pravila kategorija, vrste opreme i paketi
+osiguranja — dijeli isti skelet: DTO, insert i update zahtjev, search objekt, servis
+i kontroler. Svaki od njih ima **pet do sedam linija vlastitog koda**; ostalo dolazi
+iz `BaseCRUDService` i `SifrarnikController`. To je jedina stvarna korist od
+generičkih baznih klasa i razlog zašto su pisane prije nego ijedan konkretan servis.
+
+### Ko smije šta
+
+Čitanje i pisanje nisu jednako zaštićeni, i to je namjerno.
+
+```csharp
+public abstract class SifrarnikController<TModel, TSearch, TInsert, TUpdate>
+    : BaseCRUDController<TModel, TSearch, TInsert, TUpdate>
+{
+    [Authorize(Roles = Uloge.Administrator)]
+    public override Task<TModel> InsertAsync(...)
+```
+
+`GET` nasljeđuje `[Authorize]` sa `BaseController`, pa ga smije svaki prijavljen
+korisnik. `POST`, `PUT` i `DELETE` traže ulogu `Administrator`.
+
+Razlog je praktičan: klijent u mobilnoj aplikaciji bira poslovnicu preuzimanja, tip
+vozila i marku, i te liste mora odnekud dobiti. Kad bi cijeli šifrarnik bio
+zatvoren za administratora, svaki bi ekran pretrage trebao vlastiti paralelni
+endpoint sa istim podacima — dvije rute nad istom tabelom, koje se s vremenom
+raziđu. Sadržaj šifrarnika je ionako javan podatak agencije, isti za sve korisnike.
+
+Ono što **nije** javno je pravo da se taj sadržaj mijenja, i to je zaključano na
+administratora. Specifikacija kaže da modul referentnih podataka ne vidi ni
+uposlenik, a to je upravo ovo: pristup formama za unos i izmjenu, ne pristup listi.
+
+Atributi stoje na `SifrarnikController`, a ne na svakom od jedanaest kontrolera.
+Razlog je isti kao kod `[Authorize]` na `BaseController` — ono što se piše jedanaest
+puta, dvanaesti put se zaboravi.
+
+### Strani ključevi
+
+Zahtjev koji pokazuje na nepostojeći zapis ne smije doći do baze. Provjera je u
+baznom servisu, kao metoda koju konkretni servisi zovu u `BeforeInsert` i
+`BeforeUpdate`:
+
+```csharp
+protected async Task ObaveznoPostojiAsync<TStrani>(int id, string naziv, CancellationToken ct)
+```
+
+Bez nje bi `GradInsertRequest` sa `DrzavaId = 999` prošao kroz servis i pukao tek na
+`SaveChangesAsync`, kao `DbUpdateException` iz SQL Servera — što `ExceptionFilter`
+pretvara u **500 sa generičkom porukom**. Korisniku tada piše da je došlo do
+neočekivane greške, a u stvari je samo odabrao stavku koje više nema.
+
+Provjera baca `BusinessException`, dakle **400, a ne 404**. Ovo je razlika koja se na
+odbrani zna pitati: 404 znači da traženi resurs ne postoji, a ovdje endpoint postoji
+i radi — pogrešan je sadržaj zahtjeva. 404 bi klijentskoj aplikaciji rekao da je ruta
+kriva i poslao je da traži problem na pogrešnom mjestu.
+
+### Brisanje
+
+Nijedan šifrarnik ne dopušta brisanje zapisa koji se koristi. Provjera je u
+`BeforeDelete` svakog servisa, sa porukom koja imenuje i zapis i razlog:
+
+> „Grad "Mostar" se ne može obrisati jer postoji 2 poslovnica u njemu."
+
+Strani ključevi su u bazi postavljeni na `Restrict`, pa bi brisanje puklo i bez ove
+provjere — ali bi puklo kao izuzetak iz baze, a uputstvo izričito traži jasnu poruku
+umjesto EF izuzetka. `BaseCRUDService.DeleteAsync` ipak hvata i taj slučaj, kao
+mrežu za vezu koju sam previdio: `DbUpdateException` pri brisanju postaje
+`BusinessException` sa generičnijom, ali i dalje razumljivom porukom.
+
+Redoslijed je, dakle: prvo `BeforeDelete` sa konkretnom porukom, pa `Restrict` u
+bazi kao tvrda garancija, pa prevođenje izuzetka kao posljednja odbrana.
+
+### Nazivi umjesto identifikatora
+
+`GradDto` uz `DrzavaId` nosi i `DrzavaNaziv`, `ModelVozilaDto` nosi naziv marke, tipa,
+goriva i oznaku kategorije. Bez toga bi lista modela prikazivala brojeve, a klijentska
+aplikacija bi za svaki red radila dodatni poziv — klasičan N+1, samo preseljen na
+mrežu umjesto u bazu.
+
+Vrijednosti dolaze iz navigacija koje servis učitava kroz `AddInclude`, jednim
+upitom sa `JOIN`-om. Mapster ih preslikava po eksplicitnoj konfiguraciji u
+`MapsterKonfiguracija`, a ne po konvenciji — kad bi konvencija promašila naziv, polje
+bi tiho ostalo prazno i lista bi prikazivala rupe. Include i mapiranje idu u paru:
+ako se izbaci jedno, drugo prestane davati vrijednost.
+
+### Dva pravila koja se ne vide iz modela
+
+**Poslovnica.** Koordinate su opcione, ali idu u paru. Poslovnica sa samo latitudom
+se na mapi ne može prikazati, a podatak izgleda kao da postoji.
+
+**Vrsta opreme.** Cijena je ili po danu ili fiksna, nikad oboje i nikad nijedno.
+`PricingService` u fazi 9 bira granu obračuna po tome koje je polje popunjeno; da su
+obje popunjene, cijena bi zavisila od redoslijeda `if` grana u kodu. To je tačno
+vrsta neodređenosti koju u obračunu ne smijemo imati, pa se odbija pri unosu.
+
+**Kategorija dozvole.** Oznaka se normalizuje na velika slova prije upisa. Bez toga
+bi „a1" i „A1" prošli kao dva zapisa, a kasnija provjera kategorija poredila bi
+stringove koji se razlikuju samo veličinom slova.
+
+### Duplikati i ono što se vidi u logu
+
+Duplikat se ne provjerava upitom prije upisa nego se oslanja na jedinstveni indeks.
+Razlog je konkurentnost: provjera pa upis su dvije radnje, a između njih stane tuđi
+zahtjev sa istim nazivom. Indeks je jedina garancija koja to ne može propustiti.
+
+`BaseService.SacuvajAsync` hvata `DbUpdateException`, prepoznaje SQL greške 2601 i
+2627 i pretvara ih u `BusinessException` sa porukom koju servis sam definiše — pa
+klijent dobije 400 i rečenicu, a ne 500.
+
+Uz to je EF-ov događaj `SaveChangesFailed` spušten na `Debug`:
+
+```csharp
+options.ConfigureWarnings(w => w.Log((CoreEventId.SaveChangesFailed, LogLevel.Debug)));
+```
+
+Bez toga EF isti, potpuno očekivani ishod prijavljuje kao `Error` sa punim stack
+traceom. Aplikacija je uredno odgovorila, ali log izgleda kao da je pukla — a onaj ko
+rad pregleda gleda upravo taj log. Događaj se i dalje bilježi, samo na nivou koji
+odgovara tome što jeste.
+
+### Testovi kojima je faza zatvorena
+
+| Test | Očekivano | Dobiveno |
+|---|---|---|
+| `GET` na svih jedanaest šifrarnika | 200 | ✅ |
+| Paginacija: `pageSize=3` od 6 gradova | 3 zapisa, `totalCount` 6 | ✅ |
+| Nazivi umjesto identifikatora na modelu | `CB125R: Honda / Motocikl / Benzin / A1` | ✅ |
+| Pretraga po dijelu naziva | filtrira na bazi kroz `LIKE` | ✅ |
+| `GET` kao klijent | 200 | ✅ |
+| `POST` kao klijent | 403 | ✅ |
+| Strani ključ koji ne postoji | 400 sa porukom, ne 500 | ✅ |
+| Brisanje države koja ima gradove | 400 sa objašnjenjem | ✅ |
+| Oprema sa obje cijene | 400 sa objašnjenjem | ✅ |
+| Ciklus kreiraj → izmijeni → duplikat → obriši | 200, 200, 400, pa 404 | ✅ |
+
+> **Šta ovaj test nije dokazao.** Ograničenje `PageSize` na 100 nije provjereno kako
+> treba — `pageSize=5000` je vratio 6 zapisa, ali zato što gradova ukupno ima 6.
+> Granica se ne može vidjeti dok neka tabela ne pređe stotinu redova. Provjerava se
+> na donjoj granici istog `Math.Clamp` poziva: `pageSize=0` vraća jedan zapis, a ne
+> nula i ne grešku. Puni dokaz dolazi u fazi 11, kad rezervacije dobiju endpoint —
+> njih u seedu ima preko šezdeset, a pretraga bez filtera ih vraća sve.
 
 ---
 

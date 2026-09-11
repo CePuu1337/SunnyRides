@@ -50,7 +50,7 @@ public class DrzavaService
         if (brojGradova > 0)
         {
             throw new BusinessException(
-                $"Drzava \"{entitet.Naziv}\" se ne moze obrisati jer postoji {brojGradova} gradova u njoj.");
+                $"Drzava \"{entitet.Naziv}\" se ne moze obrisati jer u njoj postoje gradovi ({brojGradova}).");
         }
     }
 }
