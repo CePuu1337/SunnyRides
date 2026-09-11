@@ -26,8 +26,8 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 0–3 | Okruženje, repozitorij, skeleton solutiona, Docker Compose | ✅ |
 | 4 | Model baze i prva migracija | ✅ |
 | 4 | Seed podaci | ✅ |
-| 5 | Bazni servisi, paginacija, `ExceptionFilter`, Mapster, Swagger | ⬜ |
-| 6 | Prijava, JWT, uloge, opoziv tokena | ⬜ |
+| 5 | Bazni servisi, paginacija, `ExceptionFilter`, Mapster, Swagger | ✅ |
+| 6 | Prijava, JWT, uloge, opoziv tokena | ✅ |
 | 7 | CRUD referentnih podataka | ⬜ |
 | 8 | Vozila, slike, blokade, cjenovnik | ⬜ |
 | 9 | Obračun cijene i provjera dostupnosti | ⬜ |
@@ -336,6 +336,134 @@ stvari raziđu, autorizacija tiho pada na 403 i greška se traži satima.
 
 ---
 
+## Prijava, token i uloge
+
+Prijava ide na `POST /api/auth/login` i traži korisničko ime, ne email. Tako je jer
+uputstvo (sekcija 5) traži da se pri pregledu rada može prijaviti sa `desktop`,
+`mobile`, `administrator` i `uposlenik` — to su korisnička imena, ne adrese.
+
+Servis traži korisnika, provjeri lozinku BCrypt-om i tek onda gleda stanje naloga:
+
+```csharp
+if (korisnik is null || !BCrypt.Net.BCrypt.Verify(request.Lozinka, korisnik.LozinkaHash))
+    throw new BusinessException("Pogresno korisnicko ime ili lozinka.");
+```
+
+Jedna poruka pokriva oba slučaja namjerno. Da nepostojeći korisnik daje „korisnik ne
+postoji", a postojeći sa krivom lozinkom „pogrešna lozinka", svako bi kroz formu za
+prijavu mogao popisati koja korisnička imena u sistemu postoje. To je klasičan
+**user enumeration** propust i košta ništa da se izbjegne.
+
+Redoslijed je bitan i u drugom smjeru: provjera lozinke ide **prije** provjere
+`Aktivan`. Da je obrnuto, poruka „nalog je deaktiviran" bi se dobila i bez tačne
+lozinke, pa bi opet odavala postojanje naloga.
+
+**Blokiran korisnik se namjerno može prijaviti.** Blokada u ovom sistemu znači da
+korisnik ne može napraviti novu rezervaciju — ne da mu se oduzima pristup vlastitoj
+historiji, računima i podacima. Deaktiviran nalog (`Aktivan = false`) je nešto drugo
+i njemu se prijava odbija.
+
+### Šta token nosi
+
+| Claim | Vrijednost | Čemu služi |
+|---|---|---|
+| `sub` | `Korisnik.Id` | jedini izvor identiteta za servise |
+| `jti` | GUID | identifikator tokena; po njemu se radi opoziv |
+| `name` | korisničko ime | prikaz i logovanje |
+| `ime`, `prezime` | — | da klijentska aplikacija ne mora odmah zvati `/api/auth/ja` |
+| `role` | naziv uloge, može ih biti više | ulazi u `[Authorize(Roles = ...)]` |
+| `exp` | `UtcNow + 120 min` | rok trajanja |
+
+Nema `refresh` tokena. Dodatak A.2 uputstva to dozvoljava, a za sistem u kojem sesija
+traje dva sata refresh mehanizam donosi drugu tabelu, drugu rutu i novu klasu grešaka
+bez stvarne koristi. Klijentske aplikacije na 401 vode korisnika na ekran za prijavu.
+
+Jedna zamka koju je `Microsoft.IdentityModel` lako postaviti: po defaultu se kratki
+nazivi claimova prevode u duge URI oblike, pa se `role` pri čitanju pretvori u
+`http://schemas.microsoft.com/ws/2008/06/identity/claims/role`. Ako se to desi na
+jednoj strani a ne na drugoj, autorizacija tiho pada na 403 i greška se traži satima.
+Zato je mapiranje isključeno na obje strane — `DefaultOutboundClaimTypeMap.Clear()`
+pri izdavanju i `MapInboundClaims = false` pri validaciji — a `RoleClaimType` je
+eksplicitno postavljen na `"role"`.
+
+`ClockSkew` je postavljen na nulu. Podrazumijevana vrijednost je pet minuta, što znači
+da istekao token prolazi još pet minuta nakon `exp`. Za sistem sa jednim serverom to
+nema smisla.
+
+### Odjava
+
+JWT je po prirodi bez stanja: jednom potpisan, važi do isteka roka i server o njemu
+ne pamti ništa. Uputstvo ipak traži da odjava **invalidira token na serveru** —
+brisanje tokena na uređaju nije dovoljno, jer token koji je neko presreo i dalje radi.
+
+Rješenje je tabela `OpozvaniToken` i middleware koji svaki autentifikovan zahtjev
+poredi sa njom po `jti`. Tabela ima indeks na `Jti`, a periodični posao u workeru
+(faza 14) iz nje briše zapise kojima je rok ionako istekao, da ne raste beskonačno.
+
+Redoslijed u `Program.cs` nije proizvoljan:
+
+```csharp
+app.UseAuthentication();                       // popuni HttpContext.User iz tokena
+app.UseMiddleware<OpozvaniTokenMiddleware>();  // tek sad zna koji je jti
+app.UseAuthorization();                        // tek sad provjerava uloge
+```
+
+Da provjera opoziva ide prije autentifikacije, ne bi imala šta čitati — `User` bi bio
+prazan, `jti` `null`, i opozvan token bi prošao.
+
+Ponovna odjava istim tokenom ne baca grešku nego tiho izlazi. Operacija je time
+idempotentna: dva klika na „Odjavi se" daju isti rezultat kao jedan.
+
+### Gdje stoji `[Authorize]`
+
+Na `BaseController`, ne na svakom kontroleru ponaosob:
+
+```csharp
+[ApiController]
+[Authorize]
+public abstract class BaseController<TModel, TSearch> : ControllerBase
+```
+
+Time je zaštita podrazumijevano stanje. Svaki novi kontroler koji naslijedi bazu
+zaštićen je prije nego u njemu bude napisana ijedna linija, a otvaranje endpointa
+traži svjestan potez. `[AllowAnonymous]` u cijelom projektu postoji na tačno dva
+mjesta: `login` i `register`.
+
+Šifrarnici nose `[Authorize(Roles = Uloge.Administrator)]` na nivou kontrolera, jer
+je održavanje šifrarnika administratorski posao. Kad klijentskoj aplikaciji zatreba
+lista država za formu, čitaće je kroz endpoint tog modula — tamo se šifrarnik samo
+čita, ovdje se i mijenja.
+
+### Ko čita identitet
+
+`ICurrentUserService` je jedini način na koji servis smije saznati ko poziva
+operaciju, i sve čita iz `ClaimsPrincipal`:
+
+```csharp
+public int? KorisnikId =>
+    int.TryParse(Korisnik?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value, out var id) ? id : null;
+```
+
+Nijedna vrijednost ne dolazi iz rute, query stringa ni tijela zahtjeva. Da `KorisnikId`
+stiže kao parametar, svako bi mogao poslati tuđi identifikator i raditi nad tuđim
+rezervacijama — a endpoint bi izgledao savršeno normalno.
+
+Interfejs `ITokenService` živi u servisnom sloju, a implementacija u API projektu.
+JWT je transportna stvar i tamo je već konfigurisana validacija; ovako servisni sloj
+ostaje bez ijedne zavisnosti prema ASP.NET Core-u.
+
+### Testovi kojima je faza zatvorena
+
+| Test | Očekivano | Dobiveno |
+|---|---|---|
+| Prijava `administrator` / `test` | token + uloga Administrator | ✅ |
+| `GET /api/drzave` bez tokena | 401 | ✅ |
+| `GET /api/drzave` sa klijentskim tokenom | 403 | ✅ |
+| `GET /api/drzave` sa admin tokenom | 200 | ✅ |
+| Odjava, pa isti token ponovo | 401 | ✅ |
+
+---
+
 ## Kome se vjeruje: klijent naspram servera
 
 > ⬜ Popunjava se u fazama 9–12.
@@ -366,8 +494,30 @@ Pravilo je jednostavno: **klijentu se vjeruje šta hoće, ali ne i koliko to ko�
 
 ### Registracija
 
-⬜ Faza 6. Bitno: `RegisterRequest` **ne smije imati** polja `Role`, `RoleId` ni
-`IsAdmin`. Ako ih ima, klijent može sam sebi dodijeliti administratorska prava.
+| Podatak | Odakle | Napomena |
+|---|---|---|
+| `KorisnickoIme` | klijent | jedinstveno; provjerava se prije upisa i štiti indeksom |
+| `Ime`, `Prezime`, `Email`, `Telefon` | klijent | format se validira anotacijama |
+| `DatumRodjenja` | klijent | server iz njega računa godine |
+| `Lozinka` | klijent | server je odmah hashira, čist tekst se nigdje ne čuva |
+| `LozinkaHash` | **server** | BCrypt |
+| **uloga** | **server** | uvijek `Klijent`, bez izuzetka |
+| `Aktivan` | **server** | `true` |
+| `Blokiran` | **server** | `false` |
+| `DatumRegistracije` | **server** | `UtcNow` |
+
+Ključno je šta u `RegisterRequest` **ne postoji**: nema polja `Role`, `RoleId` ni
+`IsAdmin`. Da postoji bilo koje od njih, klijent bi pri registraciji sam sebi mogao
+dodijeliti administratorska prava — a zahtjev bi izgledao potpuno legitimno. Uloga se
+ne prima nego se u servisu učita iz baze i zakači na novog korisnika:
+
+```csharp
+var ulogaKlijent = await _context.Role.FirstOrDefaultAsync(x => x.Naziv == Uloge.Klijent, ct)
+    ?? throw new BusinessException("Uloga Klijent ne postoji u sistemu.");
+```
+
+Registracija je dozvoljena od 16. godine; granica se računa na serveru iz
+`DatumRodjenja`, ne prima se kao broj godina od klijenta.
 
 ---
 
@@ -605,13 +755,13 @@ kategorije — isti filter kao u pretrazi.
 
 | Pravilo | |
 |---|---|
-| `[Authorize]` na svim kontrolerima, `[AllowAnonymous]` samo na `login` i `register` | ⬜ |
-| `userId` uvijek iz JWT tokena kroz `IHttpContextAccessor` | ⬜ |
-| `RegisterRequest` bez polja `Role` i `IsAdmin` | ⬜ |
-| Odjava invalidira token na serveru — `OpozvaniToken` plus middleware | ⬜ |
+| `[Authorize]` na svim kontrolerima, `[AllowAnonymous]` samo na `login` i `register` | ✅ |
+| `userId` uvijek iz JWT tokena kroz `IHttpContextAccessor` | ✅ |
+| `RegisterRequest` bez polja `Role` i `IsAdmin` | ✅ |
+| Odjava invalidira token na serveru — `OpozvaniToken` plus middleware | ✅ |
 | Upload i download provjeravaju vlasništvo nad resursom | ⬜ |
 | MIME tip se validira po magic bytes, ne po ekstenziji | ⬜ |
-| Lozinke kroz BCrypt | ⬜ |
+| Lozinke kroz BCrypt | ✅ |
 | Kodovi i tokeni kroz `RandomNumberGenerator`, nikad `System.Random` | ⬜ |
 | Sve tajne u `.env`, ništa osjetljivo u `appsettings.json` | ✅ |
 | Docker tagovi eksplicitno verzionisani | ✅ |
@@ -629,14 +779,19 @@ Sve seed lozinke su `test`.
 | Administrator | `administrator` |
 | Uposlenik | `uposlenik` |
 
-Jedna stvar tu zna oboriti cijeli rad: `HasData` seed i runtime seeder **moraju
-koristiti isti BCrypt format**. Ako se razlikuju, nijedan seed korisnik se ne može
-prijaviti — a prijava je prva stvar koju profesor proba.
+Sve četiri prijave su provjerene nakon faze 6 i rade. To nije formalnost: seed i
+prijava moraju koristiti **isti BCrypt format**, jer ako se raziđu, nijedan seed
+korisnik se ne može prijaviti — a prijava je prva stvar koju profesor proba. Ovdje se
+poklapaju po konstrukciji: seeder zove `BCrypt.HashPassword("test")`, prijava
+`BCrypt.Verify`, ista biblioteka i isti podrazumijevani parametri.
 
-Uz to, BCrypt hash u `HasData` mora biti statička konstanta, a ne poziv
-`BCrypt.HashPassword("test")`. Taj poziv daje drugačiji hash pri svakom pokretanju,
-pa EF pri svakoj migraciji vidi promjenu i generiše novu migraciju. Isto vrijedi za
-`DateTime.UtcNow` u seedu — koriste se fiksni datumi.
+Ovo je i razlog zašto je seed napisan kao runtime seeder, a ne kroz EF-ov `HasData`.
+U `HasData` hash bi morao biti statička konstanta zalijepljena u kod, jer poziv
+`HashPassword` daje drugačiji rezultat pri svakom pokretanju — EF bi pri svakoj
+migraciji vidio promjenu i generisao novu migraciju bez ijedne stvarne izmjene modela.
+Isto vrijedi za `DateTime.UtcNow`. Runtime seeder tih ograničenja nema: hashira pri
+pokretanju, a determinističnost datuma i nasumičnih vrijednosti postiže fiksnim
+`Random(220182)` sjemenom.
 
 ---
 

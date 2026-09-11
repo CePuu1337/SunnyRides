@@ -1,7 +1,13 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using SunnyRides.API.Auth;
 using SunnyRides.API.Extensions;
 using SunnyRides.API.Filters;
+using SunnyRides.API.Middleware;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Seed;
 using SunnyRides.Services.Mapping;
@@ -29,9 +35,48 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.DodajServise();
+var jwtPostavke = JwtPostavke.IzOkruzenja();
+
+builder.Services.DodajServise(jwtPostavke);
 
 MapsterKonfiguracija.Registruj();
+
+// Bez ovoga bi se kratki nazivi claimova pri citanju prevodili u duge URI oblike
+// (npr. "role" u ".../claims/role"), pa se RoleClaimType ispod ne bi poklopio.
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // Token putuje preko mreze, pa se provjerava sve sto se moze provjeriti:
+        // potpis (da ga nije neko drugi izdao), izdavalac i primalac (da nije token
+        // iz drugog sistema) i rok trajanja.
+        options.MapInboundClaims = false;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtPostavke.Kljuc)),
+
+            ValidateIssuer = true,
+            ValidIssuer = jwtPostavke.Issuer,
+
+            ValidateAudience = true,
+            ValidAudience = jwtPostavke.Audience,
+
+            ValidateLifetime = true,
+
+            // Podrazumijevana tolerancija je pet minuta, sto znaci da istekao token
+            // jos pet minuta prolazi. Za ovaj sistem to nema smisla.
+            ClockSkew = TimeSpan.Zero,
+
+            NameClaimType = JwtRegisteredClaimNames.Name,
+            RoleClaimType = "role"
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddControllers(options =>
 {
@@ -98,7 +143,16 @@ app.UseSwaggerUI();
 
 app.UseCors(CorsPolitika);
 
+// Redoslijed je bitan i nije proizvoljan:
+// 1. UseAuthentication popunjava HttpContext.User iz tokena.
+// 2. Middleware za opozvane tokene tada vec zna koji je jti u pitanju i moze
+//    odbiti token koji je odjavom ponisten prije isteka roka.
+// 3. UseAuthorization tek onda provjerava [Authorize] i uloge.
+// Kad bi provjera opoziva isla prije autentifikacije, ne bi imala sta citati.
+app.UseAuthentication();
+app.UseMiddleware<OpozvaniTokenMiddleware>();
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
