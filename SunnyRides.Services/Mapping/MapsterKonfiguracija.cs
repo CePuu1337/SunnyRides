@@ -93,5 +93,24 @@ public static class MapsterKonfiguracija
         TypeAdapterConfig<SlikaVozila, SlikaVozilaDto>.NewConfig()
             .Map(dto => dto.Url, e => e.Putanja)
             .Map(dto => dto.ThumbnailUrl, e => e.PutanjaThumbnail);
+
+        TypeAdapterConfig<BlokadaVozila, BlokadaVozilaDto>.NewConfig()
+            .Map(dto => dto.VoziloRegistarskaOznaka,
+                 e => e.Vozilo != null ? e.Vozilo.RegistarskaOznaka : null)
+            .Map(dto => dto.ModelNaziv,
+                 e => e.Vozilo != null && e.Vozilo.ModelVozila != null
+                      ? e.Vozilo.ModelVozila.Naziv : null)
+            .Map(dto => dto.PoslovnicaNaziv,
+                 e => e.Vozilo != null && e.Vozilo.Poslovnica != null
+                      ? e.Vozilo.Poslovnica.Naziv : null)
+            .Map(dto => dto.KreiraoKorisnikIme,
+                 e => e.KreiraoKorisnik != null
+                      ? e.KreiraoKorisnik.Ime + " " + e.KreiraoKorisnik.Prezime : null);
+
+        TypeAdapterConfig<Cjenovnik, CjenovnikDto>.NewConfig()
+            .Map(dto => dto.ModelNaziv, e => e.ModelVozila != null ? e.ModelVozila.Naziv : null)
+            .Map(dto => dto.MarkaNaziv,
+                 e => e.ModelVozila != null && e.ModelVozila.Marka != null
+                      ? e.ModelVozila.Marka.Naziv : null);
     }
 }

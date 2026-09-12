@@ -36,7 +36,7 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
 
             await AfterInsertAsync(request, entitet, ct);
 
-            return entitet.Adapt<TModel>();
+            return await PonovoUcitajAsync(entitet, ct);
         }, ct);
     }
 
@@ -53,7 +53,7 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
             await SacuvajAsync(ct);
             await AfterUpdateAsync(request, entitet, ct);
 
-            return entitet.Adapt<TModel>();
+            return await PonovoUcitajAsync(entitet, ct);
         }, ct);
     }
 
@@ -82,6 +82,26 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
 
             return null;
         }, ct);
+    }
+
+    /// <summary>
+    /// Ponovo ucitava zapis kroz isti put kojim ide i obican dohvat po identifikatoru.
+    ///
+    /// Bez ovoga bi se odgovor na POST i PUT gradio od entiteta koji je upravo
+    /// napravljen ili izmijenjen, a njemu navigacije nisu ucitane - pa bi DTO imao
+    /// ispravne identifikatore i prazne nazive. Klijentska aplikacija poslije
+    /// spasavanja prikazuje novi zapis na vrhu liste, i taj red bi ostao sa rupama
+    /// dok ga korisnik rucno ne osvjezi.
+    ///
+    /// Cijena je jedan SELECT po upisu. Dobitak je da POST, PUT i GET vracaju
+    /// doslovno isti oblik zapisa, pa se klijent ne mora ponasati drugacije prema
+    /// odgovoru na spasavanje nego prema odgovoru na dohvat.
+    /// </summary>
+    private async Task<TModel> PonovoUcitajAsync(TEntity entitet, CancellationToken ct)
+    {
+        var id = (int)typeof(TEntity).GetProperty("Id")!.GetValue(entitet)!;
+
+        return await GetByIdAsync(id, ct);
     }
 
     // --- hookovi ----------------------------------------------------------

@@ -747,6 +747,128 @@ izdato se briše normalno — zajedno sa svojim fotografijama.
 
 ---
 
+## Blokade i cjenovnik
+
+### Blokada je, za dostupnost, isto što i rezervacija
+
+Blokada vozila je period u kojem vozilo nije za najam — servis, kvar, sezonsko
+povlačenje iz flote. Sa stanovišta pretrage, to je ista činjenica kao potvrđena
+rezervacija: vozilo je zauzeto. Zato će ih `AvailabilityService` u fazi 9 čitati
+istim uslovom, a ne kao dva odvojena slučaja.
+
+Cijeli modul je za osoblje. Klijent blokade ne vidi ni kao listu — za njega je
+blokirano vozilo jednostavno vozilo koje se u pretrazi ne pojavljuje, a razlog
+blokade je interni podatak agencije.
+
+**Ko je blokadu evidentirao čita se iz tokena.** `BlokadaVozilaInsertRequest`
+namjerno nema polje `KreiraoKorisnikId`. Da ga ima, svaki uposlenik mogao bi blokadu
+pripisati kolegi — a blokada je audit zapis, ono „ko je i zašto vozilo povukao iz
+flote". Isto pravilo koje važi za `userId` pri rezervaciji važi i ovdje, samo je
+ovdje lakše previdjeti jer polje izgleda kao običan strani ključ.
+
+Pri izmjeni se to polje **ne dira**. Blokada ostaje pripisana onome ko ju je unio i
+kad je kasnije neko drugi ispravi — inače bi audit trag pokazivao posljednjeg
+urednika umjesto autora.
+
+### Šta u blokadama namjerno nije provjereno
+
+Dvije blokade istog vozila smiju se preklapati. To nije previd: obje znače da je
+vozilo nedostupno, a provjera dostupnosti je unija perioda, ne raspodjela. Pravilo
+koje bi to zabranilo ne bi štitilo ništa, a odbijalo bi legitiman unos — produženje
+servisa koji se preklapa sa već upisanim terminom.
+
+Provjerava se ono što jeste greška: kraj prije početka i trajanje duže od godinu
+dana, jer je to gotovo sigurno promašen datum pri unosu.
+
+> ⬜ **Šta nedostaje.** Plan izrade traži da unos blokade prikaže sve `Confirmed`
+> rezervacije koje se s njom preklapaju, da uposlenik odluči hoće li ponuditi
+> zamjensko vozilo ili otkazati uz puni povrat. Taj uslov preklapanja pripada
+> `AvailabilityService`-u, a specifikacija izričito traži da za njega postoji **samo
+> jedna** implementacija. Da je napišem ovdje, dobio bih drugu kopiju istog pravila —
+> tačno grešku pred kojom uputstvo upozorava. Dolazi u fazi 9, uz endpoint koji vraća
+> pogođene rezervacije.
+
+### Zašto se dvije tarife ne smiju preklapati
+
+Cjenovnik nosi sezonski množilac i pragove popusta za jedan model vozila u jednom
+periodu. Jedina tvrda provjera je da se dva perioda za isti model ne preklapaju.
+
+Razlog je konkretan: da smiju, `PricingService` bi pri obračunu morao birati između
+dva množioca, a taj izbor nigdje nije definisan. Cijena bi zavisila od redoslijeda
+zapisa u bazi — a to je vrsta neodređenosti koju u novcu ne smijemo imati. Zato
+`VazeciAsync` smije koristiti `FirstOrDefault`: to nije „bilo koja od nekoliko" nego
+posljedica pravila da ih više od jedne ne može biti.
+
+Uz to ide i pravilo da popust na dužem pragu ne smije biti manji od popusta na
+kraćem. Inače bi klijentu bilo isplativije rezervisati kraće, što je suprotno svrsi
+popusta.
+
+Pragovi su podatak, ne konstanta u kodu. Ekran sa detaljima vozila mora prikazati
+tačno one pragove koji se stvarno primjenjuju pri obračunu, a to je moguće samo ako
+oba čitaju isto mjesto.
+
+### Keš je na servisnom nivou, ne kao polje u klasi
+
+Cjenovnik se čita pri svakoj pretrazi i pri svakom obračunu cijene, a mijenja se
+nekoliko puta godišnje — udžbenički slučaj za keširanje. Ide kroz `IMemoryCache`,
+ključ je `cjenovnik:model:{id}`.
+
+Razlika u odnosu na `Dictionary` polje u servisu nije kozmetička. Servis je `Scoped`,
+pa bi `Dictionary` živio tačno jedan zahtjev i ne bi uštedio ništa. Da je statički,
+ništa ga ne bi čistilo ni ograničavalo — rastao bi dok aplikacija radi i ne bi znao
+kad je podatak zastario.
+
+Keš se poništava pri svakom upisu za taj model, i to i kad brisanje na kraju ne
+uspije: hladan keš je jedan upit više, a nešto što je ostalo u kešu a više ne postoji
+u bazi je pogrešna cijena. Uz to ima i rok od petnaest minuta, kao mrežu za slučaj da
+se podatak promijeni mimo servisa — migracijom ili ručnim upitom u bazi.
+
+### Odgovor na upis mora izgledati kao odgovor na dohvat
+
+Test blokade otkrio je grešku koja se u šifrarnicima nije vidjela: `POST` i `PUT` su
+odgovor gradili od entiteta koji je upravo napravljen ili izmijenjen, a njemu
+navigacije nisu učitane. Identifikatori ispravni, nazivi prazni.
+
+U `MarkaDto` nema nijednog polja iz navigacije, pa se to nije primijetilo. Prvi
+entitet sa vezama odmah je pokazao rupu — `voziloRegistarskaOznaka` i
+`kreiraoKorisnikIme` vratili su se prazni.
+
+Posljedica nije kozmetička. Uputstvo traži da se poslije spašavanja korisnik vrati na
+listu sa novim zapisom na vrhu, bez ručnog osvježavanja; taj red bi ostao prazan
+tamo gdje treba pisati naziv poslovnice i ime uposlenika.
+
+Popravka je u `BaseCRUDService`: nakon upisa se zapis pročita istim putem kojim ide i
+običan dohvat po identifikatoru.
+
+```csharp
+var id = (int)Context.Entry(entitet).Property("Id").CurrentValue!;
+return await GetByIdAsync(id, ct);
+```
+
+Košta jedan `SELECT` po upisu. Alternativa je da svaki servis ručno puni navigacije
+poslije upisa — što se zaboravi na prvom sljedećem entitetu. Ovako `POST`, `PUT` i
+`GET` vraćaju doslovno isti oblik zapisa, pa se klijentska aplikacija ne mora
+ponašati drugačije prema odgovoru na spašavanje nego prema odgovoru na dohvat.
+
+### Testovi kojima je korak zatvoren
+
+| Test | Očekivano | Dobiveno |
+|---|---|---|
+| Cjenovnik iz seeda, šest sezona po modelu | glavna sezona ×1,30, vansezona ×0,85 | ✅ |
+| Koja tarifa važi danas | jedna, sa pragovima 3 d/5 % i 7 d/10 % | ✅ |
+| Tarifa koja se preklapa sa postojećom | 400, imenuje tarifu i njen period | ✅ |
+| Veći popust na kraćem pragu | 400 sa objašnjenjem | ✅ |
+| Cjenovnik: uposlenik čita, ne mijenja | 200 / 403 | ✅ |
+| Blokade: klijent ih ne vidi uopće | 403 / 200 | ✅ |
+| Unos blokade, autor iz tokena | `Emina Hodzic (id 3)`, nije iz zahtjeva | ✅ |
+| Kraj blokade prije početka | 400 | ✅ |
+| Blokada duža od godinu dana | 400 | ✅ |
+| Pretraga po periodu koji se preklapa | 1, odnosno 0 za drugi period | ✅ |
+| Izmjena od strane administratora | autor ostaje uposlenik | ✅ |
+| `POST` vraća nazive iz navigacija | registracija, model, poslovnica, ime | ✅ |
+
+---
+
 ## Kome se vjeruje: klijent naspram servera
 
 > ⬜ Popunjava se u fazama 9–12.

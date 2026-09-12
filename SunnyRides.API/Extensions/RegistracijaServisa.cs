@@ -66,5 +66,7 @@ public static class RegistracijaServisa
     {
         services.AddScoped<IVoziloService, VoziloService>();
         services.AddScoped<ISlikaVozilaService, SlikaVozilaService>();
+        services.AddScoped<IBlokadaVozilaService, BlokadaVozilaService>();
+        services.AddScoped<ICjenovnikService, CjenovnikService>();
     }
 }
