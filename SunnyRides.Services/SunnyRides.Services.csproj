@@ -18,6 +18,7 @@
     </PackageReference>
     <PackageReference Include="QuestPDF" Version="2026.8.0" />
     <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.*" />
     <PackageReference Include="Stripe.net" Version="52.4.2" />
   </ItemGroup>
 

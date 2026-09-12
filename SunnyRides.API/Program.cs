@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SunnyRides.API.Auth;
@@ -11,6 +12,7 @@ using SunnyRides.API.Filters;
 using SunnyRides.API.Middleware;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Seed;
+using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Mapping;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,7 +49,11 @@ builder.Services.AddHttpContextAccessor();
 
 var jwtPostavke = JwtPostavke.IzOkruzenja();
 
-builder.Services.DodajServise(jwtPostavke);
+// Folderi za otpremljene fajlove se razrjesavaju jednom, pri pokretanju, i provjeri
+// se da postoje. Ako ih nema, bolje da aplikacija to javi odmah nego pri prvom uploadu.
+var pohranaOpcije = PohranaOpcije.IzOkruzenja();
+
+builder.Services.DodajServise(jwtPostavke, pohranaOpcije);
 
 MapsterKonfiguracija.Registruj();
 
@@ -152,6 +158,23 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors(CorsPolitika);
+
+// Fotografije vozila i obavijesti se posluzuju kao obicni staticki fajlovi, bez
+// tokena. To su katalog i oglasi agencije - isti sadrzaj za svakoga.
+//
+// Posluzuje se iskljucivo javni korijen. Fotografije vozackih dozvola i stete zive
+// u odvojenom folderu koji ovdje nije naveden i do kojeg se dolazi samo kroz
+// endpoint sa provjerom vlasnistva. Da su u istom stablu, ovaj jedan poziv bio bi
+// dovoljan da postanu javne.
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(pohranaOpcije.JavniKorijen),
+    RequestPath = PohranaOpcije.JavniPrefiks,
+
+    // Fajl nepoznatog tipa se ne posluzuje. Bez ovoga bi sve sto zavrsi u folderu
+    // bilo dostupno za preuzimanje, bez obzira na to sta je.
+    ServeUnknownFileTypes = false
+});
 
 // Redoslijed je bitan i nije proizvoljan:
 // 1. UseAuthentication popunjava HttpContext.User iz tokena.

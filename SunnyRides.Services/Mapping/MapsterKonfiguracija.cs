@@ -17,6 +17,7 @@ public static class MapsterKonfiguracija
         TypeAdapterConfig.GlobalSettings.Default.IgnoreNullValues(true);
 
         RegistrujSifrarnike();
+        RegistrujFlotu();
     }
 
     /// <summary>
@@ -51,5 +52,46 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.KategorijaDozvoleOznaka,
                  e => e.KategorijaDozvole != null ? e.KategorijaDozvole.Oznaka : null)
             .Map(dto => dto.TipVozilaNaziv, e => e.TipVozila != null ? e.TipVozila.Naziv : null);
+    }
+
+    /// <summary>
+    /// Vozilo nosi podatke koji zive na modelu - kubikazu, tip, marku i kategoriju
+    /// dozvole. To nije dupliranje nego pogodnost za prikaz: kartica vozila u pretrazi
+    /// mora pokazati sve to odjednom, a bez ovoga bi klijent za svaki red morao
+    /// dohvatiti i model.
+    /// </summary>
+    private static void RegistrujFlotu()
+    {
+        TypeAdapterConfig<Vozilo, VoziloDto>.NewConfig()
+            .Map(dto => dto.ModelNaziv, e => e.ModelVozila != null ? e.ModelVozila.Naziv : null)
+            .Map(dto => dto.Kubikaza, e => e.ModelVozila != null ? e.ModelVozila.Kubikaza : 0)
+            .Map(dto => dto.SnagaKw, e => e.ModelVozila != null ? e.ModelVozila.SnagaKw : 0)
+            .Map(dto => dto.KategorijaDozvoleId,
+                 e => e.ModelVozila != null ? e.ModelVozila.KategorijaDozvoleId : 0)
+            .Map(dto => dto.MarkaNaziv,
+                 e => e.ModelVozila != null && e.ModelVozila.Marka != null
+                      ? e.ModelVozila.Marka.Naziv : null)
+            .Map(dto => dto.TipVozilaNaziv,
+                 e => e.ModelVozila != null && e.ModelVozila.TipVozila != null
+                      ? e.ModelVozila.TipVozila.Naziv : null)
+            .Map(dto => dto.TipGorivaNaziv,
+                 e => e.ModelVozila != null && e.ModelVozila.TipGoriva != null
+                      ? e.ModelVozila.TipGoriva.Naziv : null)
+            .Map(dto => dto.KategorijaDozvoleOznaka,
+                 e => e.ModelVozila != null && e.ModelVozila.KategorijaDozvole != null
+                      ? e.ModelVozila.KategorijaDozvole.Oznaka : null)
+            .Map(dto => dto.PoslovnicaNaziv, e => e.Poslovnica != null ? e.Poslovnica.Naziv : null)
+            .Map(dto => dto.GradNaziv,
+                 e => e.Poslovnica != null && e.Poslovnica.Grad != null
+                      ? e.Poslovnica.Grad.Naziv : null)
+
+            // Servis ucitava samo glavnu sliku, pa je kolekcija ovdje prazna ili ima
+            // tacno jedan zapis. Vozilo bez fotografije daje prazan thumbnail, a ne gresku.
+            .Map(dto => dto.ThumbnailUrl,
+                 e => e.Slike.Select(s => s.PutanjaThumbnail).FirstOrDefault());
+
+        TypeAdapterConfig<SlikaVozila, SlikaVozilaDto>.NewConfig()
+            .Map(dto => dto.Url, e => e.Putanja)
+            .Map(dto => dto.ThumbnailUrl, e => e.PutanjaThumbnail);
     }
 }

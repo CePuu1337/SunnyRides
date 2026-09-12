@@ -1,5 +1,7 @@
 using SunnyRides.API.Auth;
 using SunnyRides.Services.Auth;
+using SunnyRides.Services.Fajlovi;
+using SunnyRides.Services.Flota;
 using SunnyRides.Services.Sifrarnici;
 
 namespace SunnyRides.API.Extensions;
@@ -10,7 +12,8 @@ namespace SunnyRides.API.Extensions;
 /// </summary>
 public static class RegistracijaServisa
 {
-    public static IServiceCollection DodajServise(this IServiceCollection services, JwtPostavke jwtPostavke)
+    public static IServiceCollection DodajServise(
+        this IServiceCollection services, JwtPostavke jwtPostavke, PohranaOpcije pohranaOpcije)
     {
         // Iste postavke koje su iskoristene za konfiguraciju validacije tokena
         // dijele se i servisu koji token izdaje. Kljuc se cita iz okruzenja tacno
@@ -25,10 +28,16 @@ public static class RegistracijaServisa
 
         services.AddScoped<IAuthService, AuthService>();
 
+        // Pohrana slika ne drzi stanje izmedju zahtjeva i ne koristi DbContext,
+        // pa moze biti singleton zajedno sa svojim postavkama.
+        services.AddSingleton(pohranaOpcije);
+        services.AddSingleton<IPohranaSlika, PohranaSlika>();
+
         // Svi servisi koji koriste DbContext registruju se kao Scoped, nikad Transient.
         // DbContext nije siguran za istovremeno koristenje iz vise niti, a Transient
         // bi ga u istom zahtjevu umnozio.
         DodajSifrarnike(services);
+        DodajFlotu(services);
 
         return services;
     }
@@ -51,5 +60,11 @@ public static class RegistracijaServisa
         services.AddScoped<IPravilaKategorijeService, PravilaKategorijeService>();
         services.AddScoped<IVrstaOpremeService, VrstaOpremeService>();
         services.AddScoped<IPaketOsiguranjaService, PaketOsiguranjaService>();
+    }
+
+    private static void DodajFlotu(IServiceCollection services)
+    {
+        services.AddScoped<IVoziloService, VoziloService>();
+        services.AddScoped<ISlikaVozilaService, SlikaVozilaService>();
     }
 }

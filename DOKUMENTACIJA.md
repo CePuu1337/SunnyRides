@@ -29,7 +29,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 5 | Bazni servisi, paginacija, `ExceptionFilter`, Mapster, Swagger | ✅ |
 | 6 | Prijava, JWT, uloge, opoziv tokena | ✅ |
 | 7 | CRUD referentnih podataka | ✅ |
-| 8 | Vozila, slike, blokade, cjenovnik | ⬜ |
+| 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
 | 9 | Obračun cijene i provjera dostupnosti | ⬜ |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ⬜ |
 | 11 | Rezervacije i state machine | ⬜ |
@@ -612,6 +612,138 @@ odgovara tome što jeste.
 > na donjoj granici istog `Math.Clamp` poziva: `pageSize=0` vraća jedan zapis, a ne
 > nula i ne grešku. Puni dokaz dolazi u fazi 11, kad rezervacije dobiju endpoint —
 > njih u seedu ima preko šezdeset, a pretraga bez filtera ih vraća sve.
+
+---
+
+## Flota i fotografije
+
+### Šta vozilo nasljeđuje od modela
+
+Vozilo je konkretan primjerak — jedna registarska oznaka, jedna kilometraža, jedna
+poslovnica. Sve što je svojstvo **tipa** a ne primjerka živi na `ModelVozila`:
+kubikaža, snaga, tip goriva i, najvažnije, **potrebna kategorija vozačke dozvole**.
+
+Zato `VoziloInsertRequest` nema polje `KategorijaDozvoleId`. Da ga ima, dva primjerka
+iste Honde CB125R mogla bi završiti sa različitim kategorijama — jedan zahtijeva A1,
+drugi A — i filtriranje iz faze 10 davalo bi rezultate koje niko ne bi umio objasniti.
+Ovako je kategorija upisana na jednom mjestu i vozilo je samo pokazuje.
+
+`VoziloDto` ipak nosi `kategorijaDozvoleOznaka`, `kubikaza` i `markaNaziv`. To nije
+dupliranje podatka nego pogodnost za prikaz: kartica u pretrazi mora pokazati sve to
+odjednom, a bez toga bi klijent za svaki red morao dohvatiti i model — N+1, samo
+preseljen sa baze na mrežu.
+
+### Dva korijena za fajlove
+
+Otpremljeni fajlovi žive u dva odvojena stabla i razlika među njima je sigurnosna,
+ne organizaciona:
+
+| Folder | Šta sadrži | Kako se dohvata |
+|---|---|---|
+| `uploads/` | fotografije vozila, slike obavijesti | statički, bez tokena |
+| `privatno/` | fotografije vozačkih dozvola i štete | isključivo kroz endpoint sa provjerom vlasništva |
+
+`app.UseStaticFiles` je konfigurisan da poslužuje **samo** javni korijen. Da su
+osjetljivi fajlovi u istom stablu, taj jedan poziv bio bi dovoljan da fotografija
+tuđe vozačke dozvole postane dostupna svakome ko pogodi putanju — bez ijedne greške
+u kodu, samo zbog izbora foldera.
+
+Razdvajanje je uvedeno u fazi 8, dok `privatno/` još stoji prazan. Namjerno prije
+nego u njemu bude podataka: konvencija koja se uvodi kasnije znači premještanje
+fajlova i ispravku putanja koje su već upisane u bazu.
+
+Korijeni se pronalaze sami. U kontejneru je radni folder `/app`, a Compose u njega
+montira `./uploads`; pri lokalnom `dotnet run` radni folder je `SunnyRides.API`, a
+folder je jedan nivo iznad. Ista logika kao kod `.env` fajla — isti kod radi u oba
+okruženja bez ijedne izmjene.
+
+### Zašto se MIME tip provjerava po prvim bajtima
+
+Ekstenzija fajla i `Content-Type` zaglavlje dolaze od klijenta i oboje se slobodno
+falsifikuju. `virus.exe` preimenovan u `slika.jpg` prolazi svaku provjeru koja gleda
+naziv. Prvi bajtovi su dio samog sadržaja i njih napadač ne može promijeniti a da
+fajl ostane ono što tvrdi da jeste.
+
+```
+JPEG   FF D8 FF
+PNG    89 50 4E 47 0D 0A 1A 0A
+WEBP   "RIFF" ···· "WEBP"   (bajtovi 0-3 i 8-11)
+```
+
+Provjera je namjerno **dvostruka**. Potpis je prva, jeftina kapija. Druga je samo
+učitavanje slike kroz ImageSharp: sadržaj koji ima ispravna prva tri bajta a
+pokvarenu strukturu tu pada, i to prije nego išta dodirne disk. Test je to i
+potvrdio — tekstualni fajl preimenovan u `.jpg` odbijen je sa 400, a u folderu
+vozila nije ostao nijedan trag.
+
+### Šta se dešava pri uploadu
+
+1. Kontroler prima `multipart/form-data` i prosljeđuje **samo tok bajtova i dužinu**.
+   Ne otvara fajl, ne prepoznaje format, ne računa putanju.
+2. Servis provjerava veličinu (najviše 5 MB), pa potpis.
+3. Original se smanjuje na najviše 1600 px po dužoj stranici i snima kao JPEG.
+4. Thumbnail 200×150 se siječe na tačan omjer, da kartice u listi budu iste visine.
+5. U bazu ide **putanja**, nikad sadržaj.
+
+Treći korak nije kozmetika. Fotografija sa telefona zna biti dvanaest megabajta, a na
+ekranu se nikad ne vidi više od par stotina piksela — čuvanje originala u punoj
+veličini samo puni disk i usporava galeriju.
+
+Sadržaj ide kao multipart, nikad kao base64 u JSON-u. Base64 povećava prenos za
+trećinu i cijeli fajl drži u memoriji kao string.
+
+### Redoslijed diska i baze
+
+Dvije operacije, dva suprotna redoslijeda, i oba su namjerna.
+
+**Pri dodavanju** fajl ide prvi, jer se putanja koju treba upisati zna tek kad je
+snimljen. Ako `SaveChangesAsync` poslije padne, fajl se briše u `catch` bloku —
+inače bi ostao zauvijek, bez ijednog zapisa koji na njega pokazuje.
+
+**Pri brisanju** je obrnuto: prvo baza, pa disk. Suvišan fajl na disku je smeće;
+zapis koji pokazuje na fajl kojeg više nema je pokvaren podatak koji će puknuti pri
+prvom otvaranju galerije. Od dva loša ishoda bira se manji.
+
+Isto vrijedi i za brisanje vozila: putanje se pročitaju u `BeforeDelete`, dok se još
+zna gdje su, a fajlovi se uklanjaju nakon što je zapis nestao iz baze. Slike se u
+bazi brišu kaskadno, ali kaskada ne zna za disk.
+
+### Glavna slika je uvijek tačno jedna
+
+Prva otpremljena slika automatski postaje glavna — da vozilo nikad ne ostane bez
+thumbnaila u listi samo zato što je neko zaboravio kliknuti. Prebacivanje oznake
+skida je sa svih ostalih i postavlja na odabranu **u istom** `SaveChangesAsync`
+pozivu, pa ne postoji trenutak u kojem su dvije glavne ili nijedna. Brisanje glavne
+je dodjeljuje sljedećoj po redoslijedu.
+
+### Vozilo se ne briše, nego deaktivira
+
+`DELETE /api/vozila/{id}` na vozilu koje ima rezervacije vraća 400 sa porukom koja
+kaže šta uraditi umjesto toga:
+
+> „Vozilo "A18-O-178" se ne može obrisati jer postoje rezervacije (2). Deaktivirajte
+> ga umjesto brisanja."
+
+Historija najmova mora ostati čitava radi izvještaja. Deaktivirano vozilo nestaje iz
+pretrage i kalendara flote, a prošlost ostaje netaknuta. Vozilo koje nikad nije bilo
+izdato se briše normalno — zajedno sa svojim fotografijama.
+
+### Testovi kojima je korak zatvoren
+
+| Test | Očekivano | Dobiveno |
+|---|---|---|
+| Lista vozila sa thumbnailom i nazivima | 35 vozila, svako sa markom, poslovnicom i kategorijom | ✅ |
+| Thumbnail se poslužuje statički | 200, `image/jpeg` | ✅ |
+| Filteri po tipu, cijeni i statusu | 20 / 21 / 2 | ✅ |
+| Klijent čita flotu, ne mijenja je | 200 / 403 | ✅ |
+| Dnevna tarifa niža od satne | 400 sa objašnjenjem | ✅ |
+| Brisanje vozila sa rezervacijama | 400, uputa da se deaktivira | ✅ |
+| Upload: prva slika postaje glavna | `jeGlavna = true` | ✅ |
+| Upload: druga ne preuzima oznaku | `jeGlavna = false`, redoslijed 1 | ✅ |
+| Prebacivanje glavne | thumbnail vozila se mijenja | ✅ |
+| Tekstualni fajl sa `.jpg` ekstenzijom | 400, **nijedan fajl na disku** | ✅ |
+| Brisanje glavne promoviše sljedeću | thumbnail se vraća na prvu | ✅ |
+| Brisanje vozila čisti disk | 0 preostalih fajlova | ✅ |
 
 ---
 

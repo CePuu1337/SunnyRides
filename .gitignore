@@ -22,6 +22,10 @@ appsettings.Development.json
 uploads/*
 !uploads/seeds/
 
+# Osjetljivi fajlovi: fotografije vozackih dozvola i stete. Odvojeni su od
+# uploads/ jer se taj folder posluzuje staticki, a ovaj se nikad ne posluzuje.
+privatno/
+
 # Generisani PDF izvjestaji
 *.pdf
 
