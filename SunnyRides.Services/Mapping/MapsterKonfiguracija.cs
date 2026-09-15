@@ -107,6 +107,12 @@ public static class MapsterKonfiguracija
                  e => e.KreiraoKorisnik != null
                       ? e.KreiraoKorisnik.Ime + " " + e.KreiraoKorisnik.Prezime : null);
 
+        TypeAdapterConfig<Rezervacija, PogodjenaRezervacijaDto>.NewConfig()
+            .Map(dto => dto.KlijentImePrezime,
+                 e => e.Korisnik != null ? e.Korisnik.Ime + " " + e.Korisnik.Prezime : null)
+            .Map(dto => dto.KlijentEmail, e => e.Korisnik != null ? e.Korisnik.Email : null)
+            .Map(dto => dto.KlijentTelefon, e => e.Korisnik != null ? e.Korisnik.Telefon : null);
+
         TypeAdapterConfig<Cjenovnik, CjenovnikDto>.NewConfig()
             .Map(dto => dto.ModelNaziv, e => e.ModelVozila != null ? e.ModelVozila.Naziv : null)
             .Map(dto => dto.MarkaNaziv,

@@ -1,6 +1,7 @@
 using SunnyRides.API.Auth;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Cijene;
+using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
 using SunnyRides.Services.Sifrarnici;
@@ -43,6 +44,10 @@ public static class RegistracijaServisa
         // Obracun cijene je jedini put do iznosa - i pregled prije rezervacije i samo
         // kreiranje rezervacije zovu isti servis.
         services.AddScoped<IPricingService, PricingService>();
+
+        // Provjera dostupnosti je jedina implementacija uslova preklapanja. Registruje
+        // se prije flote, jer je VoziloService koristi u pretrazi.
+        services.AddScoped<IAvailabilityService, AvailabilityService>();
 
         return services;
     }

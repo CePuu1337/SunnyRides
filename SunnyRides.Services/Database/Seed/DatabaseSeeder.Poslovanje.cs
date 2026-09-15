@@ -14,12 +14,18 @@ public partial class DatabaseSeeder
         var horizont = _danas.AddDays(60);
         var pocetakHistorije = _danas.AddDays(-190);
 
+        // Gornja granica po vozilu postoji samo da jedno vozilo ne popuni cijeli
+        // kalendar ako mu razmaci ispadnu kratki. Sama petlja ide dok ne dodje do
+        // horizonta, a ne fiksan broj puta - inace se rezervacije nagomilaju na
+        // pocetku perioda i nikad ne stignu do danasnjeg dana.
+        const int maksimalnoPoVozilu = 14;
+
         foreach (var vozilo in _vozila.Where(v => v.Aktivno))
         {
             var kursor = pocetakHistorije.AddDays(Broj(0, 20));
-            var koliko = Broj(2, 5);
+            var napravljeno = 0;
 
-            for (var i = 0; i < koliko; i++)
+            while (kursor < horizont && napravljeno < maksimalnoPoVozilu)
             {
                 kursor = kursor.AddDays(Broj(3, 26));
                 var trajanjeDana = Broj(1, 11);
@@ -46,6 +52,7 @@ public partial class DatabaseSeeder
                 rezervacije.Add(rezervacija);
                 _context.Rezervacije.Add(rezervacija);
 
+                napravljeno++;
                 kursor = datumDo.Date.AddDays(1);
             }
         }

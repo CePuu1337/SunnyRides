@@ -22,4 +22,14 @@ public class VoziloSearchObject : BaseSearchObject
 
     /// <summary>Prazno vraca i aktivna i deaktivirana vozila. Klijentska aplikacija salje true.</summary>
     public bool? Aktivno { get; set; }
+
+    /// <summary>
+    /// Termin za koji vozilo mora biti slobodno. Oba polja idu zajedno - jedan datum
+    /// sam po sebi ne opisuje period, pa se ignorise.
+    ///
+    /// Filtriranje po dostupnosti radi isti servis koji odlucuje i pri kreiranju
+    /// rezervacije, pa pretraga ne moze pokazati vozilo koje bi rezervacija odbila.
+    /// </summary>
+    public DateTime? SlobodnoOd { get; set; }
+    public DateTime? SlobodnoDo { get; set; }
 }

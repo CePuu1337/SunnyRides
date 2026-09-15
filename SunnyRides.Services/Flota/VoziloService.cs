@@ -5,6 +5,7 @@ using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Fajlovi;
 
@@ -15,10 +16,14 @@ public class VoziloService
       IVoziloService
 {
     private readonly IPohranaSlika _pohrana;
+    private readonly IAvailabilityService _dostupnost;
 
-    public VoziloService(SunnyRidesDbContext context, IPohranaSlika pohrana) : base(context)
+    public VoziloService(
+        SunnyRidesDbContext context, IPohranaSlika pohrana, IAvailabilityService dostupnost)
+        : base(context)
     {
         _pohrana = pohrana;
+        _dostupnost = dostupnost;
     }
 
     protected override string NazivEntiteta => "Vozilo";
@@ -87,6 +92,15 @@ public class VoziloService
         if (search.Aktivno.HasValue)
         {
             upit = upit.Where(x => x.Aktivno == search.Aktivno.Value);
+        }
+
+        // Uslov slobodnog termina se ne pise ovdje nego se trazi od servisa koji ga
+        // jedini poznaje. Vraca se kao dio istog upita, pa baza odbacuje zauzeta
+        // vozila prije nego ijedan red stigne u memoriju.
+        if (search.SlobodnoOd.HasValue && search.SlobodnoDo.HasValue
+            && search.SlobodnoDo.Value > search.SlobodnoOd.Value)
+        {
+            upit = _dostupnost.DodajUslovSlobodno(upit, search.SlobodnoOd.Value, search.SlobodnoDo.Value);
         }
 
         return upit;

@@ -30,7 +30,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 6 | Prijava, JWT, uloge, opoziv tokena | ✅ |
 | 7 | CRUD referentnih podataka | ✅ |
 | 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
-| 9 | Obračun cijene i provjera dostupnosti | 🟡 |
+| 9 | Obračun cijene i provjera dostupnosti | ✅ |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ⬜ |
 | 11 | Rezervacije i state machine | ⬜ |
 | 12 | Plaćanje, webhook, povrat novca | ⬜ |
@@ -975,6 +975,156 @@ zaokruživanje na iznosu koji pada tačno na polovinu (5,265 → 5,27).
 > njegov posao je učitavanje iz baze, a to bi tražilo test bazu ili mokove.
 > Provjereno je kroz API: ista rezervacija u julu i u novembru daje različit iznos,
 > jer se povlači različita sezona.
+
+---
+
+## Provjera dostupnosti
+
+Ovo je drugi od dva problema koji čine domen specifičnim: isto vozilo ne smije biti
+izdato dva puta u periodima koji se preklapaju. Odgovor na pitanje „je li vozilo
+slobodno" daje se na **jednom** mjestu, a traže ga tri: pretraga vozila, kreiranje
+rezervacije i kalendar flote.
+
+Dvije implementacije istog uslova znače da pretraga pokaže vozilo koje rezervacija
+odbije — ili, gore, da rezervacija prihvati termin koji je već zauzet.
+
+### Uslov preklapanja
+
+```
+BUFFER = 2 sata
+
+zauzeto  ⟺  postojeciDo > (traženiOd − BUFFER)
+         ∧  postojeciOd < (traženiDo + BUFFER)
+```
+
+Buffer postoji zato što vozilo između dva najma treba oprati, dopuniti gorivo i
+pregledati. Bez njega bi sistem dozvolio da jedan klijent vrati skuter u 10:00, a
+drugi ga preuzme istog trenutka.
+
+Oduzimanje i dodavanje buffera dešava se na jednom mjestu — `UslovDostupnosti.GranicaOd`
+i `GranicaDo`. Svaki upit gradi granice kroz njih. Da se aritmetika piše svugdje gdje
+se sastavlja upit, prvi propušteni buffer bio bi dvostruko ugovoren termin.
+
+Uslov je **strogo** preklapanje, pa termin koji počinje tačno dva sata nakon kraja
+prethodnog prolazi. To je i potvrđeno testom:
+
+| Novi termin | Slobodno |
+|---|---|
+| isti kao postojeća rezervacija | ne |
+| počinje 30 min nakon kraja | ne |
+| počinje 1 h nakon kraja | ne |
+| počinje **tačno 2 h** nakon kraja | da |
+| završava 1 h prije početka | ne |
+| završava **tačno 2 h** prije početka | da |
+| obuhvata rezervaciju sa obje strane | ne |
+
+Granica je simetrična — buffer se dodaje sa obje strane traženog perioda, ne samo
+poslije.
+
+### Šta se smatra zauzećem
+
+| Zapis | Uslov | Buffer |
+|---|---|---|
+| Rezervacija `Confirmed` | uvijek | da |
+| Rezervacija `Pending` | samo dok `DrziDo > sada` | da |
+| `BlokadaVozila` | uvijek | **ne** |
+
+`Cancelled` ne zauzima ništa, a `Completed` je prošlost. `Pending` zauzima samo dok
+traje držanje termina — kad istekne, vozilo je slobodno i prije nego ga periodični
+posao formalno otkaže. Da nije tako, neplaćena rezervacija držala bi termin do
+sljedećeg prolaska workera.
+
+**Blokade se gledaju bez buffera**, i to je svjesna odluka. Buffer je vrijeme za
+pripremu vozila između dva *najma*; servis nije najam. Specifikacija to i nagovještava
+formulacijom — za rezervacije kaže „rezervacija u statusu X", a za blokade „svaka
+`BlokadaVozila` **koja se preklapa**".
+
+### Zašto uslov vraća `IQueryable`, a ne listu
+
+`DodajUslovSlobodno` prima upit nad vozilima i vraća isti upit sa dodatim uslovom:
+
+```csharp
+upit.Where(v => !v.Rezervacije.Any(...)).Where(v => !v.Blokade.Any(...))
+```
+
+Rezultat je **jedan** SQL upit sa dva `NOT EXISTS`. Alternativa — dohvatiti
+identifikatore slobodnih vozila pa ih proslijediti kroz `Contains` — značila bi dva
+upita i listu koja raste sa veličinom flote. Uputstvo učitavanje svega u memoriju pa
+naknadno filtriranje izričito navodi kao grešku.
+
+Zato `VoziloService` ne piše svoj uslov nego traži od `AvailabilityService` da ga
+doda. Pretraga i rezervacija time dijele isti kod, a ne isto pravilo napisano dvaput.
+
+### Zaključavanje vozila
+
+`ZakljucajVoziloAsync` je jedini raw SQL u projektu:
+
+```sql
+SELECT TOP 1 Id FROM Vozilo WITH (UPDLOCK, HOLDLOCK) WHERE Id = @id
+```
+
+EF nema način da izrazi lock hint, a bez njega dvije istovremene rezervacije mogu obje
+proći provjeru dostupnosti prije nego ijedna upiše svoj red. `UPDLOCK` uzima lock koji
+drugi čitač sa istim hintom mora čekati; `HOLDLOCK` ga drži do kraja transakcije
+umjesto do kraja upita.
+
+Metoda baca izuzetak ako je neko pozove izvan transakcije — lock bez transakcije se
+otpušta odmah po izvršenju upita i ne štiti ništa. To je greška u kodu koji poziva, a
+ne stanje koje korisnik može izazvati, pa pada glasno.
+
+Zaštita radi pod uslovom da **svi** koji upisuju rezervacije uzmu isti lock. Pošto je
+`RezervacijaService` jedini pisac, to je ispunjeno. Drugi sloj je jedinstveni indeks
+na `(KorisnikId, VoziloId, DatumOd)`, ali on hvata samo dvostruko slanje iste forme
+od istog korisnika.
+
+> ⬜ **Test konkurentnosti još nije proveden.** Plan traži dva istovremena zahtjeva za
+> isto vozilo i isti termin, od kojih samo jedan smije proći. Endpoint za kreiranje
+> rezervacije nastaje u fazi 11, pa se test radi tamo. Mehanizam je spreman i čeka
+> pozivaoca.
+
+### Pogođene rezervacije
+
+`GET /api/dostupnost/pogodjene-rezervacije` vraća potvrđene rezervacije koje bi
+planirana blokada pogodila, sa imenom, emailom i telefonom klijenta — da uposlenik
+zna koga treba nazvati prije nego blokadu potvrdi. Ovo je stavka koja je u fazi 8
+ostala nenapravljena, upravo zato što uslov preklapanja pripada ovdje.
+
+Endpoint je isključivo za osoblje. Klijent nema razloga znati ko još ima rezervaciju
+na tom vozilu, a obična provjera dostupnosti mu je otvorena.
+
+---
+
+## Ispravka u seed podacima
+
+Test dostupnosti otkrio je grešku u seederu koja bi se inače pojavila tek u fazi 17.
+
+U bazi nije bilo **nijedne** rezervacije u statusu `Confirmed` ni `Pending`, i nijedne
+u budućnosti — samo 15 otkazanih i 80 završenih, sve starije od tri mjeseca.
+
+Uzrok je bio u generatoru. Petlja je po vozilu pravila **fiksan broj** rezervacija —
+dvije do četiri — a svaka pomjeri kursor za prosječno devetnaest dana. Prozor je 250
+dana (190 unazad, 60 unaprijed), pa je zadnja rezervacija po vozilu padala oko 114
+dana prije današnjeg dana. Horizont se nikad nije ni približio.
+
+Status se izvodi iz odnosa termina prema danas: `datumDo < danas` daje `Completed` ili
+`Cancelled`, `datumOd > danas` daje `Confirmed` ili `Pending`. Pošto budućih termina
+nije bilo, druga grana se nikad nije izvršila.
+
+Popravka je da petlja ide **dok ne dođe do horizonta**, sa gornjom granicom po vozilu
+samo da jedno vozilo ne popuni cijeli kalendar.
+
+Šta bi ovo oborilo da nije nađeno: kalendar flote bio bi prazan, kartica „aktivne
+rezervacije" na pregledu poslovanja pokazivala bi nulu, `popularity` komponenta
+preporuke broji rezervacije iz zadnjih 90 dana — a njih nije bilo nijedne — i state
+machine iz faze 11 ne bi imao nijedan `Pending` ni `Confirmed` zapis. Uputstvo uz to
+traži rezervacije **u svim statusima**.
+
+Nakon ispravke: 15 `Pending`, 67 `Confirmed`, 76 `Cancelled`, 205 `Completed`, sa
+terminima do šezdeset dana u budućnost.
+
+> Seeder se pokreće samo nad praznom bazom, pa je za primjenu bio potreban
+> `docker compose down -v`. To je ista komanda kojom se u fazi 20.6 provjerava da se
+> sistem podiže iz ničega.
 
 ---
 
