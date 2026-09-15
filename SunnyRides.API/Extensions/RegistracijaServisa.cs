@@ -1,5 +1,6 @@
 using SunnyRides.API.Auth;
 using SunnyRides.Services.Auth;
+using SunnyRides.Services.Cijene;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
 using SunnyRides.Services.Sifrarnici;
@@ -38,6 +39,10 @@ public static class RegistracijaServisa
         // bi ga u istom zahtjevu umnozio.
         DodajSifrarnike(services);
         DodajFlotu(services);
+
+        // Obracun cijene je jedini put do iznosa - i pregled prije rezervacije i samo
+        // kreiranje rezervacije zovu isti servis.
+        services.AddScoped<IPricingService, PricingService>();
 
         return services;
     }

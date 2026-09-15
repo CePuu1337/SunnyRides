@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SunnyRides.API", "SunnyRide
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SunnyRides.Subscriber", "SunnyRides.Subscriber\SunnyRides.Subscriber.csproj", "{FDB6790A-97DD-4560-B2BE-4F1BC194B4F5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SunnyRides.Tests", "SunnyRides.Tests\SunnyRides.Tests.csproj", "{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{FDB6790A-97DD-4560-B2BE-4F1BC194B4F5}.Release|x64.Build.0 = Release|Any CPU
 		{FDB6790A-97DD-4560-B2BE-4F1BC194B4F5}.Release|x86.ActiveCfg = Release|Any CPU
 		{FDB6790A-97DD-4560-B2BE-4F1BC194B4F5}.Release|x86.Build.0 = Release|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Debug|x64.Build.0 = Debug|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Debug|x86.Build.0 = Debug|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Release|x64.ActiveCfg = Release|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Release|x64.Build.0 = Release|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Release|x86.ActiveCfg = Release|Any CPU
+		{C8582DD8-8B9E-40EF-B551-9AE98616E5CE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -30,7 +30,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 6 | Prijava, JWT, uloge, opoziv tokena | ✅ |
 | 7 | CRUD referentnih podataka | ✅ |
 | 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
-| 9 | Obračun cijene i provjera dostupnosti | ⬜ |
+| 9 | Obračun cijene i provjera dostupnosti | 🟡 |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ⬜ |
 | 11 | Rezervacije i state machine | ⬜ |
 | 12 | Plaćanje, webhook, povrat novca | ⬜ |
@@ -866,6 +866,115 @@ ponašati drugačije prema odgovoru na spašavanje nego prema odgovoru na dohvat
 | Pretraga po periodu koji se preklapa | 1, odnosno 0 za drugi period | ✅ |
 | Izmjena od strane administratora | autor ostaje uposlenik | ✅ |
 | `POST` vraća nazive iz navigacija | registracija, model, poslovnica, ime | ✅ |
+
+---
+
+## Obračun cijene
+
+Cijena se računa na jednom mjestu i taj put je jedini. Zovu ga dvije stvari i obje
+moraju dobiti isti broj: pregled cijene koji klijent vidi prije rezervacije, i samo
+kreiranje rezervacije. Da postoje dvije implementacije, klijent bi vidio jednu cijenu
+a platio drugu — i to bi se otkrilo tek kad neko uporedi račun sa ekranom.
+
+### Tri sloja, i zašto baš tako
+
+| Klasa | Odgovornost | Zna za bazu |
+|---|---|---|
+| `TrajanjeNajma` | koliko sati ili dana se naplaćuje | ne |
+| `ObracunCijene` | sastavlja razradu od gotovih brojeva | ne |
+| `PricingService` | učita vozilo, sezonu, opremu, osiguranje | da |
+
+Podjela nije estetska. Kontrolni primjeri iz uputstva — 24 h 30 min, 25 h, 48 h,
+49 h — testiraju se **bez baze, bez mokova i bez konteksta**, kao obična funkcija.
+Test koji prolazi zato što je mok podešen da vrati očekivani rezultat ne dokazuje
+ništa; ovaj računa stvarnu aritmetiku.
+
+### Pravilo trajanja
+
+```
+trajanje ≤ 6 h        →  satna tarifa, započeti sat se računa cijeli
+6 h < trajanje ≤ 24 h →  dnevna tarifa, jedan dan
+trajanje > 24 h       →  puni dani + tolerancija 59 minuta
+```
+
+Tolerancija je ono što se najlakše pogriješi. Vraćanje vozila deset minuta poslije
+roka ne smije klijenta koštati cijeli dodatni dan; sat i više već smije. Zato:
+
+| Trajanje | Ostatak preko punih dana | Naplaćeno |
+|---|---|---|
+| 24 h 30 min | 30 min | 1 dan |
+| 24 h 59 min | 59 min | 1 dan |
+| 25 h | 60 min | 2 dana |
+| 48 h | 0 | 2 dana |
+| 49 h | 60 min | 3 dana |
+
+Granica je **strogo veće od** 59 minuta, ne veće ili jednako. Tačno 59 minuta je još
+unutar tolerancije.
+
+### Tri odluke koje uputstvo ne precizira
+
+**Započeti sat se računa cijeli.** Inače bi najam od 61 minute koštao kao najam od
+jednog sata. Isti princip kao na parkingu.
+
+**Sezonski množilac djeluje prije popusta.** Popust je popust na cijenu koja se
+stvarno naplaćuje, pa se računa od iznosa koji već nosi sezonu:
+
+```
+osnovica    = dnevnaTarifa × dani
+saSezonom   = osnovica × množilac
+popust      = saSezonom × procenat
+iznosNajma  = saSezonom − popust
+```
+
+Obrnutim redoslijedom bi se popust računao od cijene koja se nikad ne naplaćuje.
+
+**Najam po satu se za opremu i osiguranje računa kao jedan dan.** Inače bi GPS na
+petosatnom najmu bio besplatan, jer je broj dana nula.
+
+### Odakle dolaze pragovi popusta
+
+Iz cjenovnika, ne iz koda. `PopustPrag1`, `PopustProcenat1`, `PopustPrag2` i
+`PopustProcenat2` su kolone u tabeli `Cjenovnik`, pa se sezonska akcija mijenja
+unosom podatka umjesto ponovnim prevođenjem. Gleda se prvo viši prag, da najam od
+deset dana dobije popust za sedam a ne za tri dana.
+
+Ako za datum preuzimanja nema definisane sezone, koristi se podrazumijevana politika
+3 dana/5 % i 7 dana/10 % — iste vrijednosti koje stoje u seed cjenovniku. To je
+zaštita da najam od sedam dana ne ostane bez popusta samo zato što neko nije unio
+tarifu za taj period.
+
+**Sezona se bira po datumu preuzimanja, ne po današnjem danu.** Rezervacija
+napravljena u maju za termin u julu plaća se po ljetnoj tarifi. Cjenovnik smije
+nadjačati i samu tarifu vozila; kad je ne navede, važi tarifa upisana na primjerku.
+
+### Zaokruživanje
+
+Svaka stavka se zaokružuje na dvije decimale **posebno**, a ukupan iznos je zbir već
+zaokruženih stavki. Zbog toga se prikazana razrada uvijek sabira u prikazani ukupni
+iznos. Da se zaokružuje samo na kraju, klijent bi vidio listu brojeva koja se ne
+sabira u ono što plaća — a to je prva stvar koju čovjek provjeri kad mu se račun
+učini previsokim.
+
+### Šta u zahtjevu namjerno ne postoji
+
+`ObracunCijeneRequest` nema nijedno polje sa iznosom. Klijent kaže koje vozilo, za
+koji period, koju opremu i koji paket osiguranja — sve što ima cijenu server čita iz
+baze. Da iznos stiže izvana, klijent bi mogao rezervisati po cijeni koju sam odredi.
+
+Isto vrijedi za `StavkaOpremeRequest`: šalje se šta i koliko, nikad po kojoj cijeni.
+
+### Testovi kojima je korak zatvoren
+
+31 test, svi prolaze. Trajanje pokriva granice — tačno 6 h, 6 h 1 min, tačno 24 h,
+24 h 59 min, 25 h, 48 h 59 min naspram 49 h — te datum vraćanja prije preuzimanja.
+Obračun pokriva pragove popusta, redoslijed množioca i popusta, opremu po danu
+naspram fiksne cijene, opremu na satnom najmu, osiguranje, depozit, zbir razrade i
+zaokruživanje na iznosu koji pada tačno na polovinu (5,265 → 5,27).
+
+> ⬜ **Šta ovi testovi ne pokrivaju.** `PricingService` sam po sebi nema testove —
+> njegov posao je učitavanje iz baze, a to bi tražilo test bazu ili mokove.
+> Provjereno je kroz API: ista rezervacija u julu i u novembru daje različit iznos,
+> jer se povlači različita sezona.
 
 ---
 
