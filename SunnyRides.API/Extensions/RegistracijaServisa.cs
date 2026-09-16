@@ -3,6 +3,7 @@ using SunnyRides.Services.Auth;
 using SunnyRides.Services.Cijene;
 using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
+using SunnyRides.Services.Rezervacije;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
 using SunnyRides.Services.Sifrarnici;
@@ -53,6 +54,11 @@ public static class RegistracijaServisa
         // Dozvole su jedina implementacija hijerarhije kategorija - koristi ih i
         // pretraga i provjera preduslova pri rezervaciji.
         services.AddScoped<IDozvolaService, DozvolaService>();
+
+        // Jedino mjesto gdje se mijenja status rezervacije. Scoped je jer cita
+        // prijavljenog korisnika iz trenutnog zahtjeva.
+        services.AddScoped<IRezervacijaStateMachine, RezervacijaStateMachine>();
+        services.AddScoped<IRezervacijaService, RezervacijaService>();
 
         return services;
     }

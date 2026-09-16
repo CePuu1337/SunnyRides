@@ -1,5 +1,6 @@
 using SunnyRides.Model.Enums;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Rezervacije;
 
 namespace SunnyRides.Services.Database.Seed;
 
@@ -105,33 +106,35 @@ public partial class DatabaseSeeder
     }
 
     /// <summary>
-    /// Povrat po politici otkazivanja. Depozit se vraca uvijek, neovisno o tome
-    /// koliko je vremena ostalo do preuzimanja.
+    /// Povrat po politici otkazivanja.
+    ///
+    /// Racuna ga <c>PravilaOtkazivanja</c> - isto pravilo koje servis primjenjuje na
+    /// zivim podacima. Da je ovdje prepisano, seed bi poslije prve izmjene pravila
+    /// poceo pricati drugu pricu od aplikacije, a to je neslaganje koje se primijeti
+    /// tek kad neko uporedi stari i novi zapis.
     /// </summary>
     private void DodajPovratZbogOtkazivanja(Rezervacija rezervacija, Placanje placanje)
     {
         var otkazano = rezervacija.DatumOtkazivanja ?? rezervacija.DatumKreiranja;
-        var danaDoPreuzimanja = (rezervacija.DatumOd - otkazano).TotalDays;
         var otkazalaAgencija = rezervacija.OtkazaoKorisnik is not null
                                && _osoblje.Any(o => o.Id == rezervacija.OtkazaoKorisnik.Id);
 
-        var procenat = otkazalaAgencija ? 100m
-            : danaDoPreuzimanja > 7 ? 100m
-            : danaDoPreuzimanja >= 3 ? 50m
-            : 0m;
+        var obracun = PravilaOtkazivanja.Izracunaj(new UlazOtkazivanja
+        {
+            DatumOd = rezervacija.DatumOd,
+            Sada = otkazano,
+            OtkazujeAgencija = otkazalaAgencija,
 
-        var iznosNajma = rezervacija.UkupanIznos - rezervacija.IznosDepozita;
-        var iznosPovrata = Zaokruzi(iznosNajma * procenat / 100m + rezervacija.IznosDepozita);
-
-        var razlog = otkazalaAgencija
-            ? "Otkazivanje od strane agencije - puni povrat."
-            : $"Otkazivanje od strane klijenta - primijenjeno pravilo {procenat:0} % uz puni povrat depozita.";
+            // Osnova je stvarno naplaceni iznos, ne ukupan iznos rezervacije.
+            Naplaceno = placanje.NaplaceniIznos ?? 0m,
+            IznosDepozita = rezervacija.IznosDepozita
+        });
 
         _context.Refundi.Add(new Refund
         {
             Placanje = placanje,
-            Iznos = iznosPovrata,
-            Razlog = razlog,
+            Iznos = obracun.UkupanPovrat,
+            Razlog = obracun.Obrazlozenje,
             Status = StatusPlacanja.Succeeded,
             ProviderRefundId = $"re_seed_{rezervacija.Id}",
             KreiraoKorisnik = rezervacija.OtkazaoKorisnik,

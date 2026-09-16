@@ -107,6 +107,16 @@ public partial class DatabaseSeeder
         var paket = Sansa(75) ? Izaberi(_paketiOsiguranja) : null;
         var datumKreiranja = datumOd.AddDays(-Broj(1, 21));
 
+        // Rezervacija ne moze nastati prije nego je napravljena. Kod buducih termina
+        // oduzimanje od datuma preuzimanja zna zavrsiti u buducnosti - termin za tri
+        // sedmice minus deset dana je i dalje sutra - pa bi cijela historija statusa
+        // nosila datume koji jos nisu nastupili. Tada se datum pomjera unazad od
+        // danasnjeg dana.
+        if (datumKreiranja > _danas)
+        {
+            datumKreiranja = _danas.AddDays(-Broj(0, 4)).AddHours(-Broj(1, 20));
+        }
+
         // Dio otkazanih rezervacija je prije otkazivanja bio placen - njima kasnije
         // nastaje i zapis o povratu novca. Ostale su otkazane jos u statusu Pending.
         var bioPlacen = status switch

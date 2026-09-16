@@ -32,7 +32,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
 | 9 | Obračun cijene i provjera dostupnosti | ✅ |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ✅ |
-| 11 | Rezervacije i state machine | ⬜ |
+| 11 | Rezervacije, state machine, otkazivanje | ✅ |
 | 12 | Plaćanje, webhook, povrat novca | ⬜ |
 | 13 | Primopredaja i obračun depozita | ⬜ |
 | 14 | RabbitMQ i worker servis | ⬜ |
@@ -1077,10 +1077,10 @@ Zaštita radi pod uslovom da **svi** koji upisuju rezervacije uzmu isti lock. Po
 na `(KorisnikId, VoziloId, DatumOd)`, ali on hvata samo dvostruko slanje iste forme
 od istog korisnika.
 
-> ⬜ **Test konkurentnosti još nije proveden.** Plan traži dva istovremena zahtjeva za
-> isto vozilo i isti termin, od kojih samo jedan smije proći. Endpoint za kreiranje
-> rezervacije nastaje u fazi 11, pa se test radi tamo. Mehanizam je spreman i čeka
-> pozivaoca.
+> ✅ **Test konkurentnosti je proveden u fazi 11**, kad je nastao endpoint za
+> kreiranje rezervacije. Dva istovremena zahtjeva za isto vozilo i isti termin: jedan
+> prolazi, drugi dobija 400, a u bazi ostaje tačno jedna rezervacija. Detalji su u
+> sekciji o rezervacijama.
 
 ### Pogođene rezervacije
 
@@ -1345,6 +1345,277 @@ seedu ne uvede izuzetak od pravila da osjetljivi fajlovi nisu javni.
 
 ---
 
+## Rezervacije i promjena statusa
+
+### Tabela prelaza je odvojena od mašine
+
+`PrelaziRezervacije` nema nijednu zavisnost — ni bazu, ni korisnika, ni audit. Cijelo
+pravilo stoji na jednom mjestu koje se pročita odjednom:
+
+```
+Pending   → Confirmed    plaćanje verifikovano na serveru
+Pending   → Cancelled    isteklo držanje ili klijent odustao
+Confirmed → Cancelled    otkazivanje prije preuzimanja
+Confirmed → Completed    evidentiran povrat vozila
+Cancelled → terminalno
+Completed → terminalno
+```
+
+**Sve što u toj tabeli ne piše je zabranjeno.** Nema implicitnih prelaza i nema
+prelaza koji se „podrazumijeva" — uključujući prelaz u isti status, koji testovi
+posebno gađaju.
+
+Poruka o odbijanju nabraja šta jeste moguće: „Rezervacija je na čekanju i ne može
+postati završena. Iz ovog stanja moguće je samo: potvrđena, otkazana." Korisnik time
+zna šta da uradi umjesto da pogađa.
+
+Jedan test postoji samo da zaključa odluku koja se lako previdi: **izdavanje vozila ne
+mijenja status.** Rezervacija ostaje `Confirmed` i dok je vozilo fizički kod klijenta —
+fizički tok se prati kroz zapise `Primopredaja`, jer uputstvo propisuje tačno četiri
+statusa. Da je neko dodao `InProgress`, rad bi pao na tom pravilu.
+
+### Mašina ne snima
+
+`Promijeni` i `ZabiljeziKreiranje` su **sinhrone** i namjerno ne zovu
+`SaveChangesAsync`. Promjena statusa je uvijek dio veće operacije — naplate,
+otkazivanja, povrata vozila — pa transakcijom upravlja onaj ko tu operaciju vodi. Da
+mašina sama snima, kreiranje rezervacije bi imalo dva odvojena upisa umjesto jednog
+atomskog.
+
+Audit zapis nosi četiri stvari koje uputstvo traži: ko, kada, razlog i opis. Izvršilac
+se čita iz tokena i **smije biti prazan** — periodični posao u workeru otkazuje
+istekle rezervacije bez ijednog prijavljenog korisnika, i tada je tačno reći da to
+nije uradio niko nego sistem.
+
+### Redoslijed pri kreiranju nije proizvoljan
+
+```
+1. provjera klijenta (blokiran? deaktiviran?)
+2. provjera termina (nije u prošlosti, kraj poslije početka)
+   ── otvara se transakcija ──
+3. ZAKLJUČAVANJE VOZILA
+4. učitavanje vozila, provjera da je aktivno
+5. provjera dozvole na datum preuzimanja
+6. provjera dostupnosti
+7. provjera zaliha opreme
+8. obračun cijene na serveru
+9. upis rezervacije i stavki
+   ── commit ──
+```
+
+**Zaključavanje ide prije provjere dostupnosti.** Da je obrnuto, dva istovremena
+zahtjeva bi oba prošla provjeru prije nego ijedan upiše svoj red — provjera bi bila
+tačna u trenutku kad je rađena i pogrešna čim se drugi zahtjev upiše.
+
+**Provjera dozvole se radi ponovo**, iako je ista provjera već filtrirala pretragu.
+Filter u pretrazi je udobnost; provjera pri kreiranju je pravilo. Bez druge, klijent
+bi zaobišao filter pozivom API-ja direktno.
+
+### Broj se izvodi iz identifikatora, pa se upisuje u dva koraka
+
+`Broj` ima jedinstveni indeks, a identifikator baza dodjeljuje tek pri upisu. Zato
+prvi upis nosi privremenu vrijednost sa GUID-om, a drugi konačan broj
+`SR-2026-01002`. Oba su u istoj transakciji, pa privremenu vrijednost niko izvana ne
+vidi.
+
+Alternativa — brojanje postojećih rezervacija za tu godinu — kod dva istovremena upisa
+dala bi isti broj i pala na jedinstvenom indeksu.
+
+### Šta zahtjev nema
+
+`RezervacijaInsertRequest` nema nijedno polje koje nosi novac ni stanje: nema
+`UkupanIznos`, `IznosDepozita`, `IznosPopusta`, `Status`, `IsPaid` ni `DrziDo`. Sve to
+računa i postavlja server.
+
+Nema ni `KorisnikId` — klijent rezerviše za sebe. Nema ni `PoslovnicaId`, jer se vozilo
+preuzima tamo gdje jeste.
+
+Kreiranje je otvoreno **samo klijentu**. Ručni unos rezervacije od strane osoblja, iz
+kalendara flote, traži da se klijent navede izvana; to je zaseban endpoint sa vlastitom
+provjerom uloge i dolazi uz kalendar u fazi 17. Ovaj put se time ne otvara.
+
+### Blokiran klijent dobija 403, ne 400
+
+Blokada ne oduzima pristup vlastitim podacima nego pravo na novi najam. Blokiran
+klijent se može prijaviti, vidjeti svoju historiju i račune, ali ne može rezervisati.
+
+### Čitanje je ograničeno vlasništvom u servisu
+
+Klijent vidi isključivo svoje rezervacije, osoblje sve. Ograničenje se **nalaže u
+servisu**, a ne očekuje od klijenta da pošalje ispravan filter — razriješeni
+identifikator živi u privatnom polju servisa, jer se search objekat puni iz query
+stringa.
+
+Dohvat po identifikatoru provjerava vlasništvo posebno: bez toga bi svaki prijavljen
+klijent mogao mijenjati broj u adresi i čitati tuđe rezervacije, zajedno sa iznosima i
+kontakt podacima.
+
+### Lista i detalj vuku različito
+
+Detaljni dohvat učitava tri kolekcije — slike vozila, stavke opreme i historiju
+statusa — pa ide kroz `AsSplitQuery`. U jednom upitu bi se redovi množili međusobno:
+rezervacija sa tri stavke i četiri zapisa historije vratila bi dvanaest redova umjesto
+sedam, i u svakom ponovo sve podatke o vozilu i klijentu. EF na to i upozorava.
+
+Lista ima **tačno jednu** kolekciju — glavnu sliku vozila — pa se redovi ne množe i
+upit ostaje jedan. Stavke opreme i historija se u listi ne prikazuju, pa se ni ne
+učitavaju; na DTO-u ostaju prazne liste.
+
+### Test konkurentnosti
+
+Ovo je test koji je iz faze 9 ostao nenapravljen, jer je tražio endpoint koji tada nije
+postojao.
+
+Dva **različita** klijenta šalju istovremeni zahtjev za isto vozilo i isti termin.
+Različita namjerno — da jedinstveni indeks na `(KorisnikId, VoziloId, DatumOd)` ne
+uhvati slučaj umjesto zaključavanja, pa da lock bude taj koji odlučuje.
+
+| | Rezultat |
+|---|---|
+| Prvi zahtjev | `USPJEH SR-2026-01003` |
+| Drugi zahtjev | `ODBIJEN 400 — Vozilo je već rezervisano u tom terminu` |
+| Rezervacija u bazi za taj termin | **1** |
+
+`UPDLOCK, HOLDLOCK` nad redom vozila radi posao: drugi zahtjev čeka na locku, a kad
+ga dobije, provjera dostupnosti već vidi upisanu rezervaciju.
+
+### Testovi kojima je korak zatvoren
+
+24 nova unit testa za tabelu prelaza. Kroz API:
+
+| Test | Rezultat |
+|---|---|
+| Klijent vidi svoje (67), osoblje sve (363) | ✅ |
+| Klijent traži tuđu rezervaciju | 403 |
+| Kreiranje: `Pending`, `IsPaid=false`, držanje 899 s | ✅ |
+| Iznos, depozit i popust računa server | ✅ |
+| Audit zapis nastaje odmah | „Rezervacija kreirana, čeka se plaćanje." |
+| Isto vozilo, isti termin, drugi klijent | 400 |
+| Termin u prošlosti | 400 |
+| Quad klijentu koji ima samo A1 | „Za ovo vozilo je potrebna kategorija B, a vaša dozvola pokriva A1." |
+| Uposlenik kroz klijentski endpoint | 403 |
+| Dvostruko slanje iste forme | 400 |
+
+### Otkazivanje: prikaz nije obećanje
+
+Otkazivanje ima dva endpointa. `GET /api/rezervacije/{id}/obracun-otkazivanja` kaže
+šta bi se vratilo kad bi se otkazalo u ovom trenutku i ne mijenja ništa.
+`POST /api/rezervacije/{id}/otkazi` otkazuje.
+
+Obračun se pri samom otkazivanju radi **iznova**, iz podataka u bazi i iz trenutnog
+vremena. Onaj prvi poziv je prikaz, a ne obećanje. Da se njegov odgovor uzimao zdravo
+za gotovo, klijent bi ga mogao zatražiti osam dana prije termina — kad je povrat pun —
+sačekati do dana prije, otkazati i tražiti tih sto posto. Ovo je isti princip kao kod
+cijene: klijent bira šta hoće, ali koliko to košta i koliko mu se vraća računa server,
+u trenutku kad se odluka stvarno izvršava.
+
+### Pravilo povrata stoji na jednom mjestu
+
+`PravilaOtkazivanja` je statička klasa bez baze i bez stanja, kao i `ObracunCijene`.
+Razlog za odvajanje je isti: pravilo o povratu je ono što klijent citira kad se ne
+slaže sa iznosom, pa mora stajati na jednom mjestu koje se može pročitati odjednom i
+provjeriti bez baze.
+
+| Kad se otkazuje | Povrat najma |
+|---|---|
+| više od 7 dana prije preuzimanja | 100 % |
+| od 3 do 7 dana prije | 50 % |
+| manje od 3 dana prije | 0 % |
+| termin je već počeo | 0 % |
+| agencija otkazuje | 100 %, bez obzira na rok |
+
+Depozit se vraća **uvijek i u cijelosti**, jer nije naknada nego polog. To je i razlog
+zašto je naplaćeni iznos u obračunu podijeljen na dva dijela: procenat djeluje samo na
+dio najma, depozit prolazi netaknut.
+
+Seed koristi **istu** klasu umjesto vlastite kopije pravila. Da je pravilo prepisano na
+dva mjesta, prva izmjena bi napravila neslaganje između podataka u bazi i onoga što
+aplikacija računa — a to je vrsta greške koja se primijeti tek kad neko uporedi stari i
+novi zapis.
+
+### Osnova je naplaćeno, ne cijena
+
+Povrat se računa iz `Placanje.NaplaceniIznos` uspješnih plaćanja, nikad iz
+`Rezervacija.UkupanIznos` i nikako ponovnim obračunom iz cjenovnika. Ako se tarifa
+u međuvremenu promijenila, povrat to ne smije osjetiti — vraća se dio onoga što je
+stvarno uzeto, a ne dio onoga što bi ista rezervacija koštala danas.
+
+Iz istog razloga se prati i koliko je po rezervaciji **već** vraćeno. Bez toga bi dva
+uzastopna zahtjeva — ili jedan ponovljen nakon prekida veze — napravila dva povrata za
+isti novac. Kao već vraćen računa se i povrat koji je tek zapisan a nije izvršen;
+neuspio i poništen se ne računaju, jer je taj novac i dalje kod agencije.
+
+### Ko smije otkazati i šta mora navesti
+
+Otkazuju i klijent i osoblje, pa na endpointu nema `Roles`. Razlika se ne vidi u ruti
+nego u ishodu: kad otkazuje agencija, povrat je pun, a razlog je **obavezan** — klijent
+ima pravo znati zašto mu je najam otkazan. Klijentu se vlastiti razlog ne traži.
+
+Ko je otkazao čita se iz tokena i upisuje u `OtkazaoKorisnikId`. Tijelo zahtjeva nosi
+isključivo razlog. Da u njemu postoji polje „iznos povrata", klijent bi mogao otkazati
+dan prije termina i sam upisati sto posto.
+
+Redoslijed provjera je: postoji li rezervacija (404) → smijem li joj uopšte pristupiti
+(403) → smije li se otkazati (400) → koliko se vraća → upis. Vlasništvo ide odmah
+poslije postojanja, da tuđi broj u adresi ne može izvući ni iznos ni razlog otkazivanja.
+
+### Vozilo koje je već izdato se ne otkazuje
+
+Ako po rezervaciji postoji `Primopredaja` tipa `Izdavanje`, otkazivanje se odbija.
+Vozilo je kod klijenta i taj najam se ne poništava nego zatvara evidentiranjem povrata
+vozila — put vodi u `Completed`, ne u `Cancelled`.
+
+Isti izvor istine koristi i prikaz i upis: polje `mozeSeOtkazati` u obračunu i provjera
+pri otkazivanju zovu istu funkciju. Zato se ne može desiti da dugme u aplikaciji bude
+aktivno a zahtjev odbijen, ili obrnuto.
+
+### Povrat se veže za plaćanje, ne za rezervaciju
+
+Stripe povrat ide prema konkretnom `PaymentIntent`-u, pa se iznos raspoređuje po
+plaćanjima umjesto da bude jedan slobodan zapis uz rezervaciju. Zapis nastaje sa
+statusom `Created`: postoji, ali prema provajderu još nije poslan.
+
+> ⬜ **Slanje povrata prema Stripe-u dolazi u fazi 12.** Do tada zapis stoji kao
+> evidentirana obaveza, a ne kao izvršena isplata. Tek potvrda sa servera Stripe-a
+> prevodi ga u `Succeeded`.
+
+### Šta je testiranje otkrilo u seedu
+
+Prvi prolaz kroz test pokazao je da posljednji zapis historije nije bio otkazivanje
+nego starije „plaćanje verifikovano". Otkazivanje jeste bilo upisano — greška je bila
+u seed podacima.
+
+Seed je računao datum kreiranja kao `datumOd` minus jedan do dvadeset jedan dan. Za
+termin tri sedmice unaprijed to zna završiti **u budućnosti**, pa je cijela historija
+te rezervacije nosila datume koji još nisu nastupili i pri sortiranju po vremenu
+ispadala iza stvarnog otkazivanja. Rezervacija nastala u budućnosti je podatak koji ne
+bi izdržao nijedno pitanje, pa je datum kreiranja sada ograničen na prošlost.
+
+Uz to je poredak historije učinjen stabilnim — `OrderBy(DatumVrijeme).ThenBy(Id)`. Bez
+drugog ključa, dva zapisa u istom trenutku slaže baza kako joj odgovara, a to nije
+poredak nego slučajnost koja se može razlikovati između dva poziva.
+
+### Testovi kojima je korak zatvoren
+
+21 novi unit test za pravila povrata, sa težištem na granicama: sedmi dan, treći dan i
+trenutak kad je termin već počeo. Kroz API:
+
+| Test | Rezultat |
+|---|---|
+| Obračun: povrat + zadržano = naplaćeno | ✅ 250,30 = 250,30 |
+| Termin za 22 dana, klijent | 100 %, pun povrat |
+| Klijent traži obračun za tuđu rezervaciju | 403 |
+| Klijent otkazuje svoju | `Cancelled`, `DrziDo` prazno |
+| Audit zapis nosi obrazloženje i iznos | „…najam se vraća u cijelosti. Povrat: 250,30 EUR." |
+| Ponovno otkazivanje iste rezervacije | 400 |
+| Obračun poslije otkazivanja | `mozeSeOtkazati=false`, već vraćeno 250,30, novi povrat 0,00 |
+| Osoblje otkazuje bez razloga | 400 |
+| Osoblje otkazuje uz razlog | `Cancelled`, izvršilac Emina Hodžić |
+| Otkazivanje završene rezervacije | 400 |
+| Nepostojeća rezervacija | 404 |
+
+---
+
 ## Kome se vjeruje: klijent naspram servera
 
 > ⬜ Popunjava se u fazama 9–12.
@@ -1477,7 +1748,7 @@ vrati razumnu poruku, pošteno je reći da stvar nije završena.
 
 ## Životni ciklus rezervacije
 
-> ⬜ Implementira se u fazi 11.
+> ✅ Implementirano u fazi 11.
 
 Rezervacija ima **tačno četiri statusa**. Peti se ne dodaje — uputstvo to propisuje.
 
@@ -1589,21 +1860,27 @@ jer se to zaobiđe direktnim pozivom API-ja.
 
 ## Povrat novca
 
-| Kad se otkazuje | Povrat |
+> ✅ Pravilo i obračun su gotovi u fazi 11c. Izvršavanje povrata prema Stripe-u dolazi
+> u fazi 12.
+
+| Kad se otkazuje | Povrat najma |
 |---|---|
 | više od 7 dana prije preuzimanja | 100 % |
-| 3–7 dana prije | 50 % |
-| manje od 48 h prije | 0 % |
+| od 3 do 7 dana prije | 50 % |
+| manje od 3 dana prije | 0 % |
 | agencija otkazuje | 100 %, uvijek |
 
-Depozit se vraća **uvijek**, neovisno o politici.
+Depozit se vraća **uvijek**, neovisno o politici — nije naknada nego polog.
 
 Iznos se računa iz `Placanje.NaplaceniIznos` — stvarno naplaćenog iznosa koji je
 vratio Stripe — a nikad ponovnim obračunom iz cjenovnika. Razlika je bitna: kad se
 tarifa promijeni u međuvremenu, povrat za staru rezervaciju mora ostati isti.
 
 `GET /api/rezervacije/{id}/obracun-otkazivanja` vraća izračunati iznos **bez
-izvršavanja akcije**, da klijent vidi tačan iznos prije nego potvrdi.
+izvršavanja akcije**, da klijent vidi tačan iznos prije nego potvrdi. Taj odgovor je
+prikaz, a ne obećanje — pri samom otkazivanju se računa iznova.
+
+Detaljno obrazloženje je u sekciji o otkazivanju, uz fazu 11.
 
 ---
 

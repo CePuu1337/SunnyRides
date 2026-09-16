@@ -1,5 +1,6 @@
 using Mapster;
 using SunnyRides.Model.DTOs;
+using SunnyRides.Model.Enums;
 using SunnyRides.Services.Database.Entities;
 
 namespace SunnyRides.Services.Mapping;
@@ -19,6 +20,7 @@ public static class MapsterKonfiguracija
         RegistrujSifrarnike();
         RegistrujFlotu();
         RegistrujDozvole();
+        RegistrujRezervacije();
     }
 
     /// <summary>
@@ -108,6 +110,11 @@ public static class MapsterKonfiguracija
                  e => e.KreiraoKorisnik != null
                       ? e.KreiraoKorisnik.Ime + " " + e.KreiraoKorisnik.Prezime : null);
 
+        TypeAdapterConfig<HistorijaStatusaRezervacije, HistorijaStatusaDto>.NewConfig()
+            .Map(dto => dto.IzvrsioKorisnikIme,
+                 e => e.IzvrsioKorisnik != null
+                      ? e.IzvrsioKorisnik.Ime + " " + e.IzvrsioKorisnik.Prezime : null);
+
         TypeAdapterConfig<Rezervacija, PogodjenaRezervacijaDto>.NewConfig()
             .Map(dto => dto.KlijentImePrezime,
                  e => e.Korisnik != null ? e.Korisnik.Ime + " " + e.Korisnik.Prezime : null)
@@ -142,5 +149,49 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.VerifikovaoKorisnikIme,
                  e => e.VerifikovaoKorisnik != null
                       ? e.VerifikovaoKorisnik.Ime + " " + e.VerifikovaoKorisnik.Prezime : null);
+    }
+
+    /// <summary>
+    /// Rezervacija nosi podatke o vozilu, klijentu i poslovnici zato sto ih kartica
+    /// prikazuje odjednom. Bez toga bi lista od dvadeset rezervacija trazila dvadeset
+    /// dodatnih poziva.
+    /// </summary>
+    private static void RegistrujRezervacije()
+    {
+        TypeAdapterConfig<StavkaOpreme, StavkaOpremeDto>.NewConfig()
+            .Map(dto => dto.Naziv, e => e.VrstaOpreme != null ? e.VrstaOpreme.Naziv : null);
+
+        TypeAdapterConfig<Rezervacija, RezervacijaDto>.NewConfig()
+            .Map(dto => dto.KlijentImePrezime,
+                 e => e.Korisnik != null ? e.Korisnik.Ime + " " + e.Korisnik.Prezime : null)
+            .Map(dto => dto.KlijentEmail, e => e.Korisnik != null ? e.Korisnik.Email : null)
+            .Map(dto => dto.OtkazaoKorisnikIme,
+                 e => e.OtkazaoKorisnik != null
+                      ? e.OtkazaoKorisnik.Ime + " " + e.OtkazaoKorisnik.Prezime : null)
+
+            .Map(dto => dto.RegistarskaOznaka,
+                 e => e.Vozilo != null ? e.Vozilo.RegistarskaOznaka : null)
+            .Map(dto => dto.ModelNaziv,
+                 e => e.Vozilo != null && e.Vozilo.ModelVozila != null
+                      ? e.Vozilo.ModelVozila.Naziv : null)
+            .Map(dto => dto.MarkaNaziv,
+                 e => e.Vozilo != null && e.Vozilo.ModelVozila != null
+                      && e.Vozilo.ModelVozila.Marka != null
+                      ? e.Vozilo.ModelVozila.Marka.Naziv : null)
+            .Map(dto => dto.ThumbnailUrl,
+                 e => e.Vozilo != null
+                      ? e.Vozilo.Slike.Select(s => s.PutanjaThumbnail).FirstOrDefault() : null)
+
+            .Map(dto => dto.PoslovnicaNaziv, e => e.Poslovnica != null ? e.Poslovnica.Naziv : null)
+            .Map(dto => dto.PaketOsiguranjaNaziv,
+                 e => e.PaketOsiguranja != null ? e.PaketOsiguranja.Naziv : null)
+
+            // Odbrojavanje racuna server, da ne zavisi od toga koliko je sat na
+            // uredjaju tacan. Prazno je cim drzanje vise nije bitno.
+            .Map(dto => dto.PreostaloSekundiDrzanja,
+                 e => e.Status == StatusRezervacije.Pending
+                      && e.DrziDo != null && e.DrziDo > DateTime.UtcNow
+                      ? (int?)(int)(e.DrziDo.Value - DateTime.UtcNow).TotalSeconds
+                      : null);
     }
 }
