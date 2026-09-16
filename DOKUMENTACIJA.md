@@ -31,7 +31,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 7 | CRUD referentnih podataka | ✅ |
 | 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
 | 9 | Obračun cijene i provjera dostupnosti | ✅ |
-| 10 | Vozačke dozvole i filtriranje po kategoriji | ⬜ |
+| 10 | Vozačke dozvole i filtriranje po kategoriji | 🟡 |
 | 11 | Rezervacije i state machine | ⬜ |
 | 12 | Plaćanje, webhook, povrat novca | ⬜ |
 | 13 | Primopredaja i obračun depozita | ⬜ |
@@ -1125,6 +1125,119 @@ terminima do šezdeset dana u budućnost.
 > Seeder se pokreće samo nad praznom bazom, pa je za primjenu bio potreban
 > `docker compose down -v`. To je ista komanda kojom se u fazi 20.6 provjerava da se
 > sistem podiže iz ničega.
+
+---
+
+## Vozačke dozvole i kategorije
+
+Ovo je drugi problem koji čini domen specifičnim: klijentu se ne smije ponuditi
+vozilo koje prema svojoj dozvoli ne smije voziti.
+
+### Hijerarhija nije napisana u kodu
+
+Nigdje u projektu ne stoji da „A pokriva A1". To se **izvodi iz tabele**
+`PravilaKategorije`:
+
+| Kategorija | Tip vozila | Max kubikaža | Max snaga | Min godine |
+|---|---|---|---|---|
+| A1 | skuter | 125 cm³ | 11 kW | 16 |
+| A1 | motocikl | 125 cm³ | 11 kW | 16 |
+| A | skuter | — | — | 24 |
+| A | motocikl | — | — | 24 |
+| B | quad | — | — | 18 |
+
+Pravilo kategorije A za motocikle nema gornju granicu, a pravilo A1 ima 125 cm³ i
+11 kW. Ko ima A, ima pravilo koje pokriva sve što pokriva i A1 — pa je hijerarhija
+**posljedica podataka**, ne grana u kodu.
+
+`PravilaPokrivenosti.Pokrivene` radi po jednom pitanju: pokriva li neka moja kategorija
+sve što traži kandidat? Pokriva ako za svaki tip vozila koji kandidat obuhvata imam
+vlastito pravilo koje nije strožije. Prazna granica znači „bez ograničenja" i pokriva
+svaku konkretnu; obrnuto ne vrijedi, jer bi inače A1 ispao ravnopravan sa A.
+
+Ako se propis promijeni i A dobije granicu od 500 cm³, A i dalje pokriva A1 — 500 je
+veće od 125. Ispravka je izmjena jednog reda u šifrarniku; kod se ne dira. To je i
+testirano: jedan test mijenja pravila i provjerava da se hijerarhija promijenila sama.
+
+**Godine ulaze u račun**, jer pravilo nosi i `MinGodine`. Neko ko ima upisanu
+kategoriju A a ima dvadeset godina ne dobija njena prava — pravilo traži 24, pa mu ta
+kategorija ne vrijedi ni za A1.
+
+### Rok se provjerava na datum preuzimanja
+
+Dozvola koja važi danas a ističe prije termina ne pokriva taj najam. Zato
+`DozvoljeneKategorijeAsync` prima datum, a pretraga mu prosljeđuje početak traženog
+termina. Provjera na današnji dan propustila bi rezervaciju za termin nakon isteka.
+
+### Šta zahtjev namjerno nema
+
+`VozackaDozvolaRequest` nema polje `KorisnikId` — vlasnik se čita iz tokena. Nema ni
+`Status`: da ga ima, klijent bi sam sebi odobrio dozvolu i preskočio verifikaciju.
+
+`VoziloSearchObject.SamoDozvoljenaZaMene` je **zastavica, a ne lista kategorija**. Da
+klijent šalje kategorije, poslao bi one koje mu odgovaraju; ovako ih server izvodi iz
+njegove dozvole. Razriješene kategorije žive u privatnom polju servisa, a ne u search
+objektu — search objekat se puni iz query stringa, pa bi lista u njemu bila nešto što
+klijent može sam poslati.
+
+### Dvije strane istog kontrolera
+
+Klijent radi isključivo sa **svojom** dozvolom i nikad ne navodi čijom — rute za njega
+nemaju identifikator u putanji (`/api/dozvole/moja`, `/api/dozvole/moje-kategorije`).
+Da ga imaju, bilo bi dovoljno promijeniti broj u URL-u da se vidi tuđa dozvola, i
+nijedan `[Authorize]` to ne bi spriječio.
+
+Uposlenik radi po identifikatoru, jer verifikuje tuđe dozvole, i te rute traže ulogu.
+
+### Verifikacija
+
+Svaka izmjena dozvole vraća status na `NaCekanju` i briše tragove ranije odluke. Bez
+toga bi klijent mogao dobiti odobrenje, pa poslije promijeniti broj i kategorije — a
+odobrenje bi ostalo.
+
+Razlog je obavezan **samo pri odbijanju**. Odobrenje i odbijanje se mogu ispraviti u
+oba smjera (uposlenik pogriješi), ali se ponavljanje iste odluke odbija sa porukom
+„Dozvola je već odobrena" — nema smisla dvaput odobriti istu stvar.
+
+Istekla dozvola se ne može odobriti: klijent mora prijaviti važeću.
+
+**Uposlenik na ekranu za verifikaciju vidi šta bi klijent smio voziti**, izvedeno iz
+kategorija i pravila, i to **bez obzira na status** — on to čita dok odlučuje hoće li
+odobriti, pa mu odgovor „čeka verifikaciju" ne bi pomogao. Oba puta, klijentski i
+uposlenički, računaju pokrivenost kroz istu metodu, pa ne mogu dati različit odgovor
+za istu dozvolu.
+
+### Jedan oblik greške za cijeli API
+
+Greške iz anotacija i greške iz servisa sada izgledaju isto.
+
+`[ApiController]` po defaultu vraća `ValidationProblemDetails` sa rječnikom `errors`,
+dok `ExceptionFilter` vraća `ProblemDetails` sa poljem `detail`. To su dva oblika istog
+događaja — zahtjev nije prihvaćen — i klijentska aplikacija bi za svaki morala imati
+vlastito čitanje.
+
+`InvalidModelStateResponseFactory` sada spaja poruke iz anotacija u isti
+`ProblemDetails`. Uputstvo traži da se backend validacijska poruka proslijedi
+korisniku umjesto generičkog teksta, a to je lakše ispuniti kad postoji samo jedan
+oblik odgovora.
+
+### Testovi kojima je korak zatvoren
+
+Devet novih unit testova pokriva hijerarhiju: A pokriva A1, A1 ne pokriva A, B je
+odvojena, više kategorija se sabira, mlađi od propisane dobi ne dobija prava, tačno
+propisana dob ih daje, i — najvažnije — promjena pravila mijenja hijerarhiju bez
+ijedne izmjene koda.
+
+Kroz API je provjereno ono što unit testovi ne mogu:
+
+| Test | Rezultat |
+|---|---|
+| Klijent sa A i B | smije A, A1, B — svih 33 vozila |
+| Klijent sa samo A1 | smije samo A1 — 20 od 33 vozila |
+| Uposlenik gleda dozvolu na čekanju | „Sa kategorijama A1 i 35 godina, klijent bi smio voziti vozila kategorija A1." |
+| Odbijanje bez razloga | 400 sa porukom iz anotacije |
+| Dvostruko odobrenje | 400, „Dozvola je već odobrena" |
+| Klijent traži listu svih dozvola | 403 |
 
 ---
 

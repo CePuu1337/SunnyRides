@@ -18,6 +18,7 @@ public static class MapsterKonfiguracija
 
         RegistrujSifrarnike();
         RegistrujFlotu();
+        RegistrujDozvole();
     }
 
     /// <summary>
@@ -118,5 +119,28 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.MarkaNaziv,
                  e => e.ModelVozila != null && e.ModelVozila.Marka != null
                       ? e.ModelVozila.Marka.Naziv : null);
+    }
+
+    /// <summary>
+    /// Dozvola nikad ne salje putanju do fotografije. Klijentu se javlja samo je li
+    /// prilozena; sam sadrzaj ide kroz endpoint koji provjerava vlasnistvo.
+    /// </summary>
+    private static void RegistrujDozvole()
+    {
+        TypeAdapterConfig<VozackaDozvola, VozackaDozvolaDto>.NewConfig()
+            .Map(dto => dto.ImaFotografiju, e => e.PutanjaSlike != null)
+            .Map(dto => dto.Istekla, e => e.DatumIsteka <= DateTime.UtcNow)
+            .Map(dto => dto.Kategorije,
+                 e => e.Kategorije.Select(k => k.KategorijaDozvole.Oznaka).OrderBy(x => x).ToList())
+            .Map(dto => dto.KategorijaIds,
+                 e => e.Kategorije.Select(k => k.KategorijaDozvoleId).ToList())
+            .Map(dto => dto.KlijentImePrezime,
+                 e => e.Korisnik != null ? e.Korisnik.Ime + " " + e.Korisnik.Prezime : null)
+            .Map(dto => dto.KlijentEmail, e => e.Korisnik != null ? e.Korisnik.Email : null)
+            .Map(dto => dto.KlijentDatumRodjenja,
+                 e => e.Korisnik != null ? e.Korisnik.DatumRodjenja : default(DateTime))
+            .Map(dto => dto.VerifikovaoKorisnikIme,
+                 e => e.VerifikovaoKorisnik != null
+                      ? e.VerifikovaoKorisnik.Ime + " " + e.VerifikovaoKorisnik.Prezime : null);
     }
 }

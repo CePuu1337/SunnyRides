@@ -32,4 +32,13 @@ public class VoziloSearchObject : BaseSearchObject
     /// </summary>
     public DateTime? SlobodnoOd { get; set; }
     public DateTime? SlobodnoDo { get; set; }
+
+    /// <summary>
+    /// Vraca samo vozila koja prijavljeni korisnik smije voziti prema svojoj dozvoli.
+    /// Mobilna aplikacija ovo salje uvijek.
+    ///
+    /// Namjerno je zastavica, a ne lista kategorija. Da klijent salje kategorije,
+    /// poslao bi one koje mu odgovaraju; ovako ih server izvodi iz njegove dozvole.
+    /// </summary>
+    public bool SamoDozvoljenaZaMene { get; set; }
 }

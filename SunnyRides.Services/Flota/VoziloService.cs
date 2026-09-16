@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
+using SunnyRides.Services.Auth;
 using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
+using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Fajlovi;
 
@@ -17,13 +20,53 @@ public class VoziloService
 {
     private readonly IPohranaSlika _pohrana;
     private readonly IAvailabilityService _dostupnost;
+    private readonly IDozvolaService _dozvolaService;
+    private readonly ICurrentUserService _trenutniKorisnik;
+
+    /// <summary>
+    /// Kategorije koje prijavljeni korisnik smije voziti, razrijesene na pocetku
+    /// pretrage.
+    ///
+    /// Drzi se u polju, a ne u search objektu, i to je sigurnosna odluka: search
+    /// objekat se puni iz query stringa, pa bi lista kategorija u njemu bila nesto
+    /// sto klijent moze sam poslati. Servis je Scoped, dakle traje jedan zahtjev.
+    /// </summary>
+    private List<int>? _dozvoljeneKategorije;
 
     public VoziloService(
-        SunnyRidesDbContext context, IPohranaSlika pohrana, IAvailabilityService dostupnost)
+        SunnyRidesDbContext context,
+        IPohranaSlika pohrana,
+        IAvailabilityService dostupnost,
+        IDozvolaService dozvolaService,
+        ICurrentUserService trenutniKorisnik)
         : base(context)
     {
         _pohrana = pohrana;
         _dostupnost = dostupnost;
+        _dozvolaService = dozvolaService;
+        _trenutniKorisnik = trenutniKorisnik;
+    }
+
+    /// <summary>
+    /// Kategorije se razrjesavaju ovdje jer je upit sinhron, a dozvola se cita iz baze.
+    /// Filtriranje samo po sebi ostaje u <see cref="AddFilter"/>, kao i kod svih
+    /// ostalih uslova.
+    /// </summary>
+    public override async Task<PagedResult<VoziloDto>> GetAsync(
+        VoziloSearchObject search, CancellationToken ct = default)
+    {
+        _dozvoljeneKategorije = null;
+
+        if (search.SamoDozvoljenaZaMene)
+        {
+            var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+
+            // Rok vazenja dozvole se provjerava na datum preuzimanja kad je poznat.
+            _dozvoljeneKategorije = await _dozvolaService.DozvoljeneKategorijeIdAsync(
+                korisnikId, search.SlobodnoOd, ct);
+        }
+
+        return await base.GetAsync(search, ct);
     }
 
     protected override string NazivEntiteta => "Vozilo";
@@ -92,6 +135,15 @@ public class VoziloService
         if (search.Aktivno.HasValue)
         {
             upit = upit.Where(x => x.Aktivno == search.Aktivno.Value);
+        }
+
+        // Filtriranje po dozvoli ide na serveru, ne skrivanjem stavki u interfejsu.
+        // Prazna lista znaci da korisnik nema upotrebljivu dozvolu - tada se ne
+        // prikazuje nijedno vozilo, jer nijedno ne smije voziti.
+        if (_dozvoljeneKategorije is not null)
+        {
+            var kategorije = _dozvoljeneKategorije;
+            upit = upit.Where(x => kategorije.Contains(x.ModelVozila.KategorijaDozvoleId));
         }
 
         // Uslov slobodnog termina se ne pise ovdje nego se trazi od servisa koji ga

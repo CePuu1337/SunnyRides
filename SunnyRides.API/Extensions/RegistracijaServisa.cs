@@ -2,6 +2,7 @@ using SunnyRides.API.Auth;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Cijene;
 using SunnyRides.Services.Dostupnost;
+using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
 using SunnyRides.Services.Sifrarnici;
@@ -48,6 +49,10 @@ public static class RegistracijaServisa
         // Provjera dostupnosti je jedina implementacija uslova preklapanja. Registruje
         // se prije flote, jer je VoziloService koristi u pretrazi.
         services.AddScoped<IAvailabilityService, AvailabilityService>();
+
+        // Dozvole su jedina implementacija hijerarhije kategorija - koristi ih i
+        // pretraga i provjera preduslova pri rezervaciji.
+        services.AddScoped<IDozvolaService, DozvolaService>();
 
         return services;
     }

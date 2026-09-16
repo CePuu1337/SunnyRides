@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.FileProviders;
@@ -98,6 +99,36 @@ builder.Services.AddControllers(options =>
 {
     // Jedno mjesto koje pretvara izuzetke u HTTP odgovore.
     options.Filters.Add<ExceptionFilter>();
+});
+
+// Greske iz anotacija i greske iz servisa moraju izgledati isto.
+//
+// [ApiController] po defaultu vraca ValidationProblemDetails sa recnikom "errors",
+// dok ExceptionFilter vraca ProblemDetails sa poljem "detail". To su dva oblika istog
+// dogadjaja - zahtjev nije prihvacen - i klijentska aplikacija bi za svaki morala
+// imati vlastito citanje. Uputstvo trazi da se backend poruka proslijedi korisniku, a
+// to je lakse ispuniti kad postoji samo jedan oblik.
+builder.Services.Configure<ApiBehaviorOptions>(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var poruke = context.ModelState
+            .Where(x => x.Value is not null && x.Value.Errors.Count > 0)
+            .SelectMany(x => x.Value!.Errors.Select(greska => greska.ErrorMessage))
+            .Where(poruka => !string.IsNullOrWhiteSpace(poruka))
+            .Distinct()
+            .ToList();
+
+        return new BadRequestObjectResult(new ProblemDetails
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Title = "Zahtjev nije prihvacen",
+            Detail = poruke.Count > 0
+                ? string.Join(" ", poruke)
+                : "Zahtjev sadrzi neispravne podatke.",
+            Instance = context.HttpContext.Request.Path
+        });
+    };
 });
 
 // CORS se konfigurise jednom, sa izricito navedenim origin-ima.
