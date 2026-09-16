@@ -2,6 +2,7 @@ using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Base;
+using SunnyRides.Services.Fajlovi;
 
 namespace SunnyRides.Services.Dozvole;
 
@@ -23,6 +24,19 @@ public interface IDozvolaService : IService<VozackaDozvolaDto, VozackaDozvolaSea
     /// <c>NaCekanju</c> - izmijenjenu dozvolu uposlenik mora ponovo pogledati.
     /// </summary>
     Task<VozackaDozvolaDto> PrijaviAsync(VozackaDozvolaRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Postavlja fotografiju na **vlastitu** dozvolu. Nema parametar sa vlasnikom -
+    /// dozvola se pronalazi po korisniku iz tokena, pa se tudja ne moze ni adresirati.
+    /// </summary>
+    Task<VozackaDozvolaDto> PostaviFotografijuAsync(
+        Stream sadrzaj, long duzinaBajta, CancellationToken ct = default);
+
+    /// <summary>
+    /// Preuzimanje fotografije uz provjeru vlasnistva: klijent smije samo svoju,
+    /// osoblje svaku. Provjera je ovdje, u servisu, a ne u kontroleru.
+    /// </summary>
+    Task<PrivatniFajl> PreuzmiFotografijuAsync(int dozvolaId, CancellationToken ct = default);
 
     Task<VozackaDozvolaDto> OdobriAsync(int id, CancellationToken ct = default);
 

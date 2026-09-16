@@ -31,7 +31,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 7 | CRUD referentnih podataka | ✅ |
 | 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
 | 9 | Obračun cijene i provjera dostupnosti | ✅ |
-| 10 | Vozačke dozvole i filtriranje po kategoriji | 🟡 |
+| 10 | Vozačke dozvole i filtriranje po kategoriji | ✅ |
 | 11 | Rezervacije i state machine | ⬜ |
 | 12 | Plaćanje, webhook, povrat novca | ⬜ |
 | 13 | Primopredaja i obračun depozita | ⬜ |
@@ -1241,6 +1241,110 @@ Kroz API je provjereno ono što unit testovi ne mogu:
 
 ---
 
+## Privatni fajlovi
+
+Fotografija vozačke dozvole je prvi osjetljivi fajl u sistemu. Tu se sastaju tri
+pravila iz uputstva koja su dotad bila samo pripremljena: odvojeni korijen, validacija
+po magic bytes i provjera vlasništva nad resursom.
+
+### Ključ, ne adresa
+
+`SacuvajPrivatnoAsync` vraća **ključ** — `dozvole/12/a1b2.jpg` — bez prefiksa i bez
+vodeće kose crte. Ono što završi u bazi namjerno ne liči na adresu, jer se do
+privatnog fajla dolazi isključivo kroz endpoint koji provjerava vlasništvo.
+
+Javne i privatne slike imaju **odvojene metode**, a ne jednu sa zastavicom. Tako se ne
+može desiti da neko previdi parametar i osjetljivu fotografiju snimi u folder koji se
+poslužuje statički. Isto vrijedi za brisanje.
+
+Privatna slika nema thumbnail. Mala verzija osjetljivog dokumenta je i dalje osjetljiv
+dokument, a nigdje se ne prikazuje u listi.
+
+### Vlasništvo se provjerava u servisu, prema tokenu
+
+```csharp
+var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+var jeOsoblje = _trenutniKorisnik.JeUUlozi(Uloge.Administrator)
+                || _trenutniKorisnik.JeUUlozi(Uloge.Uposlenik);
+
+if (dozvola.KorisnikId != korisnikId && !jeOsoblje)
+{
+    throw new ForbiddenException("Mozete preuzeti samo fotografiju svoje dozvole.");
+}
+```
+
+`[Authorize]` ovdje ne bi uhvatio ništa — i klijent i uposlenik su uredno prijavljeni
+korisnici. Razlika je u tome čija je dozvola, a to zna samo servis.
+
+Rute su podijeljene po istom principu kao i ostatak modula. **Upload** ide na
+`/api/dozvole/moja/fotografija`, bez identifikatora — dozvola se pronalazi po
+korisniku iz tokena, pa se tuđa ne može ni adresirati. **Preuzimanje** ima
+identifikator, jer uposlenik mora moći otvoriti tuđu, i tu provjera radi posao.
+
+### Nova fotografija vraća dozvolu na čekanje
+
+Bez toga bi klijent odobrenu dozvolu mogao zamijeniti drugom slikom, a odobrenje bi
+ostalo da važi. Isto pravilo kao kod izmjene broja i kategorija.
+
+Redoslijed pri zamjeni je isti obrazac kao kod slika vozila: nova se snima, pa se
+upisuje u bazu, pa se tek onda briše stara. Ako upis padne, nova se briše u `catch`
+bloku — inače bi ostala bez ijednog zapisa koji na nju pokazuje.
+
+### Provjera izlaska iz foldera
+
+`UApsolutnu` poredi punu putanju sa korijenom koji **završava separatorom**. Bez toga
+bi folder `privatno-backup` prošao provjeru da je „unutar" foldera `privatno`, jer
+`"...\privatno-backup\x.jpg".StartsWith("...\privatno")` vraća tačno.
+
+Kod javnih slika to bi bilo nezgodno; kod privatnih znači čitanje fajlova koje niko ne
+bi smio vidjeti.
+
+### Gdje folderi zapravo jesu
+
+Testom se pokazalo da je `privatno/` nastao u `SunnyRides.API\privatno`, a ne u
+korijenu repozitorija.
+
+Uzrok: svaki folder se tražio zasebno. `uploads` postoji u repozitoriju pa se našao
+jedan nivo iznad radnog foldera; `privatno` ne postoji nigdje, pa je pretraga pala na
+radni folder — a to je `SunnyRides.API`.
+
+Sigurnost time nije bila ugrožena: folder se i dalje nije posluživao statički, a
+`.gitignore` ga hvata na bilo kojem nivou. U kontejneru bi bilo gore — Compose montira
+samo `./uploads`, pa bi `/app/privatno` živio unutar image-a i **nestao pri svakom
+`--build`**.
+
+Popravka je da se traži **jedan korijen podataka** — folder koji sadrži `uploads` — a
+oba se izvedu kao susjedi ispod njega. Traži se samo javni jer on postoji u
+repozitoriju; privatni se pravi pri prvom pokretanju, pa ga nema smisla tražiti.
+
+Uz to je dodato `./privatno:/app/privatno` u `docker-compose.yml` i `privatno/` u
+`.dockerignore` — fajlovi se montiraju, ne pakuju u image.
+
+### Placeholder u seedu
+
+Seed nema stvarne skenove vozačkih dozvola i ne bi ih smio ni imati. Ali bez ijedne
+fotografije ekran za verifikaciju nema šta prikazati, pa se pri seedu generiše jedna
+neutralna slika koju dijele sve seed dozvole.
+
+Ide kroz **istu pohranu** kao stvarni upload, dakle u privatni folder — da se ni u
+seedu ne uvede izuzetak od pravila da osjetljivi fajlovi nisu javni.
+
+### Testovi kojima je faza zatvorena
+
+| Test | Očekivano | Dobiveno |
+|---|---|---|
+| Vlasnik preuzima svoju fotografiju | 200 | ✅ |
+| Drugi klijent traži istu | **403** | ✅ |
+| Uposlenik traži tuđu | 200 | ✅ |
+| Privatni folder kroz `/uploads/...` | 404 | ✅ |
+| Privatni folder kroz `/privatno/...` | 404 | ✅ |
+| Upload vraća dozvolu na čekanje | status `NaCekanju` | ✅ |
+| Tekstualni fajl sa `.jpg` ekstenzijom | 400, ništa na disku | ✅ |
+| `git status` vidi `privatno/` | ne vidi | ✅ |
+| DTO sadrži putanju do fotografije | ne sadrži, samo `imaFotografiju` | ✅ |
+
+---
+
 ## Kome se vjeruje: klijent naspram servera
 
 > ⬜ Popunjava se u fazama 9–12.
@@ -1536,8 +1640,8 @@ kategorije — isti filter kao u pretrazi.
 | `userId` uvijek iz JWT tokena kroz `IHttpContextAccessor` | ✅ |
 | `RegisterRequest` bez polja `Role` i `IsAdmin` | ✅ |
 | Odjava invalidira token na serveru — `OpozvaniToken` plus middleware | ✅ |
-| Upload i download provjeravaju vlasništvo nad resursom | ⬜ |
-| MIME tip se validira po magic bytes, ne po ekstenziji | ⬜ |
+| Upload i download provjeravaju vlasništvo nad resursom | ✅ |
+| MIME tip se validira po magic bytes, ne po ekstenziji | ✅ |
 | Lozinke kroz BCrypt | ✅ |
 | Kodovi i tokeni kroz `RandomNumberGenerator`, nikad `System.Random` | ⬜ |
 | Sve tajne u `.env`, ništa osjetljivo u `appsettings.json` | ✅ |

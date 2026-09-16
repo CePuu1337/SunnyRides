@@ -7,6 +7,7 @@ using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Dozvole;
+using SunnyRides.Services.Exceptions;
 
 namespace SunnyRides.API.Controllers;
 
@@ -52,6 +53,42 @@ public class VozackaDozvolaController : ControllerBase
         [FromBody] VozackaDozvolaRequest request, CancellationToken ct)
     {
         return await _dozvolaService.PrijaviAsync(request, ct);
+    }
+
+    /// <summary>
+    /// Postavljanje fotografije vlastite dozvole.
+    ///
+    /// Ruta nema identifikator - dozvola se pronalazi po korisniku iz tokena. Tudja
+    /// se ne moze ni adresirati, pa nema ni sta da se provjerava.
+    /// </summary>
+    [HttpPost("moja/fotografija")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<VozackaDozvolaDto> PostaviFotografijuAsync(IFormFile fajl, CancellationToken ct)
+    {
+        if (fajl is null || fajl.Length == 0)
+        {
+            throw new BusinessException("Odaberite fotografiju dozvole.");
+        }
+
+        await using var sadrzaj = fajl.OpenReadStream();
+
+        return await _dozvolaService.PostaviFotografijuAsync(sadrzaj, fajl.Length, ct);
+    }
+
+    /// <summary>
+    /// Preuzimanje fotografije dozvole.
+    ///
+    /// Ovdje identifikator postoji, jer uposlenik mora moci otvoriti tudju dozvolu.
+    /// Zato servis provjerava vlasnistvo: klijent smije samo svoju, osoblje svaku.
+    /// Atribut <c>[Authorize]</c> sam po sebi to ne bi uhvatio - i klijent i uposlenik
+    /// su prijavljeni korisnici.
+    /// </summary>
+    [HttpGet("{id:int}/fotografija")]
+    public async Task<IActionResult> PreuzmiFotografijuAsync(int id, CancellationToken ct)
+    {
+        var fajl = await _dozvolaService.PreuzmiFotografijuAsync(id, ct);
+
+        return File(fajl.Sadrzaj, fajl.ContentType, fajl.NazivFajla);
     }
 
     /// <summary>Sta prijavljeni korisnik smije voziti, sa obrazlozenjem za prikaz iznad pretrage.</summary>

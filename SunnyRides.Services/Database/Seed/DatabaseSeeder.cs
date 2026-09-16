@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SunnyRides.Services.Fajlovi;
 
 namespace SunnyRides.Services.Database.Seed;
 
@@ -21,9 +22,17 @@ public partial class DatabaseSeeder
     /// <summary>Sve sto se racuna od danas racuna se od ove vrijednosti.</summary>
     private readonly DateTime _danas = DateTime.UtcNow.Date;
 
-    public DatabaseSeeder(SunnyRidesDbContext context)
+    /// <summary>
+    /// Pohrana je opciona jer je seeder koristi samo za jednu stvar - placeholder
+    /// fotografiju vozacke dozvole. Bez nje seed radi normalno, samo dozvole ostanu
+    /// bez slike.
+    /// </summary>
+    private readonly IPohranaSlika? _pohrana;
+
+    public DatabaseSeeder(SunnyRidesDbContext context, IPohranaSlika? pohrana = null)
     {
         _context = context;
+        _pohrana = pohrana;
     }
 
     public async Task SeedAsync(CancellationToken ct = default)

@@ -24,45 +24,18 @@ public class PohranaSlika : IPohranaSlika
         _logger = logger;
     }
 
+    // --- javne slike -------------------------------------------------------
+
     public async Task<SacuvanaSlika> SacuvajJavnoAsync(
         Stream sadrzaj, long duzinaBajta, string podfolder, CancellationToken ct = default)
     {
-        if (duzinaBajta <= 0)
-        {
-            throw new BusinessException("Fajl je prazan.");
-        }
-
-        if (duzinaBajta > PohranaOpcije.MaksimalnaVelicinaBajta)
-        {
-            var mb = PohranaOpcije.MaksimalnaVelicinaBajta / 1024 / 1024;
-            throw new BusinessException($"Slika ne smije biti veca od {mb} MB.");
-        }
-
-        // Sadrzaj se prvo prepise u memoriju, da se moze i procitati unaprijed radi
-        // provjere potpisa i zatim ponovo od pocetka ucitati. Velicina je vec
-        // ogranicena, pa je to sigurno.
-        using var bafer = new MemoryStream();
-        await sadrzaj.CopyToAsync(bafer, ct);
-        bafer.Position = 0;
-
-        ProvjeriPotpis(bafer);
-        bafer.Position = 0;
+        using var slika = await UcitajProvjerenuAsync(sadrzaj, duzinaBajta, ct);
 
         var apsolutniFolder = Path.Combine(_opcije.JavniKorijen, NormalizujPodfolder(podfolder));
         var folderThumbova = Path.Combine(apsolutniFolder, "thumbs");
         Directory.CreateDirectory(folderThumbova);
 
         var naziv = $"{Guid.NewGuid():N}.jpg";
-
-        // Ucitavanje kroz ImageSharp je druga, nezavisna provjera: sadrzaj koji ima
-        // ispravan potpis a pokvarenu strukturu ovdje pada, prije nego ista dodirne disk.
-        using var slika = await Image.LoadAsync(bafer, ct);
-
-        slika.Mutate(x => x.AutoOrient().Resize(new ResizeOptions
-        {
-            Mode = ResizeMode.Max,
-            Size = new Size(MaksimalnaStranica, MaksimalnaStranica)
-        }));
 
         await slika.SaveAsJpegAsync(
             Path.Combine(apsolutniFolder, naziv), new JpegEncoder { Quality = 85 }, ct);
@@ -91,27 +64,107 @@ public class PohranaSlika : IPohranaSlika
                 continue;
             }
 
-            var apsolutna = UApsolutnu(putanja);
-            if (apsolutna is null)
+            if (!putanja.StartsWith(PohranaOpcije.JavniPrefiks + "/", StringComparison.Ordinal))
             {
                 continue;
             }
 
-            try
-            {
-                if (File.Exists(apsolutna))
-                {
-                    File.Delete(apsolutna);
-                }
-            }
-            catch (IOException ex)
-            {
-                // Zapis u bazi je vec obrisan i to je ono sto korisnik vidi. Fajl koji
-                // je ostao na disku je smece, ne kvar - zato se biljezi, a operacija
-                // se ne obara.
-                _logger.LogWarning(ex, "Fajl {Putanja} nije obrisan sa diska.", apsolutna);
-            }
+            var relativna = putanja[(PohranaOpcije.JavniPrefiks.Length + 1)..];
+            Obrisi(UApsolutnu(_opcije.JavniKorijen, relativna));
         }
+    }
+
+    // --- privatne slike ----------------------------------------------------
+
+    public async Task<string> SacuvajPrivatnoAsync(
+        Stream sadrzaj, long duzinaBajta, string podfolder, CancellationToken ct = default)
+    {
+        using var slika = await UcitajProvjerenuAsync(sadrzaj, duzinaBajta, ct);
+
+        var relativniFolder = NormalizujPodfolder(podfolder);
+        var apsolutniFolder = Path.Combine(_opcije.PrivatniKorijen, relativniFolder);
+        Directory.CreateDirectory(apsolutniFolder);
+
+        var naziv = $"{Guid.NewGuid():N}.jpg";
+
+        await slika.SaveAsJpegAsync(
+            Path.Combine(apsolutniFolder, naziv), new JpegEncoder { Quality = 85 }, ct);
+
+        // Vraca se kljuc, ne adresa. Vrijednost koja zavrsi u bazi ne smije izgledati
+        // kao nesto sto se moze otvoriti direktno.
+        return $"{relativniFolder.Replace('\\', '/')}/{naziv}";
+    }
+
+    public void ObrisiPrivatno(params string?[] kljucevi)
+    {
+        foreach (var kljuc in kljucevi)
+        {
+            if (string.IsNullOrWhiteSpace(kljuc))
+            {
+                continue;
+            }
+
+            Obrisi(UApsolutnu(_opcije.PrivatniKorijen, kljuc));
+        }
+    }
+
+    public Task<PrivatniFajl> OtvoriPrivatnoAsync(
+        string kljuc, string nazivZaPreuzimanje, CancellationToken ct = default)
+    {
+        var apsolutna = UApsolutnu(_opcije.PrivatniKorijen, kljuc);
+
+        if (apsolutna is null || !File.Exists(apsolutna))
+        {
+            throw new NotFoundException("Fotografija nije pronadjena.");
+        }
+
+        Stream sadrzaj = new FileStream(
+            apsolutna, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024,
+            useAsync: true);
+
+        return Task.FromResult(new PrivatniFajl(sadrzaj, "image/jpeg", nazivZaPreuzimanje));
+    }
+
+    // --- zajednicko --------------------------------------------------------
+
+    /// <summary>
+    /// Provjerava velicinu i potpis sadrzaja, pa ga ucitava i smanjuje.
+    ///
+    /// Provjera je dvostruka i namjerno. Potpis je prva, jeftina kapija - ekstenzija
+    /// i Content-Type dolaze od klijenta i oboje se falsifikuju. Ucitavanje kroz
+    /// ImageSharp je druga, nezavisna: sadrzaj sa ispravnim potpisom a pokvarenom
+    /// strukturom pada ovdje, prije nego ista dodirne disk.
+    /// </summary>
+    private static async Task<Image> UcitajProvjerenuAsync(
+        Stream sadrzaj, long duzinaBajta, CancellationToken ct)
+    {
+        if (duzinaBajta <= 0)
+        {
+            throw new BusinessException("Fajl je prazan.");
+        }
+
+        if (duzinaBajta > PohranaOpcije.MaksimalnaVelicinaBajta)
+        {
+            var mb = PohranaOpcije.MaksimalnaVelicinaBajta / 1024 / 1024;
+            throw new BusinessException($"Slika ne smije biti veca od {mb} MB.");
+        }
+
+        using var bafer = new MemoryStream();
+        await sadrzaj.CopyToAsync(bafer, ct);
+
+        bafer.Position = 0;
+        ProvjeriPotpis(bafer);
+
+        bafer.Position = 0;
+        var slika = await Image.LoadAsync(bafer, ct);
+
+        slika.Mutate(x => x.AutoOrient().Resize(new ResizeOptions
+        {
+            Mode = ResizeMode.Max,
+            Size = new Size(MaksimalnaStranica, MaksimalnaStranica)
+        }));
+
+        return slika;
     }
 
     private static void ProvjeriPotpis(Stream sadrzaj)
@@ -126,24 +179,47 @@ public class PohranaSlika : IPohranaSlika
         }
     }
 
-    /// <summary>
-    /// Pretvara web putanju u putanju na disku, uz provjeru da rezultat ostaje
-    /// unutar javnog korijena. Bez te provjere bi vrijednost poput
-    /// "/uploads/../../appsettings.json" brisala fajlove izvan foldera za slike.
-    /// </summary>
-    private string? UApsolutnu(string webPutanja)
+    private void Obrisi(string? apsolutnaPutanja)
     {
-        if (!webPutanja.StartsWith(PohranaOpcije.JavniPrefiks + "/", StringComparison.Ordinal))
+        if (apsolutnaPutanja is null)
         {
-            return null;
+            return;
         }
 
-        var relativna = webPutanja[(PohranaOpcije.JavniPrefiks.Length + 1)..]
-            .Replace('/', Path.DirectorySeparatorChar);
+        try
+        {
+            if (File.Exists(apsolutnaPutanja))
+            {
+                File.Delete(apsolutnaPutanja);
+            }
+        }
+        catch (IOException ex)
+        {
+            // Zapis u bazi je vec obrisan i to je ono sto korisnik vidi. Fajl koji
+            // je ostao na disku je smece, ne kvar - zato se biljezi, a operacija
+            // se ne obara.
+            _logger.LogWarning(ex, "Fajl {Putanja} nije obrisan sa diska.", apsolutnaPutanja);
+        }
+    }
 
-        var puna = Path.GetFullPath(Path.Combine(_opcije.JavniKorijen, relativna));
+    /// <summary>
+    /// Spaja korijen i relativnu putanju, uz provjeru da rezultat ostaje unutar tog
+    /// korijena. Bez te provjere bi vrijednost poput <c>../../appsettings.json</c>
+    /// izasla iz foldera za slike - a kod privatnog korijena to znaci citanje fajlova
+    /// koje niko ne bi smio vidjeti.
+    /// </summary>
+    private static string? UApsolutnu(string korijen, string relativna)
+    {
+        var ocisceno = relativna.Replace('/', Path.DirectorySeparatorChar).TrimStart(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        return puna.StartsWith(_opcije.JavniKorijen, StringComparison.Ordinal) ? puna : null;
+        var puna = Path.GetFullPath(Path.Combine(korijen, ocisceno));
+
+        var granica = korijen.EndsWith(Path.DirectorySeparatorChar)
+            ? korijen
+            : korijen + Path.DirectorySeparatorChar;
+
+        return puna.StartsWith(granica, StringComparison.Ordinal) ? puna : null;
     }
 
     private static string NormalizujPodfolder(string podfolder) =>

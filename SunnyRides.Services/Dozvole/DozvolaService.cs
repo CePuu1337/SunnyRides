@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
+using SunnyRides.Model.Konstante;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
@@ -10,6 +11,7 @@ using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Fajlovi;
 
 namespace SunnyRides.Services.Dozvole;
 
@@ -21,13 +23,18 @@ public class DozvolaService
 
     private readonly ICurrentUserService _trenutniKorisnik;
     private readonly IMemoryCache _kes;
+    private readonly IPohranaSlika _pohrana;
 
     public DozvolaService(
-        SunnyRidesDbContext context, ICurrentUserService trenutniKorisnik, IMemoryCache kes)
+        SunnyRidesDbContext context,
+        ICurrentUserService trenutniKorisnik,
+        IMemoryCache kes,
+        IPohranaSlika pohrana)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
         _kes = kes;
+        _pohrana = pohrana;
     }
 
     protected override string NazivEntiteta => "Vozacka dozvola";
@@ -138,6 +145,78 @@ public class DozvolaService
         await transakcija.CommitAsync(ct);
 
         return await GetByIdAsync(dozvola.Id, ct);
+    }
+
+    public async Task<VozackaDozvolaDto> PostaviFotografijuAsync(
+        Stream sadrzaj, long duzinaBajta, CancellationToken ct = default)
+    {
+        var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+
+        var dozvola = await Context.VozackeDozvole
+            .FirstOrDefaultAsync(x => x.KorisnikId == korisnikId, ct)
+            ?? throw new BusinessException("Prvo prijavite dozvolu, pa onda dodajte fotografiju.");
+
+        var stara = dozvola.PutanjaSlike;
+
+        // Folder po korisniku, ne po dozvoli: korisnik ima najvise jednu dozvolu, a
+        // ovako se pri brisanju naloga zna sta sve treba ukloniti.
+        dozvola.PutanjaSlike = await _pohrana.SacuvajPrivatnoAsync(
+            sadrzaj, duzinaBajta, $"dozvole/{korisnikId}", ct);
+
+        // Nova fotografija znaci da uposlenik mora ponovo pogledati dozvolu. Bez ovoga
+        // bi klijent odobrenu dozvolu mogao zamijeniti drugom slikom, a odobrenje bi
+        // ostalo da vazi.
+        dozvola.Status = StatusDozvole.NaCekanju;
+        dozvola.RazlogOdbijanja = null;
+        dozvola.VerifikovaoKorisnikId = null;
+        dozvola.DatumVerifikacije = null;
+
+        try
+        {
+            await Context.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Upis je pao, a fajl je vec na disku - inace bi ostao bez ijednog zapisa
+            // koji na njega pokazuje.
+            _pohrana.ObrisiPrivatno(dozvola.PutanjaSlike);
+            throw;
+        }
+
+        // Stara fotografija se brise tek kad je nova sigurno upisana.
+        _pohrana.ObrisiPrivatno(stara);
+
+        return await GetByIdAsync(dozvola.Id, ct);
+    }
+
+    public async Task<PrivatniFajl> PreuzmiFotografijuAsync(
+        int dozvolaId, CancellationToken ct = default)
+    {
+        var dozvola = await Context.VozackeDozvole
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == dozvolaId, ct)
+            ?? throw NotFoundException.Za(NazivEntiteta, dozvolaId);
+
+        // Vlasnistvo se provjerava prema korisniku iz tokena, nikad prema vrijednosti
+        // iz rute. Bez ove provjere bi svaki prijavljen korisnik mogao mijenjati broj
+        // u adresi i preuzimati tudje vozacke dozvole.
+        var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+
+        var jeOsoblje = _trenutniKorisnik.JeUUlozi(Uloge.Administrator)
+                        || _trenutniKorisnik.JeUUlozi(Uloge.Uposlenik);
+
+        if (dozvola.KorisnikId != korisnikId && !jeOsoblje)
+        {
+            throw new ForbiddenException("Mozete preuzeti samo fotografiju svoje dozvole.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dozvola.PutanjaSlike))
+        {
+            throw new NotFoundException("Uz ovu dozvolu nije prilozena fotografija.");
+        }
+
+        return await _pohrana.OtvoriPrivatnoAsync(
+            dozvola.PutanjaSlike, $"dozvola-{dozvola.BrojDozvole}.jpg", ct);
     }
 
     // --- uposlenicka strana ------------------------------------------------

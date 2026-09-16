@@ -40,7 +40,11 @@ services:
     ports:
       - "5000:8080"
     volumes:
+      # Oba foldera se montiraju, da otpremljeni fajlovi prezive ponovni build.
+      # Privatni je odvojen i namjerno se ne posluzuje staticki - u njemu su
+      # fotografije vozackih dozvola i stete.
       - ./uploads:/app/uploads
+      - ./privatno:/app/privatno
     depends_on:
       sunnyrides-db:
         condition: service_started

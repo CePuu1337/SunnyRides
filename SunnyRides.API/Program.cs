@@ -239,7 +239,11 @@ static async Task PripremiBazuAsync(WebApplication app)
         try
         {
             await context.Database.MigrateAsync();
-            await new DatabaseSeeder(context).SeedAsync();
+
+            // Seederu se daje pohrana zato sto generise placeholder fotografiju
+            // vozacke dozvole, i to kroz isti put kojim ide stvarni upload.
+            var pohrana = scope.ServiceProvider.GetRequiredService<IPohranaSlika>();
+            await new DatabaseSeeder(context, pohrana).SeedAsync();
 
             logger.LogInformation("Baza je spremna.");
             return;

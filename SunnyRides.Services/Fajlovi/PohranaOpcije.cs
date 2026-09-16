@@ -31,21 +31,31 @@ public class PohranaOpcije
     /// <summary>Najveca dozvoljena velicina otpremljenog fajla.</summary>
     public const long MaksimalnaVelicinaBajta = 5 * 1024 * 1024;
 
+    private const string NazivJavnog = "uploads";
+    private const string NazivPrivatnog = "privatno";
+
     /// <summary>
-    /// Pronalazi korijene bez rucnog podesavanja.
+    /// Pronalazi oba korijena bez rucnog podesavanja, i to kao **susjedne** foldere
+    /// ispod istog roditelja.
     ///
-    /// U kontejneru je radni folder /app, a docker-compose u njega montira ./uploads,
-    /// pa se folder nalazi odmah. Pri lokalnom "dotnet run" radni folder je
-    /// SunnyRides.API, a folder je jedan nivo iznad. Ista logika kao kod .env fajla -
-    /// isti kod radi u oba okruzenja bez ijedne izmjene.
+    /// Trazi se samo javni folder, jer on postoji u repozitoriju - privatni se pravi
+    /// pri prvom pokretanju i zato ga nema smisla traziti. Da se svaki trazi zasebno,
+    /// javni bi se nasao u korijenu repozitorija a privatni bi ispao u folderu API
+    /// projekta, jer tamo jos ne postoji nijedan.
+    ///
+    /// U kontejneru je radni folder <c>/app</c>, a Compose u njega montira oba;
+    /// pri lokalnom <c>dotnet run</c> radni folder je SunnyRides.API, a oba su jedan
+    /// nivo iznad. Isti kod radi u oba okruzenja bez ijedne izmjene.
     /// </summary>
     public static PohranaOpcije IzOkruzenja()
     {
+        var korijen = Environment.GetEnvironmentVariable("DATA_ROOT") ?? PronadjiKorijen();
+
         var javni = Environment.GetEnvironmentVariable("UPLOADS_ROOT")
-                    ?? PronadjiIliNapravi("uploads");
+                    ?? Path.Combine(korijen, NazivJavnog);
 
         var privatni = Environment.GetEnvironmentVariable("PRIVATE_UPLOADS_ROOT")
-                       ?? PronadjiIliNapravi("privatno");
+                       ?? Path.Combine(korijen, NazivPrivatnog);
 
         Directory.CreateDirectory(javni);
         Directory.CreateDirectory(privatni);
@@ -57,15 +67,17 @@ public class PohranaOpcije
         };
     }
 
-    private static string PronadjiIliNapravi(string naziv)
+    private static string PronadjiKorijen()
     {
-        var uRadnom = Path.Combine(Directory.GetCurrentDirectory(), naziv);
-        if (Directory.Exists(uRadnom))
+        var radni = Directory.GetCurrentDirectory();
+
+        if (Directory.Exists(Path.Combine(radni, NazivJavnog)))
         {
-            return uRadnom;
+            return radni;
         }
 
-        var iznad = Path.Combine(Directory.GetCurrentDirectory(), "..", naziv);
-        return Directory.Exists(iznad) ? iznad : uRadnom;
+        var iznad = Path.Combine(radni, "..");
+
+        return Directory.Exists(Path.Combine(iznad, NazivJavnog)) ? iznad : radni;
     }
 }

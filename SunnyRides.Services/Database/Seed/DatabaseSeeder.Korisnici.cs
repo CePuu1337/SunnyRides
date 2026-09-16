@@ -1,3 +1,6 @@
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.PixelFormats;
 using SunnyRides.Model.Enums;
 using SunnyRides.Services.Database.Entities;
 
@@ -81,6 +84,8 @@ public partial class DatabaseSeeder
         await _context.SaveChangesAsync(ct);
 
         // --- vozacke dozvole ---
+        var kljucFotografije = await NapraviPlaceholderDozvoleAsync(ct);
+
         var a1 = _kategorije.Single(x => x.Oznaka == "A1");
         var a = _kategorije.Single(x => x.Oznaka == "A");
         var b = _kategorije.Single(x => x.Oznaka == "B");
@@ -118,7 +123,7 @@ public partial class DatabaseSeeder
                 BrojDozvole = $"BA{Broj(100000, 999999)}{i:D2}",
                 DatumIzdavanja = datumIzdavanja,
                 DatumIsteka = datumIzdavanja.AddYears(10),
-                PutanjaSlike = "/uploads/seeds/dozvole/placeholder.jpg",
+                PutanjaSlike = kljucFotografije,
                 Status = status,
                 DatumKreiranja = klijent.DatumRegistracije.AddDays(Broj(0, 5))
             };
@@ -149,5 +154,31 @@ public partial class DatabaseSeeder
         }
 
         await _context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Pravi jednu placeholder fotografiju dozvole i vraca njen kljuc.
+    ///
+    /// Seed nema stvarne skenove vozackih dozvola i ne bi ih smio ni imati. Ali bez
+    /// ijedne fotografije ekran za verifikaciju nema sta prikazati, pa se generise
+    /// jedna neutralna slika koju dijele sve seed dozvole.
+    ///
+    /// Ide kroz istu pohranu kao i stvarni upload, dakle u privatni folder - da se
+    /// ni u seedu ne uvede izuzetak od pravila da osjetljivi fajlovi nisu javni.
+    /// </summary>
+    private async Task<string?> NapraviPlaceholderDozvoleAsync(CancellationToken ct)
+    {
+        if (_pohrana is null)
+        {
+            return null;
+        }
+
+        using var slika = new Image<Rgba32>(640, 400, Color.ParseHex("D8DEE7"));
+
+        using var bafer = new MemoryStream();
+        await slika.SaveAsJpegAsync(bafer, new JpegEncoder { Quality = 80 }, ct);
+        bafer.Position = 0;
+
+        return await _pohrana.SacuvajPrivatnoAsync(bafer, bafer.Length, "dozvole/seed", ct);
     }
 }
