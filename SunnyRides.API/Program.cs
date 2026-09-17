@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Seed;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Mapping;
+using SunnyRides.Services.Placanja;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,7 +56,10 @@ var jwtPostavke = JwtPostavke.IzOkruzenja();
 // se da postoje. Ako ih nema, bolje da aplikacija to javi odmah nego pri prvom uploadu.
 var pohranaOpcije = PohranaOpcije.IzOkruzenja();
 
-builder.Services.DodajServise(jwtPostavke, pohranaOpcije);
+// Stripe kljucevi se citaju jednom. Live kljuc obara pokretanje - radi se samo u sandboxu.
+var stripePostavke = StripePostavke.IzOkruzenja();
+
+builder.Services.DodajServise(jwtPostavke, pohranaOpcije, stripePostavke);
 
 MapsterKonfiguracija.Registruj();
 
@@ -91,7 +96,10 @@ builder.Services
             NameClaimType = JwtRegisteredClaimNames.Name,
             RoleClaimType = "role"
         };
-    });
+    })
+    // Druga shema, iskljucivo za Stripe webhook: zahtjev se autentifikuje potpisom
+    // iz zaglavlja. JWT ostaje podrazumijevana shema za sve ostale kontrolere.
+    .AddScheme<AuthenticationSchemeOptions, StripePotpisHandler>(StripePotpisHandler.Shema, _ => { });
 
 builder.Services.AddAuthorization();
 
@@ -184,6 +192,18 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 await PripremiBazuAsync(app);
+
+if (!stripePostavke.JeKonfigurisan)
+{
+    app.Logger.LogWarning(
+        "STRIPE_SECRET_KEY nije postavljen. Aplikacija radi, ali placanje nije moguce dok se kljuc ne doda u .env.");
+}
+
+if (!stripePostavke.WebhookJeKonfigurisan)
+{
+    app.Logger.LogWarning(
+        "STRIPE_WEBHOOK_SECRET nije postavljen. Webhook odbija sve zahtjeve; placanje se potvrdjuje serverskom provjerom.");
+}
 
 app.UseSwagger();
 app.UseSwaggerUI();

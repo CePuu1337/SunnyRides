@@ -21,6 +21,7 @@ public static class MapsterKonfiguracija
         RegistrujFlotu();
         RegistrujDozvole();
         RegistrujRezervacije();
+        RegistrujPlacanja();
     }
 
     /// <summary>
@@ -193,5 +194,32 @@ public static class MapsterKonfiguracija
                       && e.DrziDo != null && e.DrziDo > DateTime.UtcNow
                       ? (int?)(int)(e.DrziDo.Value - DateTime.UtcNow).TotalSeconds
                       : null);
+    }
+
+    /// <summary>
+    /// Placanje nosi broj i stanje rezervacije, da ekran sa placanjima ne mora za
+    /// svaki red posebno dohvatati rezervaciju. Zbir vracenog racuna samo povrate
+    /// koji nisu odbijeni ni ponisteni - isto pravilo koje koristi obracun otkazivanja.
+    /// </summary>
+    private static void RegistrujPlacanja()
+    {
+        TypeAdapterConfig<Refund, PovratDto>.NewConfig()
+            .Map(dto => dto.KreiraoKorisnikIme,
+                 e => e.KreiraoKorisnik != null
+                      ? e.KreiraoKorisnik.Ime + " " + e.KreiraoKorisnik.Prezime : null);
+
+        TypeAdapterConfig<Placanje, PlacanjeDto>.NewConfig()
+            .Map(dto => dto.RezervacijaBroj, e => e.Rezervacija != null ? e.Rezervacija.Broj : null)
+            .Map(dto => dto.StatusRezervacije,
+                 e => e.Rezervacija != null ? e.Rezervacija.Status : default(StatusRezervacije))
+            .Map(dto => dto.IsPaid, e => e.Rezervacija != null && e.Rezervacija.IsPaid)
+            .Map(dto => dto.KlijentImePrezime,
+                 e => e.Rezervacija != null && e.Rezervacija.Korisnik != null
+                      ? e.Rezervacija.Korisnik.Ime + " " + e.Rezervacija.Korisnik.Prezime : null)
+            .Map(dto => dto.UkupnoVraceno,
+                 e => e.Refundi
+                     .Where(r => r.Status != StatusPlacanja.Failed && r.Status != StatusPlacanja.Canceled)
+                     .Sum(r => r.Iznos))
+            .Map(dto => dto.Povrati, e => e.Refundi.OrderBy(r => r.Id).ToList());
     }
 }

@@ -5,6 +5,7 @@ using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Konstante;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
+using SunnyRides.Services.Placanja;
 using SunnyRides.Services.Rezervacije;
 
 namespace SunnyRides.API.Controllers;
@@ -22,10 +23,12 @@ namespace SunnyRides.API.Controllers;
 public class RezervacijaController : ControllerBase
 {
     private readonly IRezervacijaService _rezervacijaService;
+    private readonly IPlacanjeService _placanjeService;
 
-    public RezervacijaController(IRezervacijaService rezervacijaService)
+    public RezervacijaController(IRezervacijaService rezervacijaService, IPlacanjeService placanjeService)
     {
         _rezervacijaService = rezervacijaService;
+        _placanjeService = placanjeService;
     }
 
     [HttpGet]
@@ -83,5 +86,16 @@ public class RezervacijaController : ControllerBase
         int id, [FromBody] OtkazivanjeRequest? request, CancellationToken ct)
     {
         return await _rezervacijaService.OtkaziAsync(id, request ?? new OtkazivanjeRequest(), ct);
+    }
+
+    /// <summary>
+    /// Priprema naplatu. Tijelo ne postoji - iznos, valutu i vezu sa rezervacijom
+    /// odredjuje server. Klijent dobija samo ono sto PaymentSheet treba.
+    /// </summary>
+    [HttpPost("{id:int}/payment-intent")]
+    [Authorize(Roles = Uloge.Klijent)]
+    public async Task<PlatniIntentDto> KreirajIntentAsync(int id, CancellationToken ct)
+    {
+        return await _placanjeService.KreirajIntentAsync(id, ct);
     }
 }

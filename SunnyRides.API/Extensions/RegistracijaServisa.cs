@@ -6,6 +6,7 @@ using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Rezervacije;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
+using SunnyRides.Services.Placanja;
 using SunnyRides.Services.Sifrarnici;
 
 namespace SunnyRides.API.Extensions;
@@ -16,8 +17,13 @@ namespace SunnyRides.API.Extensions;
 /// </summary>
 public static class RegistracijaServisa
 {
+    private const string StripeHttpKlijent = "Stripe";
+
     public static IServiceCollection DodajServise(
-        this IServiceCollection services, JwtPostavke jwtPostavke, PohranaOpcije pohranaOpcije)
+        this IServiceCollection services,
+        JwtPostavke jwtPostavke,
+        PohranaOpcije pohranaOpcije,
+        StripePostavke stripePostavke)
     {
         // Iste postavke koje su iskoristene za konfiguraciju validacije tokena
         // dijele se i servisu koji token izdaje. Kljuc se cita iz okruzenja tacno
@@ -60,7 +66,44 @@ public static class RegistracijaServisa
         services.AddScoped<IRezervacijaStateMachine, RezervacijaStateMachine>();
         services.AddScoped<IRezervacijaService, RezervacijaService>();
 
+        DodajPlacanja(services, stripePostavke);
+
         return services;
+    }
+
+    /// <summary>
+    /// Stripe klijent dobija HttpClient iz <see cref="IHttpClientFactory"/>, a ne
+    /// vlastiti <c>new HttpClient()</c>. Fabrika upravlja konekcijama i njihovim
+    /// obnavljanjem, pa se klijent moze praviti po zahtjevu bez iscrpljivanja socketa.
+    ///
+    /// Kad kljuc nije postavljen, Stripe klijent se ne pravi uopste - servis tada
+    /// odgovara porukom sta nedostaje, a ostatak aplikacije radi normalno.
+    /// </summary>
+    private static void DodajPlacanja(IServiceCollection services, StripePostavke stripePostavke)
+    {
+        services.AddSingleton(stripePostavke);
+        services.AddHttpClient(StripeHttpKlijent);
+
+        services.AddScoped<IStripeKlijent>(sp =>
+        {
+            Stripe.StripeClient? klijent = null;
+
+            if (stripePostavke.JeKonfigurisan)
+            {
+                var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient(StripeHttpKlijent);
+
+                klijent = new Stripe.StripeClient(new Stripe.StripeClientOptions
+                {
+                    ApiKey = stripePostavke.TajniKljuc,
+                    HttpClient = new Stripe.SystemNetHttpClient(http)
+                });
+            }
+
+            return new StripeKlijent(stripePostavke, klijent, sp.GetRequiredService<ILogger<StripeKlijent>>());
+        });
+
+        services.AddScoped<IIzvrsilacPovrata, IzvrsilacPovrata>();
+        services.AddScoped<IPlacanjeService, PlacanjeService>();
     }
 
     /// <summary>

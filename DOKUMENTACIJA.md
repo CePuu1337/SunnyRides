@@ -33,13 +33,54 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 9 | Obračun cijene i provjera dostupnosti | ✅ |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ✅ |
 | 11 | Rezervacije, state machine, otkazivanje | ✅ |
-| 12 | Plaćanje, webhook, povrat novca | ⬜ |
+| 12 | Plaćanje, webhook, povrat novca | ✅ |
 | 13 | Primopredaja i obračun depozita | ⬜ |
 | 14 | RabbitMQ i worker servis | ⬜ |
 | 15 | Notifikacije i SignalR | ⬜ |
 | 16 | Sistem preporuke | ⬜ |
 | 17–18 | Desktop i mobilna aplikacija | ⬜ |
 | 19 | PDF izvještaji | ⬜ |
+
+### Šta prijava obećava, a plan izrade nema kao zasebnu fazu
+
+Prijava je ugovor — uputstvo (2.1) kaže da sve navedeno u njoj mora biti implementirano
+i da implementacija mora odgovarati opisu. Poređenjem prijave sa planom izrade i sa
+kodom izdvojilo se ovo što još nema svoje mjesto u fazama 13–19, pa se ovdje vodi da
+ne ispadne:
+
+| Iz prijave | Šta treba na backendu | |
+|---|---|---|
+| Upravljanje korisnicima i ulogama, administratorski reset lozinke | CRUD korisnika za administratora, dodjela uloga, reset bez stare lozinke | ⬜ |
+| Pregled i izmjena profila, profilna fotografija | izmjena vlastitih podataka i upload slike (magic bytes, vlasništvo) | ⬜ |
+| Reset lozinke kodom poslanim na email | kod kroz `RandomNumberGenerator`, čuvan kao hash, sa rokom (`KodZaResetLozinke`) | ⬜ faza 14 |
+| Moderacija recenzija, ocjenjivanje nakon `Completed` | CRUD recenzija, skrivanje umjesto brisanja | ⬜ |
+| Obavijesti agencije na početnom ekranu | CRUD obavijesti sa slikom | ⬜ |
+| Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ⬜ |
+| Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ⬜ |
+| Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
+| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | cijena po vozilu u rezultatu pretrage, prosječna ocjena | ⬜ |
+| Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri **svakoj** pretrazi — trenutno ga upisuje samo seed | ⬜ faza 16 |
+| Detalji vozila: recenzije i slična vozila | lista recenzija po vozilu, slična vozila iz recommendera | ⬜ |
+| Otkazivanje: „korisnik bira razlog iz padajuće liste" | uputstvo (6) traži da se padajuće liste pune iz baze, pa razlozi trebaju biti šifrarnik, a ne tekst u aplikaciji | ⬜ odluka |
+
+Dvije stvari iz prijave su riješene malo drugačije nego što tekst doslovno kaže, i to
+je namjerno:
+
+- Prijava kaže da klijent dozvolu prijavljuje „pri registraciji". Dozvola se prijavljuje
+  odmah poslije registracije, zasebnim zahtjevom, jer traži fotografiju, a upload
+  fotografije traži prijavljenog korisnika radi provjere vlasništva. Registracija je
+  `[AllowAnonymous]` i zato ostaje bez fajlova. Za korisnika je to isti tok.
+- Politika otkazivanja u specifikaciji je imala rupu između 48 sati i 3 dana. Pravilo je
+  zatvoreno kao „manje od 3 dana → 0 %" (vidi sekciju o povratu novca).
+
+### Ostaci koje treba počistiti prije predaje
+
+- `SunnyRides.API/SunnyRides.API.http` je ostatak šablona i poziva `/weatherforecast`
+  (uputstvo 8.1 to navodi kao primjer za odbijanje).
+- `SunnyRides.Subscriber/Worker.cs` je još šablonski worker koji samo loguje; zamjenjuje
+  ga faza 14 (uputstvo 3.2: pomoćni servis mora raditi stvarne zadatke).
+- Mapa `Claude outputs/` (bilješke iz razvoja) je dodana u `.gitignore`; ako je ranije
+  već commitana, uklanja se iz repozitorija sa `git rm -r --cached "Claude outputs"`.
 
 ---
 
@@ -1616,9 +1657,189 @@ trenutak kad je termin već počeo. Kroz API:
 
 ---
 
-## Kome se vjeruje: klijent naspram servera
+## Plaćanje i povrat novca
 
-> ⬜ Popunjava se u fazama 9–12.
+> ✅ Faza 12. Provjerena test skriptom nad pravim Stripe sandbox računom (rezultati na kraju sekcije).
+
+Plaćanje ide kroz Stripe u test (sandbox) okruženju, valuta je EUR, a iznosi prema
+Stripe-u putuju kao cijeli broj centi. Sve što dodiruje Stripe SDK stoji u jednoj
+klasi, `StripeKlijent`; servis za plaćanje radi sa vlastitim zapisima
+(`StripeIntent`, `StripePovrat`, `StripeDogadjaj`) i sadrži samo pravila.
+
+### Tok
+
+1. `POST /api/rezervacije/{id}/payment-intent` — samo klijent, samo za svoju
+   rezervaciju. Tijela nema. Server provjeri da rezervacija čeka plaćanje i da
+   držanje nije isteklo, uzme iznos iz rezervacije i napravi PaymentIntent.
+   Klijent dobija `clientSecret` i javni ključ — ništa više.
+2. Mobilna aplikacija otvara Stripe PaymentSheet. Plaćanje ostaje u aplikaciji:
+   intent se pravi sa `AllowRedirects = "never"`, pa se ne nude načini plaćanja koji
+   bi otvorili preglednik.
+3. `POST /api/placanja/{id}/confirm` — aplikacija javlja da je PaymentSheet završio.
+   Server to ne uzima kao dokaz, nego pita Stripe: status mora biti `succeeded`, a
+   `AmountReceived` mora biti tačno iznos rezervacije u centima. Tek tada, u jednoj
+   transakciji: plaćanje `Succeeded`, `NaplaceniIznos` iz Stripe odgovora,
+   `IsPaid = true`, rezervacija `Pending → Confirmed` kroz state machine.
+4. `POST /api/webhooks/stripe` — dodatni put do istog ishoda, kad Stripe sam javi.
+
+Glavni put je treći, jer webhook traži javnu adresu, a nje u Docker okruženju pri
+pregledu rada nema. Uputstvo dozvoljava „webhook ili server-side API verifikaciju";
+urađeno je oboje, i oba puta završavaju u istoj metodi, `PrimijeniStanjeAsync`.
+Pravilo o tome šta znači „plaćeno" postoji samo jednom.
+
+### Zašto se iznos ne računa ponovo iz cjenovnika
+
+Plan kaže da server pri kreiranju intenta računa iznos. Server ga i računa — ali pri
+kreiranju rezervacije, kroz `PricingService`, i upisuje u `UkupanIznos`. Intent uzima
+taj upisani broj. Ponovni obračun bi značio da izmjena cjenovnika između rezervacije i
+plaćanja promijeni cijenu koju je klijent već prihvatio, a to specifikacija izričito
+zabranjuje. Klijent ni u jednom od ta dva trenutka ne šalje iznos.
+
+### Jedan intent, ne dva
+
+Prije novog intenta servis pogleda postoji li otvoren (`Created` ili `Pending`). Ako
+postoji, pita Stripe za njegovo stanje:
+
+- ne postoji, poništen je ili glasi na drugi iznos → označi se `Canceled` i ide dalje
+- već je naplaćen, samo potvrda nije stigla → završi se naplata odmah
+- inače → vrati se isti `clientSecret`
+
+Odbijena kartica ostavlja intent u stanju `requires_payment_method`, koje se kod nas
+čuva kao `Created` — klijent smije pokušati drugom karticom istim intentom dok traje
+držanje. Seed ima otvorene intente sa izmišljenim identifikatorima (`pi_seed_open_…`);
+Stripe za njih kaže da ne postoje, pa se prvi pokušaj plaćanja takve rezervacije
+uredno prebaci na novi intent.
+
+### Idempotency ključ
+
+`rez-{id}-v{redni broj}-{vrijeme kreiranja rezervacije}` za intent i
+`povrat-{id}-{vrijeme kreiranja povrata}` za povrat.
+
+Plan predviđa kraći oblik `rez-{id}-v{verzija}`. Vrijeme je dodano zato što Stripe
+ključ pamti 24 sata, a identifikatori poslije `docker compose down -v` kreću od
+jedinice. Bez toga bi nova rezervacija 5 dobila ključ stare rezervacije 5, sa drugim
+iznosom, i Stripe bi zahtjev odbio kao zloupotrebu ključa.
+
+### Kad novac stigne u pogrešnom trenutku
+
+Tri slučaja koja se u praksi dese, i svaki ima odgovor:
+
+| Situacija | Šta sistem radi |
+|---|---|
+| Klijent otkaže dok je PaymentSheet otvoren, pa plaćanje ipak prođe | plaćanje se bilježi kao uspjelo (novac je stigao), rezervacija ostaje otkazana, a cijeli iznos ide u povrat |
+| Držanje istekne, pa plaćanje prođe | server zaključa vozilo i ponovo provjeri dostupnost; ako je termin slobodan, rezervacija se potvrđuje, ako ga je neko u međuvremenu uzeo, rezervacija se otkazuje uz pun povrat |
+| Dva intenta iste rezervacije oba naplaćena | drugo plaćanje ne postaje `Succeeded` (to ni indeks ne bi dozvolio), a njegov iznos se vraća u cijelosti |
+
+Zajedničko je jedno: novac koji je stigao se nikad ne ignoriše. Ili pripada
+potvrđenoj rezervaciji, ili se vraća.
+
+### Povrat: prvo zapis, pa Stripe
+
+Otkazivanje u fazi 11 upisuje povrat u statusu `Created`. Sada ga `IzvrsilacPovrata`
+šalje Stripe-u — ali tek **poslije** potvrde transakcije. Redoslijed je namjeran:
+
+- Da se novac šalje prije potvrde, a transakcija zatim padne, klijent bi dobio povrat
+  za otkazivanje koje ne postoji.
+- Ovako je odluka već trajno upisana. Ako Stripe ne odgovori, otkazivanje i dalje
+  važi, a povrat stoji zapisan i može se poslati ponovo.
+
+Ishod slanja se razlikuje po tome šta se zna:
+
+| Stripe je… | Status povrata | Šta dalje |
+|---|---|---|
+| prihvatio | `Succeeded` ili `Pending`, uz `re_…` identifikator | ništa |
+| odbio (odgovor 4xx) | `Failed` | osoblje ga ponavlja; nastaje **novi** zapis sa novim ključem, a odbijeni ostaje u historiji |
+| nije odgovorio (mreža, 5xx) | ostaje `Created` | ponavlja se **isti** zapis, istim ključem — ako je Stripe povrat ipak izvršio, vratit će isti rezultat umjesto drugog povrata |
+
+`IzvrsilacPovrata` ne poziva `SaveChangesAsync`. Mijenja entitete koje dobije, a snima
+servis koji vodi operaciju, nad istim `DbContext`-om. Uputstvo (3.4) traži da se
+izbjegavaju servisi koji iz drugog servisa sami snimaju.
+
+Otkazivanjem se poništavaju i otvoreni intenti, da se otkazana rezervacija ne može
+naplatiti. Ako poništavanje ne uspije zato što je naplata upravo prošla, prvi red
+tabele iznad preuzima stvar.
+
+Osoblje ponavlja povrat kroz `POST /api/placanja/povrati/{id}/ponovi`, a listu
+plaćanja sa odbijenim povratima dobija filterom `samoNeuspjeliPovrati=true`.
+
+### Webhook bez `[AllowAnonymous]`
+
+Stripe ne može poslati naš JWT, a uputstvo dozvoljava `[AllowAnonymous]` isključivo
+na prijavi i registraciji — i posebno kaže da write operacije nikad ne smiju biti
+otvorene. Webhook je upravo takva operacija.
+
+Rješenje je druga autentifikacijska shema, `StripePotpis`. `StripePotpisHandler`
+pročita tijelo, provjeri potpis iz zaglavlja `Stripe-Signature` prema tajni iz `.env`
+fajla i tek tada zahtjevu dodijeli ulogu `StripeWebhook`. Kontroler traži baš tu shemu
+i tu ulogu. Bez potpisa, ili sa lažnim, ASP.NET vraća 401 prije nego zahtjev dođe do
+kontrolera. JWT ostaje podrazumijevana shema za sve ostalo.
+
+U servisu webhook radi ovim redom:
+
+1. potpis se provjerava još jednom, pri čitanju događaja
+2. ako `ProviderEventId` već postoji u `ObradjeniWebhookEvent` → 200, bez efekata
+3. transakcija, zaključavanje rezervacije
+4. **stanje intenta se čita iz Stripe-a**, ne iz događaja — događaji znaju stići van
+   reda, pa stariji `payment_failed` ne smije pregaziti noviji `succeeded`
+5. isti `PrimijeniStanjeAsync` kao kod potvrde
+6. upis događaja u istoj transakciji; ako isti događaj istovremeno stigne dvaput,
+   jedinstveni indeks odbije drugi upis i ta transakcija se poništava
+
+Lokalno se webhook testira kroz Stripe CLI:
+
+```
+stripe listen --forward-to localhost:5000/api/webhooks/stripe
+```
+
+Komanda ispiše `whsec_…`, što ide u `STRIPE_WEBHOOK_SECRET`.
+
+### Konfiguracija
+
+`StripePostavke` čita tri ključa iz `.env` jednom, pri pokretanju. API se podiže i bez
+njih — ostatak sistema radi, a endpointi za plaćanje odgovaraju porukom šta nedostaje.
+Live ključ (`sk_live_…`) obara pokretanje: uputstvo traži sandbox, a slučajno
+pokretanje sa pravim ključem značilo bi prave naplate.
+
+Stripe klijent dobija `HttpClient` iz `IHttpClientFactory`, ne kroz `new HttpClient()`
+(uputstvo 3.4). Javni ključ klijent dobija od servera, uz intent, pa ga mobilna
+aplikacija ne mora imati upisanog.
+
+### Šta još nije povezano
+
+- ⬜ Poruka `placanje.uspjesno` na RabbitMQ i email potvrde — faza 14. Kad nastane,
+  objavljuje se samo za ishod „potvrđeno", pa ponovljena potvrda ne šalje drugi email.
+- ⬜ Notifikacija klijentu — faza 15.
+- ⬜ Povrat depozita pri vraćanju vozila — faza 13, kroz isti `IzvrsilacPovrata`.
+- ⬜ Periodično ponovno slanje povrata koji su ostali `Created` — faza 14, u workeru.
+
+### Testovi kojima je korak zatvoren
+
+30 novih unit testova za pretvaranje iznosa i statusa (`IznosiStripeTests`) —
+ukupno 116. Kroz API, skriptom `test-faza12.ps1`:
+
+| Test | Rezultat |
+|---|---|
+| Klijent traži intent | `clientSecret`, 207,80 EUR iz rezervacije, držanje 899 s |
+| Ponovni zahtjev | isti `placanjeId` (357 = 357) |
+| Potvrda prije plaćanja | 400, „Plaćanje nije izvršeno…" |
+| Uposlenik traži intent / tuđi klijent čita plaćanje | 403 / 403 |
+| Kartica 4242, prije potvrde | Stripe `succeeded`, 20780 centi — rezervacija i dalje `Pending`, `isPaid=false` |
+| Potvrda | `Succeeded`, naplaćeno 207,80, `Confirmed`, `isPaid=true`, audit zapis „Plaćanje verifikovano na serveru" |
+| Ponovna potvrda | 200, zapisa u historiji 2 → 2 |
+| Intent za plaćenu rezervaciju | 400, „Rezervacija je već plaćena." |
+| Odbijena kartica | potvrda 400, novi pokušaj koristi isti intent (358 = 358) |
+| Otkazivanje plaćene | povrat 207,80 `Succeeded`, `re_3UGeKT…` |
+| Otkazivanje neplaćene | otvoren intent `Canceled` |
+| Webhook bez potpisa / sa lažnim | 401 / 401 |
+
+Naplate, odbijena kartica i povrat vidljivi su i u Stripe dashboardu (test način).
+
+> ⬜ Webhook sa pravim, potpisanim Stripe događajem (kroz `stripe listen`) još nije
+> pokrenut. Zaštita potpisom je provjerena, obrada događaja nije.
+
+---
+
+## Kome se vjeruje: klijent naspram servera
 
 Ovo je najvažnija sekcija dokumenta. Za svaku operaciju koja prima podatke izvana
 mora biti jasno koja vrijednost se prihvata kakva jeste, a koju server sam izračuna
@@ -1643,6 +1864,20 @@ Pravilo je jednostavno: **klijentu se vjeruje šta hoće, ali ne i koliko to ko�
 | `DrziDo` | **server** | `UtcNow + 15 min` |
 | `Broj` | **server** | generisan |
 | `CijenaPoJedinici` na stavci | **server** | iz cjenovnika u trenutku kreiranja, da kasnija izmjena tarife ne promijeni staru rezervaciju |
+
+### Plaćanje
+
+| Podatak | Odakle | Napomena |
+|---|---|---|
+| identifikator rezervacije | klijent (ruta) | provjerava se da je rezervacija njegova |
+| iznos | **server** | `Rezervacija.UkupanIznos`, upisan pri kreiranju |
+| valuta | **server** | EUR |
+| idempotency ključ | **server** | iz rezervacije i rednog broja pokušaja |
+| „plaćanje je uspjelo" | **Stripe** | server pita Stripe; poruka aplikacije je samo signal da pita |
+| `NaplaceniIznos` | **Stripe** | `AmountReceived` iz odgovora, i mora biti jednak očekivanom |
+| `IsPaid`, `Status` | **server** | isključivo kroz `PrimijeniStanjeAsync` i state machine |
+| iznos povrata | **server** | iz `NaplaceniIznos`, nikad iz cjenovnika |
+| webhook događaj | **Stripe**, uz potpis | sadržaj služi samo da se nađe plaćanje; stanje se ponovo čita iz Stripe-a |
 
 ### Registracija
 
@@ -1675,7 +1910,7 @@ Registracija je dozvoljena od 16. godine; granica se računa na serveru iz
 
 ## Redoslijed provjera
 
-> ⬜ Popunjava se u fazama 9–13.
+> Kreiranje rezervacije i potvrda plaćanja su popunjeni; primopredaja dolazi u fazi 13.
 
 Za svaku operaciju treba znati tačan redoslijed provjera — do prve koja zahtjev
 odbije — i koji status klijent tad dobija.
@@ -1701,7 +1936,21 @@ Planirani redoslijed, sve unutar jedne transakcije:
 
 ### Potvrda plaćanja
 
-⬜ Faza 12.
+1. Plaćanje postoji → 404
+2. Klijent potvrđuje samo svoje (osoblje smije svako) → 403
+3. Već je `Succeeded` → 200 sa istim stanjem, **bez efekata** — prije ijednog upisa
+4. Transakcija i zaključavanje reda rezervacije
+5. Ponovo: već je `Succeeded`? (webhook je mogao stići dok se čekalo) → 200
+6. Stripe kaže da intent ne postoji → plaćanje `Canceled`, 400
+7. Status intenta nije `succeeded` → status se upiše, 400 sa porukom po stanju
+   (odbijena kartica, 3D Secure, obrada u toku)
+8. `AmountReceived` ≠ očekivani iznos u centima → 400, rezervacija se ne potvrđuje
+9. Rezervacija već ima uspješno plaćanje → povrat cijelog iznosa
+10. Rezervacija više ne čeka plaćanje → povrat cijelog iznosa
+11. Držanje isteklo → zaključavanje vozila i ponovna provjera dostupnosti; zauzeto →
+    otkazivanje uz pun povrat
+12. `Pending → Confirmed`, `IsPaid = true`, `DrziDo` prazno
+13. Commit, pa tek onda slanje povrata i poništavanje ostalih otvorenih intenta
 
 ---
 
@@ -1715,13 +1964,15 @@ token, zaključavanje reda ili uslovni upis. Gdje mehanizma nema, to i piše.
 
 | Scenarij | Čime je riješeno | |
 |---|---|---|
-| Dva zahtjeva za isto vozilo i preklapajući termin | eksplicitna transakcija sa provjerom dostupnosti unutar nje | ⬜ |
-| Dvostruko slanje iste forme | jedinstveni indeks `(KorisnikId, VoziloId, DatumOd)` | 🟡 indeks postoji, servis ga još ne hvata |
-| Dva uspješna plaćanja iste rezervacije | filtrirani jedinstveni indeks gdje `Status = 3` | 🟡 indeks postoji, servis još ne postoji |
-| Otkazivanje i potvrda plaćanja istovremeno | — | ⬜ |
+| Dva zahtjeva za isto vozilo i preklapajući termin | transakcija i `UPDLOCK, HOLDLOCK` na redu vozila prije provjere dostupnosti | ✅ testirano u fazi 11 |
+| Dvostruko slanje iste forme | jedinstveni indeks `(KorisnikId, VoziloId, DatumOd)`; `SacuvajAsync` kršenje pretvara u 400 | ✅ |
+| Dva zahtjeva za payment intent iste rezervacije | zaključavanje reda rezervacije; drugi zahtjev čeka i dobija isti intent | ✅ |
+| Dva uspješna plaćanja iste rezervacije | zaključavanje, provjera prije upisa, i filtrirani jedinstveni indeks gdje `Status = 3`; drugi novac se vraća | ✅ |
+| Otkazivanje i potvrda plaćanja istovremeno | oba puta zaključavaju red rezervacije; ko dođe drugi vidi novo stanje, a novac za otkazanu rezervaciju se vraća | ✅ |
+| Potvrda iz aplikacije i webhook istovremeno | isto zaključavanje, pa ponovna provjera `Succeeded` poslije njega | ✅ |
+| Isti Stripe događaj dvaput | provjera prije obrade i jedinstveni indeks na `ProviderEventId` | ✅ |
 | Dvije recenzije istog najma | jedinstveni indeks `(KorisnikId, RezervacijaId)` | 🟡 indeks postoji |
 | Dvije primopredaje istog tipa | jedinstveni indeks `(RezervacijaId, Tip)` | 🟡 indeks postoji |
-| Isti Stripe događaj dvaput | jedinstveni indeks na `ProviderEventId` | 🟡 indeks postoji |
 
 Razlog za 🟡 umjesto ✅ vrijedi razumjeti. Jedinstveni indeks stvarno **sprječava**
 duplikat i onda kad provjera u kodu ne uhvati trku — baza jednostavno odbije drugi
@@ -1735,14 +1986,15 @@ vrati razumnu poruku, pošteno je reći da stvar nije završena.
 
 ## Idempotentnost
 
-> ⬜ Faza 12.
+> ✅ Faza 12.
 
 | Operacija | Kako | |
 |---|---|---|
-| `POST /api/placanja/{id}/confirm` | ako je plaćanje već `Succeeded`, vraća 200 i **ne ponavlja efekte** — bez drugog emaila, bez druge notifikacije | ⬜ |
-| Kreiranje payment intenta | ako postoji otvoren `Created`/`Pending` intent, vraća postojeći umjesto novog | ⬜ |
-| Stripe webhook | `ObradjeniWebhookEvent.ProviderEventId` je jedinstven; postojanje zapisa znači da je događaj već obrađen | ⬜ |
-| Idempotency key prema Stripe-u | `rez-{id}-v{verzija}` | ⬜ |
+| `POST /api/placanja/{id}/confirm` | ako je plaćanje već `Succeeded`, vraća 200 i **ne ponavlja efekte** — ni status, ni audit zapis, ni (od faze 14) email | ✅ |
+| Kreiranje payment intenta | ako postoji otvoren `Created`/`Pending` intent koji Stripe još vodi, vraća se on | ✅ |
+| Stripe webhook | `ObradjeniWebhookEvent.ProviderEventId` je jedinstven; postojanje zapisa znači da je događaj već obrađen | ✅ |
+| Idempotency ključ prema Stripe-u | `rez-{id}-v{n}-{ticks}` za intent, `povrat-{id}-{ticks}` za povrat | ✅ |
+| Ponovno slanje povrata | isti zapis, isti ključ — Stripe vraća prethodni rezultat umjesto novog povrata | ✅ |
 
 ---
 
@@ -1860,8 +2112,8 @@ jer se to zaobiđe direktnim pozivom API-ja.
 
 ## Povrat novca
 
-> ✅ Pravilo i obračun su gotovi u fazi 11c. Izvršavanje povrata prema Stripe-u dolazi
-> u fazi 12.
+> ✅ Pravilo i obračun su iz faze 11c, a izvršavanje prema Stripe-u iz faze 12 —
+> vidi sekciju o plaćanju.
 
 | Kad se otkazuje | Povrat najma |
 |---|---|
@@ -1921,6 +2173,8 @@ kategorije — isti filter kao u pretrazi.
 | MIME tip se validira po magic bytes, ne po ekstenziji | ✅ |
 | Lozinke kroz BCrypt | ✅ |
 | Kodovi i tokeni kroz `RandomNumberGenerator`, nikad `System.Random` | ⬜ |
+| Stripe webhook zaštićen potpisom kroz vlastitu shemu, bez `[AllowAnonymous]` | ✅ |
+| Samo testni Stripe ključ; live ključ obara pokretanje | ✅ |
 | Sve tajne u `.env`, ništa osjetljivo u `appsettings.json` | ✅ |
 | Docker tagovi eksplicitno verzionisani | ✅ |
 

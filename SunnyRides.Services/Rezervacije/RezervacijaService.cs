@@ -14,6 +14,7 @@ using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Placanja;
 
 namespace SunnyRides.Services.Rezervacije;
 
@@ -32,6 +33,7 @@ public class RezervacijaService
     private readonly IAvailabilityService _dostupnost;
     private readonly IPricingService _pricingService;
     private readonly IRezervacijaStateMachine _stateMachine;
+    private readonly IIzvrsilacPovrata _izvrsilacPovrata;
 
     /// <summary>
     /// Kad zahtjev dolazi od klijenta, ovdje stoji njegov identifikator i lista se
@@ -46,7 +48,8 @@ public class RezervacijaService
         IDozvolaService dozvolaService,
         IAvailabilityService dostupnost,
         IPricingService pricingService,
-        IRezervacijaStateMachine stateMachine)
+        IRezervacijaStateMachine stateMachine,
+        IIzvrsilacPovrata izvrsilacPovrata)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -54,6 +57,7 @@ public class RezervacijaService
         _dostupnost = dostupnost;
         _pricingService = pricingService;
         _stateMachine = stateMachine;
+        _izvrsilacPovrata = izvrsilacPovrata;
     }
 
     protected override string NazivEntiteta => "Rezervacija";
@@ -329,6 +333,10 @@ public class RezervacijaService
 
         await using var transakcija = await Context.Database.BeginTransactionAsync(ct);
 
+        // Otkazivanje i potvrda placanja iste rezervacije ne smiju raditi istovremeno
+        // nad starim stanjem - onaj ko dodje drugi ceka ovdje.
+        await Context.ZakljucajRezervacijuAsync(id, ct);
+
         var rezervacija = await DohvatiZaOtkazivanjeAsync(id, ct);
 
         var prepreka = RazlogNemogucnosti(rezervacija);
@@ -366,6 +374,12 @@ public class RezervacijaService
 
         await SacuvajAsync(ct);
         await transakcija.CommitAsync(ct);
+
+        // Novac se salje tek kad je otkazivanje trajno upisano. Ako Stripe ne odgovori,
+        // otkazivanje ostaje vazece, a povrat stoji zapisan i moze se poslati ponovo.
+        // Otvoreni intenti se ponistavaju, da se otkazana rezervacija ne moze naplatiti.
+        await _izvrsilacPovrata.IzvrsiZaRezervacijuAsync(rezervacija, ct);
+        await SacuvajAsync(ct);
 
         return await GetByIdOsnovnoAsync(id, ct);
     }
@@ -466,7 +480,8 @@ public class RezervacijaService
     /// ne upisuje kao jedan slobodan zapis.
     ///
     /// Status je <c>Created</c> - zapis postoji, ali prema provajderu jos nije poslan.
-    /// Slanje i potvrda dolaze u fazi placanja; tek tada zapis postaje <c>Succeeded</c>.
+    /// Salje ga <see cref="IIzvrsilacPovrata"/> poslije potvrde transakcije; tek kad
+    /// Stripe odgovori, zapis postaje <c>Succeeded</c> ili <c>Failed</c>.
     /// </summary>
     private void EvidentirajPovrate(
         Rezervacija rezervacija, ObracunOtkazivanjaDto obracun, DateTime sada)
@@ -510,12 +525,7 @@ public class RezervacijaService
         }
     }
 
-    /// <summary>
-    /// Povrat koji se racuna kao vracen novac. Neuspio i ponisten povrat se ne racuna -
-    /// taj novac je i dalje kod agencije.
-    /// </summary>
-    private static bool JeVazeci(Refund refund) =>
-        refund.Status != StatusPlacanja.Failed && refund.Status != StatusPlacanja.Canceled;
+    private static bool JeVazeci(Refund refund) => IznosiStripe.PovratJeVazeci(refund.Status);
 
     // --- interno -----------------------------------------------------------
 

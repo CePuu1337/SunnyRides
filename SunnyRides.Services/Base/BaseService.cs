@@ -200,7 +200,7 @@ public abstract class BaseService<TModel, TSearch, TEntity> : IService<TModel, T
     }
 
     /// <summary>SQL Server: 2601 je jedinstveni indeks, 2627 je jedinstveno ogranicenje.</summary>
-    private static bool JeKrsenjeJedinstvenosti(DbUpdateException ex) =>
+    protected static bool JeKrsenjeJedinstvenosti(DbUpdateException ex) =>
         ex.InnerException is Microsoft.Data.SqlClient.SqlException sql
         && sql.Number is 2601 or 2627;
 
