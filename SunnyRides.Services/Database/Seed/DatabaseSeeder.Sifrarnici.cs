@@ -9,6 +9,8 @@ public partial class DatabaseSeeder
     private List<ModelVozila> _modeli = new();
     private List<VrstaOpreme> _vrsteOpreme = new();
     private List<PaketOsiguranja> _paketiOsiguranja = new();
+    private List<RazlogOtkazivanja> _razloziKlijenta = new();
+    private List<RazlogOtkazivanja> _razloziAgencije = new();
     private List<KategorijaDozvole> _kategorije = new();
     private List<Marka> _marke = new();
     private List<TipVozila> _tipoviVozila = new();
@@ -151,6 +153,31 @@ public partial class DatabaseSeeder
             new() { Naziv = "Puno kasko",  CijenaPoDanu = 25m, IznosUcesca = 0m }
         };
         _context.PaketiOsiguranja.AddRange(_paketiOsiguranja);
+
+        // --- razlozi otkazivanja ---
+        // Klijent i agencija imaju svoje razloge. Vremenski uslovi i "Ostalo" nude se
+        // i jednima i drugima, a "Ostalo" trazi da se upise objasnjenje.
+        var vrijeme = new RazlogOtkazivanja { Naziv = "Nepovoljni vremenski uslovi", ZaKlijenta = true, ZaAgenciju = true };
+        var ostalo = new RazlogOtkazivanja { Naziv = "Ostalo", ZaKlijenta = true, ZaAgenciju = true, TraziNapomenu = true };
+
+        _razloziKlijenta = new List<RazlogOtkazivanja>
+        {
+            new() { Naziv = "Promjena planova putovanja", ZaKlijenta = true },
+            new() { Naziv = "Pronadjena povoljnija ponuda", ZaKlijenta = true },
+            new() { Naziv = "Pogresno odabran termin ili vozilo", ZaKlijenta = true },
+            new() { Naziv = "Zdravstveni razlozi", ZaKlijenta = true },
+            vrijeme
+        };
+
+        _razloziAgencije = new List<RazlogOtkazivanja>
+        {
+            new() { Naziv = "Vozilo je u kvaru ili na servisu", ZaAgenciju = true },
+            new() { Naziv = "Klijent nema vazecu vozacku dozvolu", ZaAgenciju = true },
+            new() { Naziv = "Klijent nije dostupan za potvrdu termina", ZaAgenciju = true },
+            vrijeme
+        };
+
+        _context.RazloziOtkazivanja.AddRange(_razloziKlijenta.Concat(_razloziAgencije).Append(ostalo).Distinct());
 
         await _context.SaveChangesAsync(ct);
     }

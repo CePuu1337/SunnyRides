@@ -192,17 +192,10 @@ public partial class DatabaseSeeder
 
         if (status == StatusRezervacije.Cancelled)
         {
-            var razlozi = new[]
-            {
-                "Klijent je odustao od najma.",
-                "Promjena planova putovanja.",
-                "Vozilo je otislo na neplanirani servis - ponudjena zamjena odbijena.",
-                "Isteklo vrijeme za placanje.",
-                "Klijent nije dostavio vazecu vozacku dozvolu."
-            };
-            rezervacija.RazlogOtkazivanja = Izaberi(razlozi);
+            var otkazaoKlijent = Sansa(60);
+            rezervacija.OtkazaoKorisnik = otkazaoKlijent ? klijent : _uposlenik;
+            rezervacija.RazlogOtkazivanja = Izaberi(otkazaoKlijent ? _razloziKlijenta : _razloziAgencije);
             rezervacija.DatumOtkazivanja = datumKreiranja.AddDays(Broj(1, 10));
-            rezervacija.OtkazaoKorisnik = Sansa(60) ? klijent : _uposlenik;
         }
 
         DodajHistorijuStatusa(rezervacija, klijent);
@@ -247,7 +240,7 @@ public partial class DatabaseSeeder
                 var izStatusa = rezervacija.IsPaid ? StatusRezervacije.Confirmed : StatusRezervacije.Pending;
                 Zapis(izStatusa, StatusRezervacije.Cancelled, "Rezervacija otkazana.",
                     rezervacija.DatumOtkazivanja ?? rezervacija.DatumKreiranja,
-                    rezervacija.OtkazaoKorisnik, rezervacija.RazlogOtkazivanja);
+                    rezervacija.OtkazaoKorisnik, rezervacija.RazlogOtkazivanja?.Naziv);
                 break;
         }
     }

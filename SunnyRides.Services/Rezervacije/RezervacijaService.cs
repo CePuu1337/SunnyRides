@@ -194,6 +194,7 @@ public class RezervacijaService
     private static IQueryable<Rezervacija> SaOsnovnim(IQueryable<Rezervacija> upit) =>
         upit.Include(x => x.Korisnik)
             .Include(x => x.OtkazaoKorisnik)
+            .Include(x => x.RazlogOtkazivanja)
             .Include(x => x.Poslovnica)
             .Include(x => x.PaketOsiguranja)
             .Include(x => x.Vozilo).ThenInclude(v => v.ModelVozila).ThenInclude(m => m.Marka)
@@ -323,13 +324,7 @@ public class RezervacijaService
         var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
         var otkazujeAgencija = JeOsoblje();
 
-        // Klijent ima pravo znati zasto mu je agencija otkazala najam, pa je razlog
-        // tada obavezan. Klijentu se vlastiti razlog ne trazi.
-        if (otkazujeAgencija && string.IsNullOrWhiteSpace(request.Razlog))
-        {
-            throw new BusinessException(
-                "Razlog otkazivanja je obavezan kad rezervaciju otkazuje agencija.");
-        }
+        var (razlog, napomena) = await ProvjeriRazlogAsync(request, otkazujeAgencija, ct);
 
         await using var transakcija = await Context.Database.BeginTransactionAsync(ct);
 
@@ -348,9 +343,7 @@ public class RezervacijaService
         var sada = DateTime.UtcNow;
         var obracun = NapraviObracun(rezervacija, sada);
 
-        var razlog = string.IsNullOrWhiteSpace(request.Razlog)
-            ? "Klijent je odustao od najma."
-            : request.Razlog.Trim();
+        var tekstRazloga = napomena is null ? razlog.Naziv : $"{razlog.Naziv} - {napomena}";
 
         // Status mijenja iskljucivo state machine - ona provjerava prelaz i pise
         // audit zapis. Servis ga ne postavlja direktno ni ovdje.
@@ -359,9 +352,10 @@ public class RezervacijaService
             StatusRezervacije.Cancelled,
             $"Rezervacija otkazana. {obracun.Obrazlozenje} " +
             $"Povrat: {obracun.UkupanPovrat:0.00} EUR.",
-            razlog);
+            tekstRazloga);
 
-        rezervacija.RazlogOtkazivanja = razlog;
+        rezervacija.RazlogOtkazivanjaId = razlog.Id;
+        rezervacija.NapomenaOtkazivanja = napomena;
         rezervacija.DatumOtkazivanja = sada;
 
         // Ko je otkazao cita se iz tokena, nikad iz tijela zahtjeva.
@@ -382,6 +376,48 @@ public class RezervacijaService
         await SacuvajAsync(ct);
 
         return await GetByIdOsnovnoAsync(id, ct);
+    }
+
+    /// <summary>
+    /// Razlog se bira iz liste, i klijent i agencija ga moraju izabrati. Agencija je
+    /// tu posebno bitna jer klijent ima pravo znati zasto mu je najam otkazan, a taj
+    /// razlog ide i u notifikaciju.
+    ///
+    /// Svaka strana smije izabrati samo razloge koji su predvidjeni za nju. Da nije
+    /// tako, klijent bi preko API-ja mogao poslati "Vozilo je u kvaru" i izgledalo bi
+    /// kao da je otkazala agencija.
+    /// </summary>
+    private async Task<(RazlogOtkazivanja Razlog, string? Napomena)> ProvjeriRazlogAsync(
+        OtkazivanjeRequest request, bool otkazujeAgencija, CancellationToken ct)
+    {
+        var razlog = await Context.RazloziOtkazivanja
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == request.RazlogOtkazivanjaId, ct)
+            ?? throw new BusinessException("Odaberite razlog otkazivanja iz ponudjene liste.");
+
+        if (!razlog.Aktivan)
+        {
+            throw new BusinessException(
+                $"Razlog \"{razlog.Naziv}\" se vise ne nudi. Odaberite neki drugi.");
+        }
+
+        var dozvoljen = otkazujeAgencija ? razlog.ZaAgenciju : razlog.ZaKlijenta;
+        if (!dozvoljen)
+        {
+            throw new BusinessException(otkazujeAgencija
+                ? $"Razlog \"{razlog.Naziv}\" je predvidjen samo za klijente."
+                : $"Razlog \"{razlog.Naziv}\" moze izabrati samo agencija.");
+        }
+
+        var napomena = string.IsNullOrWhiteSpace(request.Napomena) ? null : request.Napomena.Trim();
+
+        if (razlog.TraziNapomenu && napomena is null)
+        {
+            throw new BusinessException(
+                $"Uz razlog \"{razlog.Naziv}\" upisite kratko objasnjenje.");
+        }
+
+        return (razlog, napomena);
     }
 
     /// <summary>

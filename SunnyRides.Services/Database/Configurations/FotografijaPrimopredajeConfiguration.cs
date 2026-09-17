@@ -11,7 +11,6 @@ public class FotografijaPrimopredajeConfiguration : IEntityTypeConfiguration<Fot
         builder.ToTable("FotografijaPrimopredaje");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Putanja).IsRequired().HasMaxLength(500);
-        builder.Property(x => x.PutanjaThumbnail).IsRequired().HasMaxLength(500);
 
         builder.HasOne(x => x.Primopredaja)
                .WithMany(p => p.Fotografije)

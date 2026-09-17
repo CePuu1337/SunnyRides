@@ -143,7 +143,7 @@ public partial class DatabaseSeeder
                 case StatusRezervacije.Cancelled:
                     Notifikacija(TipNotifikacije.RezervacijaOtkazana,
                         "Rezervacija je otkazana",
-                        $"Rezervacija {rezervacija.Broj} je otkazana. Razlog: {rezervacija.RazlogOtkazivanja}",
+                        $"Rezervacija {rezervacija.Broj} je otkazana. Razlog: {rezervacija.RazlogOtkazivanja?.Naziv}",
                         rezervacija.DatumOtkazivanja ?? rezervacija.DatumKreiranja);
 
                     if (rezervacija.IsPaid)

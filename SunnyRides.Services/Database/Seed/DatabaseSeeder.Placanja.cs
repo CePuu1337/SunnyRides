@@ -8,6 +8,10 @@ public partial class DatabaseSeeder
 {
     private async Task SeedPlacanjaIPrimopredajeAsync(List<Rezervacija> rezervacije, CancellationToken ct)
     {
+        // Fotografije primopredaje su privatne, kao i fotografije dozvola, pa seed za
+        // njih pravi placeholder u privatnom folderu. Sve seed primopredaje dijele isti fajl.
+        var fotografija = await NapraviPlaceholderAsync("primopredaje/seed", "C9D3C4", ct);
+
         foreach (var rezervacija in rezervacije)
         {
             Placanje? placanje = null;
@@ -74,7 +78,7 @@ public partial class DatabaseSeeder
             // --- primopredaja ---
             if (rezervacija.Status == StatusRezervacije.Completed)
             {
-                var iznosStete = DodajPrimopredaju(rezervacija);
+                var iznosStete = DodajPrimopredaju(rezervacija, fotografija);
 
                 // Obracun depozita: uplaceno - steta. Ostatak se vraca kao zaseban
                 // zapis o povratu; otkazivanje i povrat depozita nisu isti dogadjaj.
@@ -143,9 +147,8 @@ public partial class DatabaseSeeder
     }
 
     /// <summary>Vraca iznos evidentirane stete, ili nulu ako je stete nema.</summary>
-    private decimal DodajPrimopredaju(Rezervacija rezervacija)
+    private decimal DodajPrimopredaju(Rezervacija rezervacija, string? fotografija)
     {
-        var slika = _slikaModela[rezervacija.Vozilo.ModelVozila.Naziv];
         var kmPriIzdavanju = rezervacija.Vozilo.Kilometraza - Broj(200, 3000);
         if (kmPriIzdavanju < 0)
         {
@@ -159,14 +162,11 @@ public partial class DatabaseSeeder
             DatumVrijeme = rezervacija.DatumOd.AddMinutes(Broj(0, 40)),
             Kilometraza = kmPriIzdavanju,
             NivoGoriva = Broj(80, 101),
-            Napomena = "Vozilo izdato u ispravnom stanju, kontrolna lista prodjena.",
+            Napomena = "Vozilo izdato u ispravnom stanju.",
+            KontrolnaListaProdjena = true,
             IzvrsioKorisnik = _uposlenik
         };
-        izdavanje.Fotografije.Add(new FotografijaPrimopredaje
-        {
-            Putanja = $"/uploads/seeds/{slika}.jpg",
-            PutanjaThumbnail = $"/uploads/seeds/thumbs/{slika}.jpg"
-        });
+        DodajFotografiju(izdavanje, fotografija);
         _context.Primopredaje.Add(izdavanje);
 
         var predjeno = Broj(40, 900);
@@ -179,13 +179,10 @@ public partial class DatabaseSeeder
             DatumVrijeme = rezervacija.DatumDo.AddMinutes(kasnjenjeMinuta),
             Kilometraza = kmPriIzdavanju + predjeno,
             NivoGoriva = Broj(20, 101),
+            KontrolnaListaProdjena = true,
             IzvrsioKorisnik = _uposlenik
         };
-        povrat.Fotografije.Add(new FotografijaPrimopredaje
-        {
-            Putanja = $"/uploads/seeds/{slika}.jpg",
-            PutanjaThumbnail = $"/uploads/seeds/thumbs/{slika}.jpg"
-        });
+        DodajFotografiju(povrat, fotografija);
 
         // Oko svakog sedmog povrata ima evidentirano ostecenje. Kad ga ima, opis i
         // fotografija su obavezni, a iznos umanjuje povrat depozita.
@@ -217,5 +214,13 @@ public partial class DatabaseSeeder
 
         _context.Primopredaje.Add(povrat);
         return iznosStete;
+    }
+
+    private static void DodajFotografiju(Primopredaja primopredaja, string? kljuc)
+    {
+        if (kljuc is not null)
+        {
+            primopredaja.Fotografije.Add(new FotografijaPrimopredaje { Putanja = kljuc });
+        }
     }
 }

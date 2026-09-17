@@ -75,17 +75,15 @@ public class RezervacijaController : ControllerBase
     /// <summary>
     /// Otkazivanje.
     ///
-    /// Otkazuju i klijent i osoblje, pa ovdje nema <c>Roles</c> - razlika se ne vidi
-    /// u ruti nego u ishodu: kad otkazuje agencija, povrat je pun, a razlog je obavezan.
-    /// Tijelo zahtjeva nosi samo razlog; iznos, status i izvrsilac su serverski.
-    ///
-    /// Tijelo smije izostati, pa klijent koji ne navodi razlog salje prazan POST.
+    /// Otkazuju i klijent i osoblje, pa ovdje nema <c>Roles</c>. Razlika se vidi u
+    /// ishodu, ne u ruti: kad otkazuje agencija, povrat je pun. Tijelo nosi samo
+    /// odabrani razlog i napomenu, a iznos, status i izvrsioca odredjuje server.
     /// </summary>
     [HttpPost("{id:int}/otkazi")]
     public async Task<RezervacijaDto> OtkaziAsync(
-        int id, [FromBody] OtkazivanjeRequest? request, CancellationToken ct)
+        int id, [FromBody] OtkazivanjeRequest request, CancellationToken ct)
     {
-        return await _rezervacijaService.OtkaziAsync(id, request ?? new OtkazivanjeRequest(), ct);
+        return await _rezervacijaService.OtkaziAsync(id, request, ct);
     }
 
     /// <summary>

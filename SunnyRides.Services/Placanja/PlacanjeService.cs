@@ -65,6 +65,20 @@ public class PlacanjeService
 
     protected override string PodrazumijevaniPoredak => "DatumKreiranja desc";
 
+    /// <summary>
+    /// Dogadjaji intenta koji mogu promijeniti stanje placanja. Ostali (npr.
+    /// <c>payment_intent.created</c> ili <c>charge.*</c>) se samo evidentiraju kao
+    /// obradjeni - za njih nema smisla pitati Stripe za stanje.
+    /// </summary>
+    private static readonly HashSet<string> DogadjajiIntenta = new(StringComparer.Ordinal)
+    {
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "payment_intent.canceled",
+        "payment_intent.processing",
+        "payment_intent.requires_action"
+    };
+
     /// <summary>Ishod primjene stanja iz Stripe-a na nase zapise.</summary>
     private enum Ishod
     {
@@ -369,8 +383,7 @@ public class PlacanjeService
 
         Rezervacija? rezervacija = null;
 
-        if (dogadjaj.Tip.StartsWith("payment_intent.", StringComparison.Ordinal)
-            && dogadjaj.PaymentIntentId is not null)
+        if (DogadjajiIntenta.Contains(dogadjaj.Tip) && dogadjaj.PaymentIntentId is not null)
         {
             rezervacija = await ObradiDogadjajIntentaAsync(dogadjaj, ct);
         }
@@ -617,7 +630,9 @@ public class PlacanjeService
                 _stateMachine.Promijeni(rezervacija, StatusRezervacije.Cancelled,
                     $"Rezervacija otkazana. {razlog} Naplaceni iznos se vraca u cijelosti.", razlog);
 
-                rezervacija.RazlogOtkazivanja = razlog;
+                // Ovo nije odluka ni klijenta ni agencije, pa razlog iz liste ostaje
+                // prazan, a objasnjenje ide u napomenu.
+                rezervacija.NapomenaOtkazivanja = razlog;
                 rezervacija.DatumOtkazivanja = sada;
                 rezervacija.DrziDo = null;
 

@@ -40,6 +40,7 @@ public class SunnyRidesDbContext : DbContext
     public DbSet<Cjenovnik> Cjenovnici => Set<Cjenovnik>();
 
     // Poslovanje
+    public DbSet<RazlogOtkazivanja> RazloziOtkazivanja => Set<RazlogOtkazivanja>();
     public DbSet<Rezervacija> Rezervacije => Set<Rezervacija>();
     public DbSet<StavkaOpreme> StavkeOpreme => Set<StavkaOpreme>();
     public DbSet<Placanje> Placanja => Set<Placanje>();

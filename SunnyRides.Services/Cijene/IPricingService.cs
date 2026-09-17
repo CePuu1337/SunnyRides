@@ -19,4 +19,10 @@ public interface IPricingService
         IReadOnlyList<StavkaOpremeRequest> oprema,
         int? paketOsiguranjaId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Cijena jednog dana najma za dati datum, sa sezonskim mnoziocem. Koristi se za
+    /// doplatu kad je vozilo vraceno kasnije od ugovorenog.
+    /// </summary>
+    Task<decimal> DnevnaCijenaAsync(int voziloId, DateTime datum, CancellationToken ct = default);
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SunnyRides.Services.Database;
 
@@ -11,9 +12,11 @@ using SunnyRides.Services.Database;
 namespace SunnyRides.Services.Migrations
 {
     [DbContext(typeof(SunnyRidesDbContext))]
-    partial class SunnyRidesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260917124520_RazloziOtkazivanja")]
+    partial class RazloziOtkazivanja
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -212,6 +215,11 @@ namespace SunnyRides.Services.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Putanja")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PutanjaThumbnail")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -863,9 +871,6 @@ namespace SunnyRides.Services.Migrations
 
                     b.Property<int>("Kilometraza")
                         .HasColumnType("int");
-
-                    b.Property<bool>("KontrolnaListaProdjena")
-                        .HasColumnType("bit");
 
                     b.Property<string>("Napomena")
                         .HasMaxLength(1000)

@@ -15,7 +15,7 @@ public class RezervacijaConfiguration : IEntityTypeConfiguration<Rezervacija>
         builder.Property(x => x.UkupanIznos).HasPrecision(18, 2);
         builder.Property(x => x.IznosDepozita).HasPrecision(18, 2);
         builder.Property(x => x.IznosPopusta).HasPrecision(18, 2);
-        builder.Property(x => x.RazlogOtkazivanja).HasMaxLength(500);
+        builder.Property(x => x.NapomenaOtkazivanja).HasMaxLength(500);
 
         builder.HasOne(x => x.Korisnik)
                .WithMany(k => k.Rezervacije)
@@ -40,6 +40,13 @@ public class RezervacijaConfiguration : IEntityTypeConfiguration<Rezervacija>
         builder.HasOne(x => x.OtkazaoKorisnik)
                .WithMany()
                .HasForeignKey(x => x.OtkazaoKorisnikId)
+               .OnDelete(DeleteBehavior.Restrict);
+
+        // Razlog je prazan samo kad je rezervaciju otkazao sistem, npr. zbog
+        // placanja koje je stiglo prekasno. Tada objasnjenje stoji u napomeni.
+        builder.HasOne(x => x.RazlogOtkazivanja)
+               .WithMany(r => r.Rezervacije)
+               .HasForeignKey(x => x.RazlogOtkazivanjaId)
                .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.Broj).IsUnique();

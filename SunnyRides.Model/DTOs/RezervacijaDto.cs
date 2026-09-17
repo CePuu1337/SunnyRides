@@ -28,7 +28,12 @@ public class RezervacijaDto
     public int? PreostaloSekundiDrzanja { get; set; }
 
     public DateTime DatumKreiranja { get; set; }
-    public string? RazlogOtkazivanja { get; set; }
+    public int? RazlogOtkazivanjaId { get; set; }
+
+    /// <summary>Prazno kad je rezervaciju otkazao sistem - tada je objasnjenje u napomeni.</summary>
+    public string? RazlogOtkazivanjaNaziv { get; set; }
+
+    public string? NapomenaOtkazivanja { get; set; }
     public DateTime? DatumOtkazivanja { get; set; }
     public string? OtkazaoKorisnikIme { get; set; }
 

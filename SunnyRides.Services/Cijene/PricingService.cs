@@ -87,6 +87,23 @@ public class PricingService : IPricingService
         return ObracunCijene.Izracunaj(ulaz);
     }
 
+    public async Task<decimal> DnevnaCijenaAsync(int voziloId, DateTime datum, CancellationToken ct = default)
+    {
+        var vozilo = await _context.Vozila
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == voziloId, ct)
+            ?? throw NotFoundException.Za("Vozilo", voziloId);
+
+        // Ista pravila kao kod obracuna najma: tarifa iz cjenovnika ako postoji za taj
+        // datum, inace tarifa vozila, pa sezonski mnozilac.
+        var sezona = await _cjenovnikService.VazeciAsync(vozilo.ModelVozilaId, datum, ct);
+
+        var tarifa = sezona?.DnevnaTarifa ?? vozilo.DnevnaTarifa;
+        var mnozilac = sezona?.Mnozilac ?? 1m;
+
+        return Math.Round(tarifa * mnozilac, 2, MidpointRounding.AwayFromZero);
+    }
+
     private async Task<List<StavkaOpremeUlaz>> UcitajOpremuAsync(
         IReadOnlyList<StavkaOpremeRequest> trazeno, CancellationToken ct)
     {

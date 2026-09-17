@@ -11,6 +11,7 @@ public class Primopredaja
     public DateTime DatumVrijeme { get; set; }
     public int Kilometraza { get; set; }
     public int NivoGoriva { get; set; }
+    public bool KontrolnaListaProdjena { get; set; }
     public string? Napomena { get; set; }
     public int IzvrsioKorisnikId { get; set; }
 

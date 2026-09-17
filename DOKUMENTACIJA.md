@@ -34,7 +34,8 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ✅ |
 | 11 | Rezervacije, state machine, otkazivanje | ✅ |
 | 12 | Plaćanje, webhook, povrat novca | ✅ |
-| 13 | Primopredaja i obračun depozita | ⬜ |
+| 12a | Razlozi otkazivanja kao šifrarnik | ✅ |
+| 13 | Primopredaja i obračun depozita | ✅ |
 | 14 | RabbitMQ i worker servis | ⬜ |
 | 15 | Notifikacije i SignalR | ⬜ |
 | 16 | Sistem preporuke | ⬜ |
@@ -61,7 +62,7 @@ ne ispadne:
 | Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | cijena po vozilu u rezultatu pretrage, prosječna ocjena | ⬜ |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri **svakoj** pretrazi — trenutno ga upisuje samo seed | ⬜ faza 16 |
 | Detalji vozila: recenzije i slična vozila | lista recenzija po vozilu, slična vozila iz recommendera | ⬜ |
-| Otkazivanje: „korisnik bira razlog iz padajuće liste" | uputstvo (6) traži da se padajuće liste pune iz baze, pa razlozi trebaju biti šifrarnik, a ne tekst u aplikaciji | ⬜ odluka |
+| Otkazivanje: „korisnik bira razlog iz padajuće liste" | šifrarnik `RazlogOtkazivanja`, padajuća lista se puni iz baze | ✅ |
 
 Dvije stvari iz prijave su riješene malo drugačije nego što tekst doslovno kaže, i to
 je namjerno:
@@ -79,8 +80,6 @@ je namjerno:
   (uputstvo 8.1 to navodi kao primjer za odbijanje).
 - `SunnyRides.Subscriber/Worker.cs` je još šablonski worker koji samo loguje; zamjenjuje
   ga faza 14 (uputstvo 3.2: pomoćni servis mora raditi stvarne zadatke).
-- Mapa `Claude outputs/` (bilješke iz razvoja) je dodana u `.gitignore`; ako je ranije
-  već commitana, uklanja se iz repozitorija sa `git rm -r --cached "Claude outputs"`.
 
 ---
 
@@ -544,9 +543,10 @@ Ono što **nije** javno je pravo da se taj sadržaj mijenja, i to je zaključano
 administratora. Specifikacija kaže da modul referentnih podataka ne vidi ni
 uposlenik, a to je upravo ovo: pristup formama za unos i izmjenu, ne pristup listi.
 
-Atributi stoje na `SifrarnikController`, a ne na svakom od jedanaest kontrolera.
-Razlog je isti kao kod `[Authorize]` na `BaseController` — ono što se piše jedanaest
-puta, dvanaesti put se zaboravi.
+Atributi stoje na `SifrarnikController`, a ne na svakom kontroleru posebno. Razlog je
+isti kao kod `[Authorize]` na `BaseController` — ono što se piše na svakom mjestu, na
+nekom se zaboravi. To se pokazalo kad je naknadno dodan šifrarnik razloga otkazivanja:
+novi kontroler je dobio istu zaštitu bez ijedne linije koda za nju.
 
 ### Strani ključevi
 
@@ -1589,16 +1589,50 @@ neuspio i poništen se ne računaju, jer je taj novac i dalje kod agencije.
 ### Ko smije otkazati i šta mora navesti
 
 Otkazuju i klijent i osoblje, pa na endpointu nema `Roles`. Razlika se ne vidi u ruti
-nego u ishodu: kad otkazuje agencija, povrat je pun, a razlog je **obavezan** — klijent
-ima pravo znati zašto mu je najam otkazan. Klijentu se vlastiti razlog ne traži.
+nego u ishodu: kad otkazuje agencija, povrat je pun.
+
+Razlog se ne upisuje slobodno, nego se bira iz liste. Prijava tako opisuje ekran za
+otkazivanje, a uputstvo (sekcija 6) traži da se padajuće liste pune iz baze. Zato
+razlozi žive u šifrarniku `RazlogOtkazivanja`, sa četiri oznake:
+
+| Polje | Značenje |
+|---|---|
+| `ZaKlijenta` | razlog se nudi u mobilnoj aplikaciji |
+| `ZaAgenciju` | razlog se nudi osoblju u desktop aplikaciji |
+| `TraziNapomenu` | uz razlog se mora upisati objašnjenje (npr. „Ostalo") |
+| `Aktivan` | isključen razlog se više ne nudi, ali stare rezervacije i dalje pokazuju na njega |
+
+Server provjerava da je izabrani razlog aktivan i da je predviđen za onoga ko otkazuje.
+Bez toga bi klijent kroz API mogao poslati „Vozilo je u kvaru ili na servisu" i u
+historiji bi izgledalo kao da je otkazala agencija. Razlog koji je već korišten ne
+može se obrisati — isključuje se.
+
+Na rezervaciji stoje `RazlogOtkazivanjaId` i `NapomenaOtkazivanja`. Razlog je prazan
+samo kad rezervaciju otkaže sistem (plaćanje stiglo nakon isteka držanja, a termin u
+međuvremenu zauzet); tada je objašnjenje u napomeni. U audit zapis ide tekst razloga
+zajedno sa napomenom, kakav je bio u trenutku otkazivanja.
 
 Ko je otkazao čita se iz tokena i upisuje u `OtkazaoKorisnikId`. Tijelo zahtjeva nosi
-isključivo razlog. Da u njemu postoji polje „iznos povrata", klijent bi mogao otkazati
-dan prije termina i sam upisati sto posto.
+samo razlog i napomenu. Da u njemu postoji polje „iznos povrata", klijent bi mogao
+otkazati dan prije termina i sam upisati sto posto.
 
-Redoslijed provjera je: postoji li rezervacija (404) → smijem li joj uopšte pristupiti
-(403) → smije li se otkazati (400) → koliko se vraća → upis. Vlasništvo ide odmah
+Redoslijed provjera je: je li razlog ispravan (400) → postoji li rezervacija (404) →
+smijem li joj uopšte pristupiti (403) → smije li se otkazati (400) → koliko se vraća →
+upis. Provjera razloga ide prva jer ne otkriva ništa o rezervaciji; vlasništvo ide odmah
 poslije postojanja, da tuđi broj u adresi ne može izvući ni iznos ni razlog otkazivanja.
+
+Testirano kroz API:
+
+| Test | Rezultat |
+|---|---|
+| Lista za klijenta / za agenciju | šest / pet razloga, „Ostalo" i vremenski uslovi u obje |
+| Otkazivanje bez razloga | 400, „Odaberite razlog otkazivanja." |
+| Klijent bira razlog agencije | 400, „…može izabrati samo agencija." |
+| „Ostalo" bez napomene | 400, „Uz razlog „Ostalo" upišite kratko objašnjenje." |
+| Klijent otkazuje uz razlog iz liste | otkazano, razlog upisan |
+| Agencija otkazuje uz „Ostalo" i napomenu | audit zapis „Ostalo - Poslovnica zatvorena zbog inventure.", izvršilac uposlenik |
+| Brisanje korištenog razloga | 400, uz prijedlog da se razlog isključi |
+| Klijent pokušava brisati razlog | 403 |
 
 ### Vozilo koje je već izdato se ne otkazuje
 
@@ -1834,8 +1868,161 @@ ukupno 116. Kroz API, skriptom `test-faza12.ps1`:
 
 Naplate, odbijena kartica i povrat vidljivi su i u Stripe dashboardu (test način).
 
-> ⬜ Webhook sa pravim, potpisanim Stripe događajem (kroz `stripe listen`) još nije
-> pokrenut. Zaštita potpisom je provjerena, obrada događaja nije.
+Webhook je zatim provjeren i sa pravim događajima, kroz `stripe listen`, uz istu
+skriptu. Svih 13 događaja je dobilo 200. Ono što je vrijedno vidjeti u logu:
+
+| Događaj | Šta je server uradio |
+|---|---|
+| `payment_intent.succeeded` | stigao poslije serverske potvrde iz aplikacije → ishod `VecObradjeno`, bez drugog prelaza statusa |
+| `payment_intent.payment_failed` | odbijena kartica → plaćanje ostaje otvoreno za novi pokušaj |
+| `payment_intent.canceled` | poslije otkazivanja neplaćene rezervacije → stanje se ne mijenja, već je `Canceled` |
+| `refund.created`, `refund.updated` | povrat već `Succeeded` iz odgovora na zahtjev → status potvrđen |
+| `charge.*`, `payment_intent.created` | evidentirani kao obrađeni, bez ikakvog efekta |
+
+Oba puta — potvrda iz aplikacije i webhook — stigla su za isto plaćanje u razmaku od
+sekunde, a rezervacija je prešla u `Confirmed` tačno jednom.
+
+---
+
+## Izdavanje i povrat vozila
+
+> ✅ Faza 13.
+
+Rezervacija ima četiri statusa i izdavanje vozila nije jedan od njih. Kad klijent
+preuzme vozilo, rezervacija ostaje `Confirmed`, a da je vozilo kod njega vidi se po
+tome što postoji zapis `Primopredaja` tipa `Izdavanje`, a nema zapisa tipa `Povrat`.
+Tek povrat mijenja status, u `Completed`, i to kroz state machine.
+
+Endpointi su pod `/api/primopredaje`:
+
+| Endpoint | Ko | Šta radi |
+|---|---|---|
+| `GET /` i `GET /{id}` | svi prijavljeni | osoblje vidi sve, klijent samo primopredaje svojih rezervacija |
+| `POST /izdavanje` | osoblje | izdavanje, podaci i fotografije u jednoj multipart formi |
+| `POST /povrat` | osoblje | povrat sa obračunom depozita |
+| `GET /obracun-povrata/{rezervacijaId}` | osoblje | obračun za formu povrata, ništa ne upisuje |
+| `GET /raspored` | osoblje | preuzimanja i vraćanja zakazana za dan |
+| `GET /fotografije/{id}` | svi prijavljeni | preuzimanje fotografije, uz provjeru vlasništva |
+
+### Izdavanje
+
+Provjere redom:
+
+1. Uposlenik je označio da je prošao kontrolnu listu stanja vozila → inače 400
+2. Najviše deset fotografija
+3. Zaključavanje reda rezervacije
+4. Rezervacija je `Confirmed` i plaćena
+5. Vozilo za nju još nije izdato
+6. Nije ranije od dva sata prije termina (koliko traje i priprema vozila) i termin
+   nije prošao
+7. Kilometraža nije manja od zadnje evidentirane na vozilu
+
+Vrijeme izdavanja i uposlenika upisuje server. Kilometraža vozila se ažurira, pa
+sljedeće izdavanje ima s čim da poredi.
+
+### Povrat i obračun depozita
+
+Obračun je u čistoj klasi `ObracunPovrata`, bez baze, i pokriven je testovima:
+
+```
+kašnjenje          = vrijeme povrata − ugovoreno vraćanje  (ne manje od nule)
+do 59 minuta       → ne naplaćuje se
+preko toga         → svaki započeti dan preko tolerancije je cijeli dan
+doplata            = dani × dnevna cijena (tarifa i sezonski množilac na datum vraćanja)
+za naplatu         = šteta + doplata
+zadržano           = manje od (depozit, za naplatu)
+povrat depozita    = depozit − zadržano
+nepokriveno        = za naplatu − zadržano
+```
+
+Kašnjenje se broji istim pravilom kao trajanje najma. Da ovdje važi drugo pravilo,
+klijent bi za isto prekoračenje platio različito zavisno od toga da li je najam
+produžio ili samo kasnio. Dnevnu cijenu daje `PricingService`, jer je on jedino
+mjesto gdje se računa cijena.
+
+**Depozit** je dio naplate koji je stvarno kod agencije: manji od
+`Rezervacija.IznosDepozita` i od naplaćenog iznosa umanjenog za već vraćeno. Računa se
+iz `NaplaceniIznos`, ne iz cjenovnika.
+
+**Nepokriveno** je šteta koja premašuje depozit. Sistem je prikazuje, ali je ne
+naplaćuje — to agencija rješava s klijentom mimo aplikacije. To je svjesna granica
+sistema, ne previd.
+
+Isti obračun radi i `GET /obracun-povrata` (za formu, uz opcione `datumPovrata` i
+`iznosStete`) i sam povrat, pa uposlenik prije potvrde vidi tačno ono što će se desiti.
+Odgovor uz obračun nosi i podatke sa izdavanja — kilometražu, gorivo, ko je izdao i
+broj fotografija — za poređenje na formi.
+
+Provjere pri povratu:
+
+1. Ako je označeno oštećenje: opis (bar 5 znakova), iznos veći od nule i **najmanje
+   jedna fotografija**. Bez fotografije šteta nema dokaz, a iznos se odbija od
+   klijentovog novca. Bez oznake oštećenja opis i iznos se ne primaju.
+2. Datum blokade, ako je naveden, mora biti u budućnosti
+3. Zaključavanje reda rezervacije
+4. Rezervacija je `Confirmed` i plaćena, vozilo je izdato, a povrat još nije evidentiran
+5. Kilometraža nije manja nego pri izdavanju
+
+Zatim, u jednoj transakciji: zapis o povratu i eventualna `EvidencijaStete`, nova
+kilometraža vozila, prelaz `Confirmed → Completed` sa cijelim obračunom u audit
+zapisu, povrat depozita u statusu `Created` i, ako je uposlenik tražio, blokada vozila
+do navedenog datuma — prijava predviđa da uposlenik može odmah blokirati vozilo u
+kvaru. Povrat depozita ide Stripe-u tek poslije potvrde transakcije, istim putem kao
+povrat pri otkazivanju.
+
+Fotografije se snimaju prije upisa u bazu, jer se tek tada zna da su ispravne slike
+(magic bytes). Ako upis ne uspije, snimljeni fajlovi se brišu.
+
+### Fotografije su privatne
+
+Fotografije primopredaje idu u privatni folder, kao i fotografije vozačkih dozvola.
+U bazi je ključ, ne adresa, a thumbnail se ne pravi. Klijent smije preuzeti samo
+fotografije sa svojih rezervacija. `PrimopredajaDto` nosi samo identifikatore
+fotografija.
+
+Zato je iz `FotografijaPrimopredaje` uklonjena kolona `PutanjaThumbnail`, a seed
+primopredaje sada pokazuju na privatnu placeholder sliku umjesto na javne slike
+vozila.
+
+### Raspored za dan
+
+`GET /api/primopredaje/raspored` vraća potvrđene i završene rezervacije kojima
+preuzimanje ili vraćanje pada u zadati period, sa oznakom da li je primopredaja već
+obavljena. Aplikacija šalje `od` i `do` u UTC-u, jer „danas" zavisi od vremenske
+zone. Bez njih server uzima današnji dan po UTC-u. Period je najviše sedam dana, a
+lista je paginirana kao i sve ostale.
+
+### Šta ova faza namjerno ne radi
+
+- Raniji povrat vozila ne vraća novac za neiskorištene dane. Politika to ne predviđa.
+- Šteta preko depozita se ne naplaćuje kroz sistem (vidi gore).
+- ⬜ Email i notifikacija o povratu depozita — faze 14 i 15.
+
+### Testovi kojima je korak zatvoren
+
+17 novih unit testova za obračun depozita (`ObracunPovrataTests`), sa granicama
+tolerancije na 59 i 60 minuta — ukupno 133. Kroz API, na rezervaciji plaćenoj preko
+Stripe sandboxa (192,90 EUR, depozit 150 EUR):
+
+| Test | Rezultat |
+|---|---|
+| Obračun unaprijed, 30 min kašnjenja | u toleranciji, 0 dana, povrat depozita 150,00 |
+| Obračun unaprijed, 25 h kašnjenja i šteta 50 | 2 dana × 42,90 = 85,80, zadržano 135,80, povrat 14,20 |
+| Povrat prije izdavanja | 400 |
+| Izdavanje bez kontrolne liste | 400 |
+| Kilometraža manja od zadnje na vozilu | 400, „…zadnje evidentirane (32455 km)" |
+| Tekstualni fajl sa `.jpg` ekstenzijom | 400, magic bytes ga odbijaju |
+| Klijent pokušava izdati vozilo | 403 |
+| Izdavanje sa dvije fotografije | 200, status rezervacije ostaje `Confirmed` |
+| Drugo izdavanje / otkazivanje izdate rezervacije | 400 / 400 |
+| Raspored za dan | preuzimanje obavljeno, vraćanje na čekanju |
+| Oštećenje bez fotografije / bez iznosa / iznos bez oznake | 400 / 400 / 400 |
+| Kilometraža manja nego pri izdavanju | 400 |
+| Povrat sa štetom 50 i blokadom | `Completed`, audit zapis sa obračunom, povrat depozita 100,00 `Succeeded` kod Stripe-a, blokada vozila na tri dana |
+| Drugi povrat | 400 |
+| Vlasnik preuzima fotografiju / tuđi klijent / bez tokena | 200 / 403 / 401 |
+| Direktna adresa privatnog foldera | 404 |
+| Tuđi klijent u listi primopredaja | 0 zapisa |
 
 ---
 
@@ -1910,7 +2097,7 @@ Registracija je dozvoljena od 16. godine; granica se računa na serveru iz
 
 ## Redoslijed provjera
 
-> Kreiranje rezervacije i potvrda plaćanja su popunjeni; primopredaja dolazi u fazi 13.
+> Kreiranje rezervacije i potvrda plaćanja su ovdje; izdavanje i povrat vozila su u sekciji o primopredaji.
 
 Za svaku operaciju treba znati tačan redoslijed provjera — do prve koja zahtjev
 odbije — i koji status klijent tad dobija.
@@ -1972,7 +2159,7 @@ token, zaključavanje reda ili uslovni upis. Gdje mehanizma nema, to i piše.
 | Potvrda iz aplikacije i webhook istovremeno | isto zaključavanje, pa ponovna provjera `Succeeded` poslije njega | ✅ |
 | Isti Stripe događaj dvaput | provjera prije obrade i jedinstveni indeks na `ProviderEventId` | ✅ |
 | Dvije recenzije istog najma | jedinstveni indeks `(KorisnikId, RezervacijaId)` | 🟡 indeks postoji |
-| Dvije primopredaje istog tipa | jedinstveni indeks `(RezervacijaId, Tip)` | 🟡 indeks postoji |
+| Dvije primopredaje istog tipa | zaključavanje reda rezervacije, provjera prije upisa i jedinstveni indeks `(RezervacijaId, Tip)` | ✅ |
 
 Razlog za 🟡 umjesto ✅ vrijedi razumjeti. Jedinstveni indeks stvarno **sprječava**
 duplikat i onda kad provjera u kodu ne uhvati trku — baza jednostavno odbije drugi

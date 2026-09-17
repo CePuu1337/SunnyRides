@@ -22,6 +22,7 @@ public static class MapsterKonfiguracija
         RegistrujDozvole();
         RegistrujRezervacije();
         RegistrujPlacanja();
+        RegistrujPrimopredaje();
     }
 
     /// <summary>
@@ -169,6 +170,8 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.OtkazaoKorisnikIme,
                  e => e.OtkazaoKorisnik != null
                       ? e.OtkazaoKorisnik.Ime + " " + e.OtkazaoKorisnik.Prezime : null)
+            .Map(dto => dto.RazlogOtkazivanjaNaziv,
+                 e => e.RazlogOtkazivanja != null ? e.RazlogOtkazivanja.Naziv : null)
 
             .Map(dto => dto.RegistarskaOznaka,
                  e => e.Vozilo != null ? e.Vozilo.RegistarskaOznaka : null)
@@ -221,5 +224,22 @@ public static class MapsterKonfiguracija
                      .Where(r => r.Status != StatusPlacanja.Failed && r.Status != StatusPlacanja.Canceled)
                      .Sum(r => r.Iznos))
             .Map(dto => dto.Povrati, e => e.Refundi.OrderBy(r => r.Id).ToList());
+    }
+
+    /// <summary>
+    /// Primopredaja salje identifikatore fotografija, ne putanje. Putanja je kljuc do
+    /// privatnog fajla i ne izlazi iz servera.
+    /// </summary>
+    private static void RegistrujPrimopredaje()
+    {
+        TypeAdapterConfig<Primopredaja, PrimopredajaDto>.NewConfig()
+            .Map(dto => dto.RezervacijaBroj, e => e.Rezervacija != null ? e.Rezervacija.Broj : null)
+            .Map(dto => dto.IzvrsioKorisnikIme,
+                 e => e.IzvrsioKorisnik != null
+                      ? e.IzvrsioKorisnik.Ime + " " + e.IzvrsioKorisnik.Prezime : null)
+            .Map(dto => dto.FotografijaIds, e => e.Fotografije.OrderBy(f => f.Id).Select(f => f.Id).ToList())
+            .Map(dto => dto.ImaOstecenje, e => e.EvidencijaStete != null)
+            .Map(dto => dto.OpisStete, e => e.EvidencijaStete != null ? e.EvidencijaStete.Opis : null)
+            .Map(dto => dto.IznosStete, e => e.EvidencijaStete != null ? (decimal?)e.EvidencijaStete.Iznos : null);
     }
 }

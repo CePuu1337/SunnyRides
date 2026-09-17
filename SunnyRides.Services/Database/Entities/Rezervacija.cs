@@ -20,7 +20,8 @@ public class Rezervacija
     public bool IsPaid { get; set; }
     public DateTime? DrziDo { get; set; }
     public DateTime DatumKreiranja { get; set; }
-    public string? RazlogOtkazivanja { get; set; }
+    public int? RazlogOtkazivanjaId { get; set; }
+    public string? NapomenaOtkazivanja { get; set; }
     public int? OtkazaoKorisnikId { get; set; }
     public DateTime? DatumOtkazivanja { get; set; }
 
@@ -29,6 +30,7 @@ public class Rezervacija
     public Poslovnica Poslovnica { get; set; } = null!;
     public PaketOsiguranja? PaketOsiguranja { get; set; }
     public Korisnik? OtkazaoKorisnik { get; set; }
+    public RazlogOtkazivanja? RazlogOtkazivanja { get; set; }
     public ICollection<StavkaOpreme> StavkeOpreme { get; set; } = new List<StavkaOpreme>();
     public ICollection<Placanje> Placanja { get; set; } = new List<Placanje>();
     public ICollection<Primopredaja> Primopredaje { get; set; } = new List<Primopredaja>();

@@ -19,7 +19,7 @@ namespace SunnyRides.API.Controllers;
 /// Pisanje je administratorsko. Odrzavanje sifrarnika je modul koji prema
 /// specifikaciji ne vidi ni uposlenik, pa POST, PUT i DELETE traze ulogu
 /// Administrator. Atributi stoje ovdje, na jednom mjestu, umjesto da se ponavljaju
-/// na jedanaest kontrolera gdje bi se na dvanaestom zaboravili.
+/// na svakom kontroleru posebno, gdje bi se na nekom zaboravili.
 /// </summary>
 public abstract class SifrarnikController<TModel, TSearch, TInsert, TUpdate>
     : BaseCRUDController<TModel, TSearch, TInsert, TUpdate>
