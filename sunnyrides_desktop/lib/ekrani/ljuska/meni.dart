@@ -3,6 +3,8 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../widgeti/u_izradi.dart';
 import '../pregled/pregled_ekran.dart';
+import '../rezervacije/rezervacije_ekran.dart';
+import '../vozila/vozila_ekran.dart';
 
 /// Jedna stavka bocne trake.
 class StavkaMenija {
@@ -84,7 +86,7 @@ class Meni {
           naziv: 'Vozila',
           podnaslov: 'Skuteri, motocikli i kvadovi u floti',
           ikona: Icons.two_wheeler_outlined,
-          gradi: _uIzradi,
+          gradi: _vozila,
         ),
         StavkaMenija(
           id: 'kalendar',
@@ -98,7 +100,7 @@ class Meni {
           naziv: 'Rezervacije',
           podnaslov: 'Sve rezervacije i njihov status',
           ikona: Icons.receipt_long_outlined,
-          gradi: _uIzradi,
+          gradi: _rezervacije,
         ),
         StavkaMenija(
           id: 'primopredaja',
@@ -178,3 +180,7 @@ class Meni {
 Widget _uIzradi(BuildContext context) => const UIzradi();
 
 Widget _pregled(BuildContext context) => const PregledEkran();
+
+Widget _vozila(BuildContext context) => const VozilaEkran();
+
+Widget _rezervacije(BuildContext context) => const RezervacijeEkran();
