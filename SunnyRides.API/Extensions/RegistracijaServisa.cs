@@ -13,6 +13,7 @@ using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Preporuke;
 using SunnyRides.Services.Preporuke.Ml;
 using SunnyRides.Services.Primopredaje;
+using SunnyRides.Services.Izvjestaji;
 using SunnyRides.Services.Kalendar;
 using SunnyRides.Services.Korisnici;
 using SunnyRides.Services.Obavijesti;
@@ -86,6 +87,7 @@ public static class RegistracijaServisa
         // Pregled poslovanja i kalendar flote samo citaju i broje - nista ne mijenjaju.
         services.AddScoped<IPregledService, PregledService>();
         services.AddScoped<IKalendarService, KalendarService>();
+        services.AddScoped<IIzvjestajService, IzvjestajService>();
 
         // Preporuke i biljezenje pretraga. Historija je ulaz za preporuke, pa se upisuje
         // u istom zahtjevu u kojem pretraga i nastaje.

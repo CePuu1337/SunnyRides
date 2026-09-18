@@ -65,6 +65,10 @@ builder.Services.DodajServise(jwtPostavke, pohranaOpcije, stripePostavke);
 
 MapsterKonfiguracija.Registruj();
 
+// QuestPDF trazi da se licenca navede prije prvog generisanja, inace baca izuzetak.
+// Community licenca vazi za projekte ovog obima i besplatna je.
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 // Bez ovoga bi se kratki nazivi claimova pri citanju prevodili u duge URI oblike
 // (npr. "role" u ".../claims/role"), pa se RoleClaimType ispod ne bi poklopio.
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();

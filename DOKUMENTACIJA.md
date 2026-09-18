@@ -40,7 +40,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 15 | Notifikacije i SignalR | ✅ |
 | 16 | Sistem preporuke | ✅ |
 | 17–18 | Desktop i mobilna aplikacija | ⬜ |
-| 19 | PDF izvještaji | ⬜ |
+| 19 | PDF izvještaji | ✅ |
 
 ### Šta prijava obećava, a plan izrade nema kao zasebnu fazu
 
@@ -2512,6 +2512,85 @@ dostupnost pod zaključanim vozilom, zalihe opreme, obračun cijene na serveru. 
 nastaje kao `Pending` i drži termin — status se ne može preskočiti samo zato što unos
 dolazi sa šaltera. Dodatno se provjerava da je ciljni korisnik zaista klijent, da se
 rezervacija ne zavede na nalog uposlenika.
+
+---
+
+## PDF izvještaji
+
+> 🟢 Faza 19 je gotova: iskorištenost flote i finansijski pregled.
+
+Oba izvještaja imaju **dva oblika**: podatak i PDF. Podatak (`GET .../iskoristenost-flote`)
+služi za pregled prije generisanja — uputstvo traži da korisnik provjeri parametre prije
+nego dobije dokument — a PDF se gradi iz tog **istog** podatka, pa pregled i dokument ne
+mogu pokazivati različite brojeve.
+
+PDF se generiše na serveru kroz QuestPDF i vraća kao bajtovi; desktop ih preuzima i
+otvara za pregled i štampu. Da se generiše u Flutteru, logika izvještaja bi postojala na
+dva mjesta, a agregacije bi se računale u aplikaciji umjesto na bazi.
+
+> QuestPDF traži da se licenca navede prije prvog generisanja. Postavlja se jednom u
+> `Program.cs`; bez toga prvi poziv baca izuzetak, i to tek u trenutku kad neko zatraži
+> dokument.
+
+### Iskorištenost flote
+
+Jedan red po vozilu: tip, poslovnica, broj najmova, dana izdato, iskorištenost, prihod i
+prosječna ocjena — uz zbirni red i sumarni prikaz po tipu vozila.
+
+**Dani izdato se računaju iz preklapanja najma sa periodom, a ne iz trajanja najma.**
+Preklapanje računa baza: početak je kasniji od dva datuma, kraj raniji. Najam koji je
+počeo prije perioda ili se završava poslije njega ulazi samo onim dijelom koji u period
+stvarno pada. Računa se u satima pa dijeli sa 24, jer bi brojanje kalendarskih dana
+dvosatni najam preko ponoći prikazalo kao cijeli dan.
+
+U izvještaju su i vozila **bez ijednog najma** — vozilo koje cijeli mjesec nije izdato je
+najvažniji red u ovom izvještaju, jer košta a ne zarađuje. Ne ulaze, međutim, vozila koja
+su povučena iz ponude i u periodu nisu radila: ona imaju nula dana izdato, a ulazila bi u
+nazivnik i spuštala iskorištenost cijele flote. Vozilo koje je radilo pa je povučeno
+ostaje, jer je zaradilo prihod koji bi inače nestao iz izvještaja.
+
+Prihod dolazi iz stvarno naplaćenih iznosa, ne iz ugovorene vrijednosti rezervacije.
+Ocjene se ne ograničavaju na period: ocjena govori o vozilu, ne o mjesecu, pa bi suđenje
+po tromjesečnom isječku dalo prosjek iz dvije-tri recenzije. Prosjek u zbirnom redu se
+računa preko broja ocjena, ne preko vozila — inače bi vozilo sa jednom ocjenom vuklo
+prosjek flote jednako kao ono sa četrdeset.
+
+### Finansijski pregled
+
+Jedan red po mjesecu i poslovnici: broj rezervacija, naplaćeno, refundirano, neto prihod
+i prosječna vrijednost najma.
+
+Sve brojke dolaze iz **plaćanja**, ne iz iznosa rezervacija. Rezervacija nosi koliko je
+trebalo naplatiti, a plaćanje koliko jeste. Broj rezervacija je broj **različitih**
+rezervacija koje su u tom mjesecu plaćene, ne broj plaćanja — jedna rezervacija može
+imati više pokušaja naplate, a izvještaj broji najmove. Povrat koji je odbijen ili
+poništen se ne broji: to nije novac koji je otišao.
+
+### Zašto se prihod u dva izvještaja razlikuje
+
+Isti period zna dati različit iznos u jednom i drugom izvještaju, i to nije greška nego
+posljedica toga šta svaki od njih broji.
+
+| Izvještaj | Šta je „u periodu" |
+|---|---|
+| iskorištenost flote | najam čiji se **termin** preklapa sa periodom |
+| finansijski pregled | plaćanje koje je u periodu **nastalo** |
+
+Klijent koji je u martu platio najam za juni ulazi u finansijski pregled za mart, a u
+izvještaj o floti za juni. Svaki od dva izvještaja odgovara na svoje pitanje: prvi koliko
+je flota radila, drugi koliko je novca ušlo. Uz to je prihod u izvještaju o floti bruto —
+povrati se prate u finansijskom pregledu, gdje im je i mjesto.
+
+### Agregacije
+
+Nijedan izvještaj ne učitava zapise pa ih broji u memoriji. Iskorištenost flote koristi
+četiri grupisana upita — vozila, najmovi, prihodi i ocjene — koji se zatim spajaju po
+identifikatoru vozila. Četiri upita a ne jedan zato što jedan upit sa tri ugniježdena
+agregata SQL Server rješava troškovnije nego tri odvojena; ono što se izbjegava je upit
+po vozilu, a ne postojanje više upita.
+
+Period je ograničen na dvije godine, a bez zadatog perioda izvještaj pokriva posljednjih
+365 dana.
 
 ---
 
