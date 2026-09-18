@@ -16,6 +16,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.ML" Version="5.0.0" />
+
+    <!-- Recommender ne prati verziju glavnog ML.NET paketa - on je i dalje u seriji 0.x. -->
+    <PackageReference Include="Microsoft.ML.Recommender" Version="0.23.0" />
     <PackageReference Include="QuestPDF" Version="2026.8.0" />
     <PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.*" />

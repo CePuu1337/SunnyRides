@@ -29,14 +29,23 @@ public partial class DatabaseSeeder
 
         var zavrsene = rezervacije.Where(r => r.Status == StatusRezervacije.Completed).ToList();
 
+        // Svaki klijent ima tip vozila koji mu lezi, i ocjene to prate.
+        //
+        // Ovo nije ukras nego uslov da sistem preporuke ima sta nauciti. Dok su ocjene
+        // bile cisto nasumicne, u podacima nije postojao nikakav obrazac izmedju
+        // korisnika i vozila - a model koji uci iz takvih podataka ne moze biti bolji od
+        // pogadjanja prosjeka, sto se na evaluaciji vidi kao negativan R kvadrat.
+        // Stvarni korisnici imaju ukus, pa ga demo podaci moraju imati.
+        var omiljeniTip = OmiljeniTipoviKlijenata();
+
         foreach (var rezervacija in zavrsene)
         {
-            if (!Sansa(78))
+            if (!Sansa(85))
             {
                 continue;
             }
 
-            var ocjena = Sansa(72) ? Broj(4, 6) : Broj(2, 4);
+            var ocjena = OcijeniPremaUkusu(rezervacija, omiljeniTip);
             var komentar = ocjena >= 4 ? Izaberi(pohvale) : Izaberi(zamjerke);
 
             _context.Recenzije.Add(new Recenzija
@@ -54,6 +63,42 @@ public partial class DatabaseSeeder
         }
 
         await _context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Dodjeljuje svakom klijentu po jedan omiljeni tip vozila, u krug. Raspodjela je
+    /// namjerno pravilna, ne nasumicna: tako svaki tip ima priblizno jednako pristalica
+    /// i nijedan ne ostane bez ijedne dobre ocjene.
+    /// </summary>
+    private Dictionary<int, int> OmiljeniTipoviKlijenata()
+    {
+        var tipovi = _vozila
+            .Select(v => v.ModelVozila.TipVozilaId)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+        return _klijenti
+            .Select((klijent, redniBroj) => (klijent, tip: tipovi[redniBroj % tipovi.Count]))
+            .ToDictionary(x => x.klijent.Id, x => x.tip);
+    }
+
+    /// <summary>
+    /// Ocjena koja prati ukus: vozilo omiljenog tipa dobija cetvorku ili peticu, ostalo
+    /// uglavnom dvojku ili trojku. Preklapanje je namjerno - i omiljeni tip ponekad
+    /// razocara, a tudji tip ponekad prijatno iznenadi. Bez tog suma bi podaci bili
+    /// savrseni na nacin na koji stvarni nikad nisu.
+    /// </summary>
+    private int OcijeniPremaUkusu(Rezervacija rezervacija, Dictionary<int, int> omiljeniTip)
+    {
+        var tipVozila = rezervacija.Vozilo.ModelVozila.TipVozilaId;
+
+        if (omiljeniTip.TryGetValue(rezervacija.Korisnik.Id, out var omiljeni) && tipVozila == omiljeni)
+        {
+            return Sansa(80) ? 5 : 4;
+        }
+
+        return Sansa(75) ? Broj(2, 4) : 4;
     }
 
     private async Task SeedObavijestiINotifikacijeAsync(List<Rezervacija> rezervacije, CancellationToken ct)

@@ -38,7 +38,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 13 | Primopredaja i obračun depozita | ✅ |
 | 14 | RabbitMQ i worker servis | ✅ |
 | 15 | Notifikacije i SignalR | ✅ |
-| 16 | Sistem preporuke | ⬜ |
+| 16 | Sistem preporuke | ✅ |
 | 17–18 | Desktop i mobilna aplikacija | ⬜ |
 | 19 | PDF izvještaji | ⬜ |
 
@@ -60,8 +60,8 @@ ne ispadne:
 | Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ⬜ |
 | Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
 | Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | cijena po vozilu u rezultatu pretrage, prosječna ocjena | ⬜ |
-| Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri **svakoj** pretrazi — trenutno ga upisuje samo seed | ⬜ faza 16 |
-| Detalji vozila: recenzije i slična vozila | lista recenzija po vozilu, slična vozila iz recommendera | ⬜ |
+| Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
+| Detalji vozila: recenzije i slična vozila | slična vozila su gotova (`/api/preporuke/slicna/{id}`); lista recenzija po vozilu još nije | 🟡 |
 | Otkazivanje: „korisnik bira razlog iz padajuće liste" | šifrarnik `RazlogOtkazivanja`, padajuća lista se puni iz baze | ✅ |
 
 Dvije stvari iz prijave su riješene malo drugačije nego što tekst doslovno kaže, i to
@@ -2641,26 +2641,63 @@ Detaljno obrazloženje je u sekciji o otkazivanju, uz fazu 11.
 
 ## Sistem preporuke
 
-> ⬜ Faza 16. Detaljan opis modela ide u `recommender-dokumentacija.md`.
+> 🟢 Faza 16 je gotova. Potpun opis je u `recommender-dokumentacija.md`; ovdje stoji
+> samo sažetak i razlog zašto sistem ima dva puta.
 
-```
-skor = 0,6 × content + 0,4 × popularity
-```
+Sistem ima **ML model** i **rezervni put**, i to nisu iste vrste stvari.
 
-Content komponenta je ponderisano poklapanje profila korisnika sa atributima vozila:
-tip vozila 0,35 · cjenovni rang 0,25 · grad ili poslovnica 0,20 · marka 0,10 ·
-kubikažni razred 0,10. Profil se gradi iz `HistorijaPretrage` i završenih rezervacija.
+**ML model — matrična faktorizacija.** `MatrixFactorizationTrainer` iz ML.NET-a (LIBMF)
+uči latentne faktore iz matrice korisnik × model vozila. Ulaz su ocjene iz `Recenzija`
+i završeni najmovi bez recenzije, koji ulaze sa prosjekom flote. Model predviđa ocjenu
+koju bi korisnik dao vozilu koje još nije vozio, a predikcija se svodi na skor 0–1.
+Mjeri se RMSE-om na 20% stvarnih ocjena izdvojenih iz učenja; procijenjene vrijednosti
+nikad ne ulaze u test skup.
 
-Popularity komponenta je normalizovan broj rezervacija u zadnjih 90 dana i Bayesova
-prosječna ocjena. Novi korisnik bez historije dobija čistu popularity listu.
+Stavka je **model vozila**, ne pojedinačno vozilo: flota ima 8–10 modela i 30–40 vozila,
+pa je matrica na nivou modela popunjena oko 30% umjesto 8%. U odgovoru se zato zadržava
+jedan primjerak po modelu.
 
-Rezultat se na kraju filtrira na vozila slobodna u terminu i dozvoljena za korisnikove
-kategorije — isti filter kao u pretrazi.
+Broj latentnih faktora i jačina regularizacije se ne upisuju u kod nego se biraju
+pretragom po mreži, a svaki kandidat se ocjenjuje petostrukom unakrsnom provjerom nad
+podacima za učenje. Skup za provjeru se izdvaja prvi i do kraja se ne dira, pa se model
+ne mjeri na podacima prema kojima je i podešen.
+
+Seed ocjene su izmijenjene u istoj fazi: svaki demo klijent ima tip vozila koji mu leži i
+ocjene to prate. Dok su bile čisto nasumične, u podacima nije postojao obrazac koji bi
+bilo koji model mogao naučiti, pa je evaluacija davala negativan R² — model lošiji od
+pogađanja prosjeka.
+
+**Rezervni put — ponderisano bodovanje.** `skor = 0,6 × sličnost + 0,4 × popularnost`,
+sa težinama tip 0,35 · cijena 0,25 · lokacija 0,20 · marka 0,10 · kubikaža 0,10.
+Koristi se kad korisnik nije bio u podacima za učenje ili kad model nije treniran zbog
+premalo podataka. **To nije mašinsko učenje** i nigdje se tako ne predstavlja — u
+odgovoru nosi oznaku `RezervnaHeuristika` i prazno polje `predvidjenaOcjena`.
+
+Oba puta filtriraju kandidate kroz **iste servise** koje koriste pretraga i kreiranje
+rezervacije (`IAvailabilityService`, `IDozvolaService`). Da preporuke imaju vlastitu
+provjeru, klijentu bi se moglo ponuditi vozilo koje mu rezervacija odbija.
+
+Zapis u `HistorijaPretrage` upisuje `HistorijaPretrageService`, pozvan iz
+`VoziloService.GetAsync`. Ne bilježe se pretrage osoblja, zahtjevi bez ijednog filtera i
+druga i dalje stranica istog rezultata.
+
+`GET /api/preporuke/model` vraća stanje modela: na čemu je učen, koliko korisnika i
+modela vozila poznaje, te RMSE, MAE i R². `POST /api/preporuke/model/treniraj` trenira
+na zahtjev.
+
+Nad seed podacima model daje RMSE 0,711 naspram 0,981 koliko daje pogađanje prosjeka,
+dakle R² 0,475. Greška pri odabiru parametara (0,707) i greška pri provjeri (0,711) su
+praktično iste, što znači da model nije naučio podatke napamet.
+
+> **Zašto dva puta.** Mentor je na prijavu teme odgovorio da content-based nije naziv
+> algoritma nego pristup i da je bodovanje sa unaprijed zadatim težinama heuristika, a
+> ne ML model, te tražio stvarnu ML metodu. Matrična faktorizacija je uvedena kao
+> odgovor na to. Ranije bodovanje nije obrisano nego svedeno na ono što jedino i može
+> biti — rješenje za hladni start.
 
 > Uputstvo (sekcija 2.4) izričito kaže da svaki signal naveden u dokumentaciji mora
-> biti stvarno korišten u kodu, i navodi prosječnu ocjenu kao primjer signala koji se
-> spomene pa ignoriše. Ako se algoritam ikad pojednostavi, dokumentacija se mijenja u
-> istom commitu.
+> biti stvarno korišten u kodu. Ako se algoritam ikad promijeni, `recommender-dokumentacija.md`
+> se mijenja u istom commitu.
 
 ---
 

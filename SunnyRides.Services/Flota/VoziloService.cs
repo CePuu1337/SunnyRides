@@ -11,6 +11,7 @@ using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Fajlovi;
+using SunnyRides.Services.Preporuke;
 
 namespace SunnyRides.Services.Flota;
 
@@ -22,6 +23,7 @@ public class VoziloService
     private readonly IAvailabilityService _dostupnost;
     private readonly IDozvolaService _dozvolaService;
     private readonly ICurrentUserService _trenutniKorisnik;
+    private readonly IHistorijaPretrageService _historijaPretrage;
 
     /// <summary>
     /// Kategorije koje prijavljeni korisnik smije voziti, razrijesene na pocetku
@@ -38,13 +40,15 @@ public class VoziloService
         IPohranaSlika pohrana,
         IAvailabilityService dostupnost,
         IDozvolaService dozvolaService,
-        ICurrentUserService trenutniKorisnik)
+        ICurrentUserService trenutniKorisnik,
+        IHistorijaPretrageService historijaPretrage)
         : base(context)
     {
         _pohrana = pohrana;
         _dostupnost = dostupnost;
         _dozvolaService = dozvolaService;
         _trenutniKorisnik = trenutniKorisnik;
+        _historijaPretrage = historijaPretrage;
     }
 
     /// <summary>
@@ -65,6 +69,12 @@ public class VoziloService
             _dozvoljeneKategorije = await _dozvolaService.DozvoljeneKategorijeIdAsync(
                 korisnikId, search.SlobodnoOd, ct);
         }
+
+        // Zapis o pretrazi je jedini trag o ukusu korisnika prije nego ista rezervise,
+        // i bez njega sistem preporuke nema ulaz. Upisuje se ovdje, u jedinoj metodi
+        // kroz koju pretraga stvarno prolazi - da se ne bi zaboravio na nekom od
+        // mjesta koja je pozivaju.
+        await _historijaPretrage.ZabiljeziAsync(search, ct);
 
         return await base.GetAsync(search, ct);
     }

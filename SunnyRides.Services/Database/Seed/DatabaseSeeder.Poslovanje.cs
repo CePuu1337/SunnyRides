@@ -12,13 +12,18 @@ public partial class DatabaseSeeder
         var redniBroj = 1;
 
         var horizont = _danas.AddDays(60);
-        var pocetakHistorije = _danas.AddDays(-190);
+
+        // Historija ide gotovo godinu i po unazad. Duzi period nije ukras: sistem
+        // preporuke uci iz ocjena, a uz kratku historiju svaki par korisnik-vozilo ima
+        // najvise jednu ocjenu, pa svaka nosi puno slucajno odstupanje. Sa vise najmova
+        // isti par dobije vise ocjena koje se usrednje, sum pada, a obrazac se vidi.
+        var pocetakHistorije = _danas.AddDays(-420);
 
         // Gornja granica po vozilu postoji samo da jedno vozilo ne popuni cijeli
         // kalendar ako mu razmaci ispadnu kratki. Sama petlja ide dok ne dodje do
         // horizonta, a ne fiksan broj puta - inace se rezervacije nagomilaju na
         // pocetku perioda i nikad ne stignu do danasnjeg dana.
-        const int maksimalnoPoVozilu = 14;
+        const int maksimalnoPoVozilu = 26;
 
         foreach (var vozilo in _vozila.Where(v => v.Aktivno))
         {
