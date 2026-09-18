@@ -55,6 +55,45 @@ public class MetrikePoslovanjaDto
 
     public int NeverifikovaneDozvole { get; set; }
     public int NeplaceneRezervacije { get; set; }
+
+    /// <summary>
+    /// Poredjenje sa istim dijelom proslog mjeseca. Kartice na pocetnom ekranu uz
+    /// vrijednost prikazuju i strelicu sa postotkom, a taj postotak se racuna ovdje.
+    /// </summary>
+    public PoredbaPeriodaDto Poredba { get; set; } = new();
+}
+
+/// <summary>
+/// Tekuci mjesec do danas naspram istog broja dana proslog mjeseca.
+///
+/// Poredi se isti raspon, ne cijeli prosli mjesec. Da se poredi cijeli, devetnaestog
+/// u mjesecu bi svaka kartica pokazivala pad - ne zato sto poslovanje ide losije nego
+/// zato sto mjesec jos nije zavrsen.
+/// </summary>
+public class PoredbaPeriodaDto
+{
+    public DateTime TekuciOd { get; set; }
+    public DateTime TekuciDo { get; set; }
+    public DateTime PrethodniOd { get; set; }
+    public DateTime PrethodniDo { get; set; }
+
+    public PoredbaMetrikaDto NetoPrihod { get; set; } = new();
+    public PoredbaMetrikaDto NoveRezervacije { get; set; } = new();
+    public PoredbaMetrikaDto ZavrseneRezervacije { get; set; } = new();
+}
+
+/// <summary>Jedna brojka sada, ista brojka tada i razlika medju njima.</summary>
+public class PoredbaMetrikaDto
+{
+    public decimal Tekuce { get; set; }
+    public decimal Prethodno { get; set; }
+
+    /// <summary>
+    /// Promjena u postotku. Prazno kad je prethodna vrijednost nula - rast sa nule
+    /// nije "beskonacno posto" nego podatak koji se ne moze izraziti postotkom, pa
+    /// aplikacija u tom slucaju ne crta strelicu.
+    /// </summary>
+    public double? PromjenaPosto { get; set; }
 }
 
 /// <summary>Jedno preuzimanje ili vracanje zakazano za danas.</summary>

@@ -108,8 +108,7 @@ Sve lozinke su `test`.
 | Administrator | `administrator` | `test` |
 | Uposlenik | `uposlenik` | `test` |
 
-> ⚠️ **Trenutno stanje:** seed podaci još nisu implementirani, pa ovi nalozi ne
-> postoje u bazi. Ova napomena se briše kad seed bude gotov.
+Nalozi se kreiraju seedom pri prvom pokretanju API-ja nad praznom bazom.
 
 ---
 

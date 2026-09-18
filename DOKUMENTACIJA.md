@@ -2480,6 +2480,22 @@ termin, i **razložen je** na te dvije stavke — da uposlenik odmah zna gdje da
 umjesto da traži. Rezervacije kojima je držanje isteklo se ne broje: njih preuzima
 periodični posao u workeru i osoblje s njima nema šta raditi.
 
+**Poređenje sa prošlim mjesecom** stiže u `metrike.poredba`. Kartice na početnom ekranu
+uz vrijednost prikazuju i strelicu sa postotkom, pa se taj postotak računa na serveru.
+
+Poredi se **isti raspon dana**, ne cijeli prošli mjesec: tekući mjesec do sada naspram
+istog broja dana prošlog mjeseca. Da se poredi cijeli prošli mjesec, devetnaestog u
+mjesecu bi svaka kartica pokazivala pad — ne zato što poslovanje ide lošije nego zato
+što mjesec još nije završen. Kad je prošli mjesec kraći, kraj poredbenog perioda se
+odsijeca na početak tekućeg, da periodi nikad ne bi zagazili jedan u drugi.
+
+Porede se samo veličine koje se kroz period akumuliraju: neto prihod, nove rezervacije
+(po datumu kreiranja) i završene rezervacije (po datumu vraćanja). Iskorištenost i „čeka
+obradu" su trenutna stanja, ne zbirovi, pa za njih poređenje sa prošlim mjesecom nema
+značenje i namjerno ih nema. `promjenaPosto` je prazno kad je prošla vrijednost nula —
+rast sa nule nije „beskonačno posto" nego podatak koji se postotkom ne može izraziti, i
+aplikacija u tom slučaju ne crta strelicu.
+
 ### Kalendar flote
 
 `GET /api/kalendar-flote` vraća jedan red po vozilu sa blokovima zauzeća. Bez zadatog

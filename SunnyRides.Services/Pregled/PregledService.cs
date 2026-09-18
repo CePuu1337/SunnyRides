@@ -33,7 +33,17 @@ public class PregledService : IPregledService
             .Distinct()
             .ToListAsync(ct);
 
-        var metrike = await MetrikeAsync(sada, pocetakMjeseca, uNajmu.Count, ct);
+        // Isti dio proslog mjeseca kao onaj koji je od ovog mjeseca protekao. Kraj se
+        // odsijeca na pocetak tekuceg mjeseca da poredbeni period nikad ne zagazi u
+        // njega - to se desava kad je prosli mjesec kraci od tekuceg.
+        var prethodniOd = pocetakMjeseca.AddMonths(-1);
+        var prethodniDo = prethodniOd.Add(sada - pocetakMjeseca);
+        if (prethodniDo > pocetakMjeseca)
+        {
+            prethodniDo = pocetakMjeseca;
+        }
+
+        var metrike = await MetrikeAsync(sada, pocetakMjeseca, prethodniOd, prethodniDo, uNajmu.Count, ct);
         var raspored = await RasporedAsync(pocetakDana, krajDana, ct);
         var poTipu = await PoTipuAsync(uNajmu.Select(x => x.TipVozilaId).ToList(), ct);
         var poPoslovnici = await PoPoslovniciAsync(uNajmu.Select(x => x.PoslovnicaId).ToList(), ct);
@@ -51,7 +61,12 @@ public class PregledService : IPregledService
     // --- metrike -----------------------------------------------------------
 
     private async Task<MetrikePoslovanjaDto> MetrikeAsync(
-        DateTime sada, DateTime pocetakMjeseca, int vozilaUNajmu, CancellationToken ct)
+        DateTime sada,
+        DateTime pocetakMjeseca,
+        DateTime prethodniOd,
+        DateTime prethodniDo,
+        int vozilaUNajmu,
+        CancellationToken ct)
     {
         var aktivnihVozila = await _context.Vozila.CountAsync(x => x.Aktivno, ct);
 
@@ -80,6 +95,9 @@ public class PregledService : IPregledService
             .CountAsync(x => x.Status == StatusRezervacije.Pending
                              && x.DrziDo != null && x.DrziDo > sada, ct);
 
+        var poredba = await PoredbaAsync(
+            sada, pocetakMjeseca, prethodniOd, prethodniDo, naplaceno - refundirano, ct);
+
         return new MetrikePoslovanjaDto
         {
             UkupnoAktivnihVozila = aktivnihVozila,
@@ -93,7 +111,80 @@ public class PregledService : IPregledService
             NetoPrihodTekucegMjeseca = naplaceno - refundirano,
             CekaObradu = neverifikovaneDozvole + neplaceneRezervacije,
             NeverifikovaneDozvole = neverifikovaneDozvole,
-            NeplaceneRezervacije = neplaceneRezervacije
+            NeplaceneRezervacije = neplaceneRezervacije,
+            Poredba = poredba
+        };
+    }
+
+    // --- poredjenje sa proslim mjesecom -------------------------------------
+
+    /// <summary>
+    /// Iste tri brojke za tekuci i za poredbeni period.
+    ///
+    /// Poredi se samo ono sto se kroz period akumulira - novac i broj rezervacija.
+    /// Iskoristenost i "ceka obradu" su trenutna stanja, ne zbirovi, pa za njih
+    /// poredjenje sa proslim mjesecom nema znacenje i ovdje ih namjerno nema.
+    /// </summary>
+    private async Task<PoredbaPeriodaDto> PoredbaAsync(
+        DateTime sada,
+        DateTime pocetakMjeseca,
+        DateTime prethodniOd,
+        DateTime prethodniDo,
+        decimal netoTekuci,
+        CancellationToken ct)
+    {
+        var naplacenoPrethodno = await _context.Placanja
+            .Where(x => x.Status == StatusPlacanja.Succeeded
+                        && x.DatumKreiranja >= prethodniOd && x.DatumKreiranja < prethodniDo)
+            .SumAsync(x => (decimal?)x.NaplaceniIznos, ct) ?? 0m;
+
+        var refundiranoPrethodno = await _context.Refundi
+            .Where(x => x.DatumKreiranja >= prethodniOd && x.DatumKreiranja < prethodniDo
+                        && x.Status != StatusPlacanja.Failed
+                        && x.Status != StatusPlacanja.Canceled)
+            .SumAsync(x => (decimal?)x.Iznos, ct) ?? 0m;
+
+        // Nove rezervacije se broje po datumu kreiranja, bez obzira na to za koji su
+        // termin - to je mjera koliko je posla doslo u tom periodu.
+        var noveTekuci = await _context.Rezervacije
+            .CountAsync(x => x.DatumKreiranja >= pocetakMjeseca && x.DatumKreiranja < sada, ct);
+
+        var novePrethodno = await _context.Rezervacije
+            .CountAsync(x => x.DatumKreiranja >= prethodniOd && x.DatumKreiranja < prethodniDo, ct);
+
+        // Zavrsene se broje po datumu vracanja, jer se najam tada i zavrsio.
+        var zavrseneTekuci = await _context.Rezervacije
+            .CountAsync(x => x.Status == StatusRezervacije.Completed
+                             && x.DatumDo >= pocetakMjeseca && x.DatumDo < sada, ct);
+
+        var zavrsenePrethodno = await _context.Rezervacije
+            .CountAsync(x => x.Status == StatusRezervacije.Completed
+                             && x.DatumDo >= prethodniOd && x.DatumDo < prethodniDo, ct);
+
+        return new PoredbaPeriodaDto
+        {
+            TekuciOd = pocetakMjeseca,
+            TekuciDo = sada,
+            PrethodniOd = prethodniOd,
+            PrethodniDo = prethodniDo,
+            NetoPrihod = Metrika(netoTekuci, naplacenoPrethodno - refundiranoPrethodno),
+            NoveRezervacije = Metrika(noveTekuci, novePrethodno),
+            ZavrseneRezervacije = Metrika(zavrseneTekuci, zavrsenePrethodno)
+        };
+    }
+
+    private static PoredbaMetrikaDto Metrika(decimal tekuce, decimal prethodno)
+    {
+        return new PoredbaMetrikaDto
+        {
+            Tekuce = tekuce,
+            Prethodno = prethodno,
+
+            // Dijeljenje nulom se ne zaobilazi nekom izmisljenom vrijednoscu. Kad
+            // proslog mjeseca nije bilo nicega, postotak rasta ne postoji.
+            PromjenaPosto = prethodno == 0m
+                ? null
+                : Math.Round((double)((tekuce - prethodno) / Math.Abs(prethodno)) * 100.0, 1)
         };
     }
 
