@@ -70,6 +70,47 @@ public class RabbitMqObjavljivac : IObjavljivacPoruka, IAsyncDisposable
         }
     }
 
+    public async Task ObjaviSvimaAsync<T>(string razmjena, T poruka, CancellationToken ct = default)
+    {
+        try
+        {
+            var konekcija = await KonekcijaAsync(ct);
+            await using var kanal = await konekcija.CreateChannelAsync(cancellationToken: ct);
+
+            // Razmjena se pravi i pri objavi, iz istog razloga iz kojeg i red: da
+            // poruka ima gdje otici i kad nijedan slusalac jos nije pokrenut.
+            await kanal.ExchangeDeclareAsync(razmjena, ExchangeType.Fanout, durable: true,
+                autoDelete: false, cancellationToken: ct);
+
+            var tijelo = JsonSerializer.SerializeToUtf8Bytes(poruka);
+
+            await kanal.BasicPublishAsync(
+                exchange: razmjena,
+                routingKey: string.Empty,
+                mandatory: false,
+                basicProperties: new BasicProperties
+                {
+                    ContentType = "application/json",
+
+                    // Za razliku od redova, ovdje poruka nije trajna. Ako je ne primi
+                    // niko sada, kasnije vise nije zanimljiva - zapis je u bazi.
+                    Persistent = false
+                },
+                body: tijelo,
+                cancellationToken: ct);
+
+            _logger.LogDebug("Poruka objavljena na razmjenu {Razmjena}: {Sadrzaj}",
+                razmjena, Encoding.UTF8.GetString(tijelo));
+        }
+        catch (Exception ex)
+        {
+            // Isto pravilo kao kod redova: posao koji je poruku izazvao je vec obavljen
+            // i ne obara se zbog obavjestenja koje nije stiglo na uredjaj.
+            _logger.LogError(ex, "Poruka za razmjenu {Razmjena} nije objavljena: {Poruka}",
+                razmjena, JsonSerializer.Serialize(poruka));
+        }
+    }
+
     /// <summary>Sadrzaj poruke za log, ili napomena umjesto njega kad red nosi tajnu.</summary>
     private static string ZaLog(string red, string sadrzaj) =>
         Redovi.SadrziTajnu(red) ? "<sadrzaj izostavljen>" : sadrzaj;

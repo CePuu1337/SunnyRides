@@ -11,4 +11,15 @@ namespace SunnyRides.Services.Poruke;
 public interface IObjavljivacPoruka
 {
     Task ObjaviAsync<T>(string red, T poruka, CancellationToken ct = default);
+
+    /// <summary>
+    /// Objava na razmjenu, za poruke koje treba da dobiju svi slusaoci umjesto samo
+    /// jedan. Koristi se za guranje obavjestenja u aplikaciju: svaka pokrenuta
+    /// instanca API-ja drzi svoje veze prema uredjajima, pa svaka mora dobiti kopiju.
+    ///
+    /// Poruka namjerno ne preživljava restart brokera. Guranje u realnom vremenu ima
+    /// smisla samo dok je dogadjaj svjez - zapis je ionako vec u bazi i aplikacija ga
+    /// pokupi pri sljedecem otvaranju liste.
+    /// </summary>
+    Task ObjaviSvimaAsync<T>(string razmjena, T poruka, CancellationToken ct = default);
 }

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
+using SunnyRides.Services.Mapping;
+using SunnyRides.Services.Notifikacije;
 using SunnyRides.Services.Placanja;
 using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Rezervacije;
@@ -46,6 +48,10 @@ builder.Services.AddScoped<IRezervacijaStateMachine, RezervacijaStateMachine>();
 
 DodajStripe(builder.Services);
 
+// Isti servis za obavjestenja koji koristi i API. Worker kroz njega upisuje zapis i
+// objavljuje ga na razmjenu; API tu poruku preuzme i gurne na uredjaj kroz SignalR.
+builder.Services.AddScoped<INotifikacijaService, NotifikacijaService>();
+
 // DbContext je Scoped, pa je i obrada Scoped: svaka poruka dobija svoj opseg.
 builder.Services.AddScoped<ObradaDogadjaja>();
 
@@ -56,6 +62,10 @@ builder.Services.AddHostedService<OtkazivanjeNeplacenih>();
 builder.Services.AddHostedService<PodsjetniciZaPreuzimanje>();
 builder.Services.AddHostedService<PonovnoSlanjePovrata>();
 builder.Services.AddHostedService<CiscenjeIsteklihZapisa>();
+
+// Ista pravila mapiranja koja koristi i API. Worker DTO pravi samo pri upisu
+// obavjestenja, ali nema razloga da se dva procesa razlicito ponasaju nad istim podacima.
+MapsterKonfiguracija.Registruj();
 
 var host = builder.Build();
 

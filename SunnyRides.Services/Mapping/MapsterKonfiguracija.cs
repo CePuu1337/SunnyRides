@@ -23,6 +23,7 @@ public static class MapsterKonfiguracija
         RegistrujRezervacije();
         RegistrujPlacanja();
         RegistrujPrimopredaje();
+        RegistrujNotifikacije();
     }
 
     /// <summary>
@@ -241,5 +242,16 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.ImaOstecenje, e => e.EvidencijaStete != null)
             .Map(dto => dto.OpisStete, e => e.EvidencijaStete != null ? e.EvidencijaStete.Opis : null)
             .Map(dto => dto.IznosStete, e => e.EvidencijaStete != null ? (decimal?)e.EvidencijaStete.Iznos : null);
+    }
+
+    /// <summary>
+    /// Obavjestenje nosi broj rezervacije, ne samo njen identifikator - lista u
+    /// aplikaciji prikazuje broj, a identifikator joj treba samo da zna sta otvoriti.
+    /// Vrijednost dolazi iz navigacije koju servis ucitava kroz AddInclude.
+    /// </summary>
+    private static void RegistrujNotifikacije()
+    {
+        TypeAdapterConfig<Notifikacija, NotifikacijaDto>.NewConfig()
+            .Map(dto => dto.RezervacijaBroj, e => e.Rezervacija != null ? e.Rezervacija.Broj : null);
     }
 }

@@ -10,8 +10,10 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SunnyRides.API.Auth;
 using SunnyRides.API.Extensions;
+using SunnyRides.API.Hubs;
 using SunnyRides.API.Filters;
 using SunnyRides.API.Middleware;
+using SunnyRides.API.Realtime;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Seed;
 using SunnyRides.Services.Fajlovi;
@@ -76,6 +78,29 @@ builder.Services
         // iz drugog sistema) i rok trajanja.
         options.MapInboundClaims = false;
 
+        // WebSocket zahtjev ne moze nositi Authorization zaglavlje - preglednik ga pri
+        // otvaranju veze ne salje, a ni SignalR klijenti ga tu ne postavljaju. Zato
+        // token za hub stize kao query parametar.
+        //
+        // Ovo vrijedi iskljucivo za putanju huba. Da uslova nema, svaki endpoint bi
+        // prihvatao token iz adrese, a adrese zavrsavaju u logovima i historiji
+        // preglednika - tamo token nema sta traziti.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+
+                if (!string.IsNullOrEmpty(token)
+                    && context.HttpContext.Request.Path.StartsWithSegments(NotifikacijaHub.Putanja))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
@@ -102,6 +127,15 @@ builder.Services
     .AddScheme<AuthenticationSchemeOptions, StripePotpisHandler>(StripePotpisHandler.Shema, _ => { });
 
 builder.Services.AddAuthorization();
+
+// SignalR drzi otvorene veze prema uredjajima i kroz njih gura obavjestenja cim
+// nastanu. Bez toga bi aplikacija morala ponavljati zahtjev u krug, a rucni refresh
+// uputstvo izricito ne prihvata.
+builder.Services.AddSignalR();
+
+// Obavjestenja nastaju u workeru, a veze drzi API. Slusac preuzima poruke sa razmjene
+// i salje ih grupi korisnika kojem pripadaju.
+builder.Services.AddHostedService<SlusacNotifikacija>();
 
 builder.Services.AddControllers(options =>
 {
@@ -149,7 +183,13 @@ builder.Services.AddCors(options =>
             "http://localhost:3000",
             "http://10.0.2.2:5000")
         .AllowAnyHeader()
-        .AllowAnyMethod());
+        .AllowAnyMethod()
+
+        // SignalR veza iz preglednika trazi dozvolu za slanje kredencijala. Zato su
+        // origin-i gore izricito nabrojani - uz AllowCredentials wildcard nije dozvoljen,
+        // i to je ispravno: veza kroz koju idu licna obavjestenja ne smije biti otvorena
+        // svakoj stranici koja je zatrazi.
+        .AllowCredentials());
 });
 
 // Swagger ide kroz Swashbuckle, a ne kroz ugradjeni AddOpenApi(), jer nam treba
@@ -238,6 +278,10 @@ app.UseMiddleware<OpozvaniTokenMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Hub ide poslije autorizacije, kao i kontroleri - veza se ne uspostavlja bez
+// vazeceg tokena, a token koji je odjavom ponisten odbija isti middleware.
+app.MapHub<NotifikacijaHub>(NotifikacijaHub.Putanja);
 
 app.Run();
 

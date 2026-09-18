@@ -36,8 +36,8 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 12 | Plaćanje, webhook, povrat novca | ✅ |
 | 12a | Razlozi otkazivanja kao šifrarnik | ✅ |
 | 13 | Primopredaja i obračun depozita | ✅ |
-| 14 | RabbitMQ i worker servis | 🟡 |
-| 15 | Notifikacije i SignalR | ⬜ |
+| 14 | RabbitMQ i worker servis | ✅ |
+| 15 | Notifikacije i SignalR | ✅ |
 | 16 | Sistem preporuke | ⬜ |
 | 17–18 | Desktop i mobilna aplikacija | ⬜ |
 | 19 | PDF izvještaji | ⬜ |
@@ -53,7 +53,7 @@ ne ispadne:
 |---|---|---|
 | Upravljanje korisnicima i ulogama, administratorski reset lozinke | CRUD korisnika za administratora, dodjela uloga, reset bez stare lozinke | ⬜ |
 | Pregled i izmjena profila, profilna fotografija | izmjena vlastitih podataka i upload slike (magic bytes, vlasništvo) | ⬜ |
-| Reset lozinke kodom poslanim na email | kod kroz `RandomNumberGenerator`, čuvan kao hash, sa rokom (`KodZaResetLozinke`) | ⬜ faza 14 |
+| Reset lozinke kodom poslanim na email | kod kroz `RandomNumberGenerator`, čuvan kao hash, sa rokom (`KodZaResetLozinke`) | ✅ faza 14b |
 | Moderacija recenzija, ocjenjivanje nakon `Completed` | CRUD recenzija, skrivanje umjesto brisanja | ⬜ |
 | Obavijesti agencije na početnom ekranu | CRUD obavijesti sa slikom | ⬜ |
 | Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ⬜ |
@@ -1844,9 +1844,9 @@ aplikacija ne mora imati upisanog.
 
 - ✅ Poruka `placanje.uspjesno` i email potvrde su tu od faze 14a. Objavljuje se samo
   za ishod „potvrđeno", pa ponovljena potvrda ne šalje drugi email.
-- ⬜ Notifikacija klijentu — faza 15.
-- ⬜ Povrat depozita pri vraćanju vozila — faza 13, kroz isti `IzvrsilacPovrata`.
-- ⬜ Periodično ponovno slanje povrata koji su ostali `Created` — faza 14b, u workeru.
+- ✅ Notifikacija klijentu — faza 15, kroz `NotifikacijaService` i SignalR hub.
+- ✅ Povrat depozita pri vraćanju vozila — faza 13, kroz isti `IzvrsilacPovrata`.
+- ✅ Periodično ponovno slanje povrata koji su ostali `Created` — faza 14b, u workeru.
 
 ### Testovi kojima je korak zatvoren
 
@@ -2046,6 +2046,7 @@ kontejnerom, koji ne izlaže nijedan HTTP endpoint.
 | `rezervacija.otkazana` | `RezervacijaService` poslije otkazivanja | email sa razlogom otkazivanja |
 | `povrat.izvrsen` | `IzvrsilacPovrata`, kad Stripe prihvati povrat | email sa iznosom povrata |
 | `dozvola.verifikovana` | `DozvolaService` kod odobrenja i odbijanja | email o ishodu, sa razlogom kad je odbijena |
+| `vozilo.vraceno` | `PrimopredajaService` poslije evidentiranog povrata | email sa obračunom depozita i zatvaranjem najma |
 | `podsjetnik.preuzimanje` | periodični posao u workeru | podsjetnik 24 h prije preuzimanja |
 | `reset.lozinke` | `AuthService` kad neko zatraži novu lozinku | email sa kodom koji vrijedi 15 min |
 
@@ -2054,8 +2055,9 @@ poruku, a potrošač je pokupi iz reda kao i svaku drugu. Moglo je i kraće — 
 mogao odmah poslati email — ali onda bi slanje emaila postojalo na dva mjesta, sa dva
 puta kroz koja se greška obrađuje drugačije.
 
-Uz svaki email worker upisuje i `Notifikacija` zapis. Notifikacije za sve ove događaje
-tako postoje već sada, a faza 15 dodaje endpointe i SignalR da ih klijent i vidi.
+Uz svaki email worker upisuje i `Notifikacija` zapis — ne više direktno kroz `DbContext`
+nego kroz `NotifikacijaService`, koji uz upis objavi poruku za guranje na uređaj. Detalji
+su u sekciji „Notifikacije i SignalR".
 
 ### Poruka nosi identifikator, ne tekst
 
@@ -2214,9 +2216,126 @@ poništavaju — za to bi u `Korisnik` trebalo polje „tokeni izdati prije ovog
 važe", a odjava trenutno radi po `jti`-ju pojedinačnog tokena. Zapisano kao poznato
 ograničenje.
 
-### Šta još nije povezano
+---
 
-- ⬜ Prikaz notifikacija klijentu i SignalR — faza 15.
+## Notifikacije i SignalR
+
+> 🟢 Faza 15 je gotova: endpointi za obavještenja, hub i isporuka u realnom vremenu.
+
+Uputstvo traži da se lista obavještenja osvježava sama i izričito kaže da ručni refresh
+nije prihvatljiv. To znači da server mora moći progovoriti prvi, a HTTP to ne može —
+zahtjev uvijek počinje klijent. Zato SignalR.
+
+### Gdje obavještenje nastaje
+
+Do sada ih je upisivao worker, direktno kroz `DbContext`. Sada postoji
+`NotifikacijaService` i on je jedino mjesto na kojem obavještenje nastaje:
+
+```
+worker (obrada poruke)  ->  NotifikacijaService.KreirajAsync
+                                |
+                                +-- upis reda u Notifikacija
+                                +-- objava na razmjenu "notifikacije"
+                                             |
+                       API (SlusacNotifikacija) <-+
+                                |
+                                +-- NotifikacijaHub -> grupa "korisnik-{id}"
+```
+
+Razlog za jedno mjesto je praktičan: kad bi upis ostao raspoređen po pozivaocima, prvi
+koji zaboravi objaviti poruku dao bi obavještenje koje se pojavi tek pri sljedećem
+otvaranju aplikacije — a to je tačno ono ponašanje koje faza treba ukloniti.
+
+### Zašto razmjena, a ne red
+
+Redovi u ovom sistemu imaju jednog čitaoca: poruku uzme prvi ko stigne i ona je time
+potrošena. To je ispravno za posao koji se radi jednom, kao slanje emaila.
+
+Guranje na uređaj traži suprotno. Veze prema uređajima drži svaka pokrenuta instanca
+API-ja za sebe, pa poruku mora dobiti **svaka** instanca, a ne bilo koja. Zato
+`Razmjene.Notifikacije` nije red nego fanout razmjena: svaka instanca sebi pravi
+privatni red bez naziva (`exclusive`, `autoDelete`), veže ga na razmjenu i dobija kopiju
+svake poruke. Kad se instanca ugasi, red nestaje s njom — da ostane, u njemu bi se
+gomilale poruke koje niko neće pročitati.
+
+Ove poruke namjerno **ne** preživljavaju restart brokera i idu sa `autoAck: true`.
+Isporuka u realnom vremenu ima smisla samo dok je događaj svjež; sam zapis je u bazi i
+aplikacija ga pokupi pri sljedećem otvaranju liste. Zato se ovdje ne ponavlja ono što
+se u redovima ponavlja četiri puta.
+
+### Zašto slušalac stoji u API projektu
+
+`SlusacNotifikacija` je `BackgroundService` unutar API-ja, što na prvi pogled liči na
+ono što uputstvo zabranjuje. Nije isto: zabrana se odnosi na *obavljanje posla* u API
+procesu umjesto u zasebnom servisu, a posao je ovdje već obavljen u workeru. U API-ju
+se rezultat samo isporučuje, i to mora biti baš tu — SignalR poruka se ne može poslati
+iz procesa koji ne drži vezu.
+
+### Hub
+
+`NotifikacijaHub` nema nijednu metodu koju klijent može pozvati. Veza se pri uspostavi
+sama svrstava u grupu `korisnik-{id}`, a identifikator se čita iz tokena. Da hub ima
+metodu tipa „prijavi me na korisnika X", bilo bi dovoljno poslati tuđi broj i slušati
+tuđa obavještenja — i to se ne bi vidjelo ni u jednom logu HTTP zahtjeva.
+
+Token za hub stiže kao `access_token` u query stringu, jer WebSocket zahtjev ne nosi
+`Authorization` zaglavlje. To vrijedi **samo** za putanju huba (`/hubs/notifikacije`);
+da uslova nema, svaki endpoint bi prihvatao token iz adrese, a adrese završavaju u
+logovima i historiji preglednika.
+
+Hub je mapiran poslije `UseAuthentication` i middlewarea za opozvane tokene, pa token
+poništen odjavom ne otvara vezu.
+
+### Šta hub šalje
+
+| Poruka | Sadržaj |
+|---|---|
+| `NovaNotifikacija` | `NotifikacijaDto`, isti oblik koji vraća i lista |
+| `BrojNeprocitanih` | `{ broj }`, da aplikacija zbog oznake na zvonu ne mora raditi još jedan zahtjev |
+
+### Endpointi
+
+| Metoda | Ruta | Šta radi |
+|---|---|---|
+| GET | `/api/notifikacije` | lista sa paginacijom i pretragom po pročitanom, tipu, rezervaciji, tekstu i periodu |
+| GET | `/api/notifikacije/{id}` | jedno obavještenje |
+| GET | `/api/notifikacije/broj-neprocitanih` | broj za oznaku na zvonu |
+| POST | `/api/notifikacije/{id}/procitaj` | označava pročitanim; ponovljen poziv vraća isto stanje |
+| POST | `/api/notifikacije/procitaj-sve` | označava sve pročitanim, jednim upitom nad bazom |
+
+Nijedna ruta ne prima identifikator korisnika. Lista je sužena u `AddFilter`, a
+pojedinačno obavještenje se prije odgovora poredi sa vlasnikom iz tokena — inače bi
+bilo dovoljno mijenjati broj u adresi da se čitaju tuđa obavještenja, a u njima stoje
+brojevi rezervacija i iznosi.
+
+Za razliku od rezervacija, ovdje **nema** izuzetka za osoblje. Obavještenje je lična
+poruka i uposlenik nema razloga čitati tuđa.
+
+Obavještenja se ne unose i ne brišu kroz API. Nastaju isključivo kao posljedica
+događaja u sistemu, pa bi endpoint za unos imao ko da ga zove samo ako neko želi tuđem
+korisniku poslati poruku.
+
+### Za koje događaje obavještenje postoji
+
+| Tip | Događaj |
+|---|---|
+| `RezervacijaKreirana` | rezervacija upisana, čeka plaćanje |
+| `PlacanjeUspjesno` | plaćanje potvrđeno na serveru, rezervacija potvrđena |
+| `RezervacijaOtkazana` | otkazivanje, sa razlogom |
+| `PovratIzvrsen` | povrat novca prihvaćen kod Stripe-a |
+| `DozvolaOdobrena` / `DozvolaOdbijena` | uposlenik verifikovao dozvolu |
+| `PodsjetnikPreuzimanje` | 24 h prije preuzimanja |
+| `VoziloVraceno` | vozilo vraćeno, sa obračunom depozita |
+
+`VoziloVraceno` je dodan u ovoj fazi. Tip je postojao u enumu i u seed podacima, ali ga
+nijedan stvarni događaj nije stvarao — obavještenje o zatvorenom najmu i obračunu
+depozita jednostavno nije postojalo. Sada `PrimopredajaService` poslije evidentiranog
+povrata objavi `vozilo.vraceno`, a worker u toj poruci klijentu pošalje koliko je
+depozita zadržano i koliko mu se vraća. Iznos se čita iz zapisa o povratu novca koji je
+tada nastao, ne računa se ponovo — obračun je već urađen jednom, u servisu.
+
+`RezervacijaPotvrdjena` ostaje samo u seed podacima: potvrda rezervacije i uspješno
+plaćanje su isti trenutak, pa bi klijent na jedan događaj dobio dva obavještenja.
 
 ---
 
@@ -2557,7 +2676,7 @@ kategorije — isti filter kao u pretrazi.
 | Upload i download provjeravaju vlasništvo nad resursom | ✅ |
 | MIME tip se validira po magic bytes, ne po ekstenziji | ✅ |
 | Lozinke kroz BCrypt | ✅ |
-| Kodovi i tokeni kroz `RandomNumberGenerator`, nikad `System.Random` | ⬜ |
+| Kodovi i tokeni kroz `RandomNumberGenerator`, nikad `System.Random` | ✅ |
 | Stripe webhook zaštićen potpisom kroz vlastitu shemu, bez `[AllowAnonymous]` | ✅ |
 | Samo testni Stripe ključ; live ključ obara pokretanje | ✅ |
 | Sve tajne u `.env`, ništa osjetljivo u `appsettings.json` | ✅ |

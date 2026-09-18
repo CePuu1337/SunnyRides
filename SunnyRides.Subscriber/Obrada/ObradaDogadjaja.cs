@@ -5,6 +5,7 @@ using SunnyRides.Model.Enums;
 using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Notifikacije;
 using SunnyRides.Subscriber.Email;
 
 namespace SunnyRides.Subscriber.Obrada;
@@ -20,13 +21,18 @@ namespace SunnyRides.Subscriber.Obrada;
 public class ObradaDogadjaja
 {
     private readonly SunnyRidesDbContext _context;
+    private readonly INotifikacijaService _notifikacije;
     private readonly IPosiljalacEmaila _email;
     private readonly ILogger<ObradaDogadjaja> _logger;
 
     public ObradaDogadjaja(
-        SunnyRidesDbContext context, IPosiljalacEmaila email, ILogger<ObradaDogadjaja> logger)
+        SunnyRidesDbContext context,
+        INotifikacijaService notifikacije,
+        IPosiljalacEmaila email,
+        ILogger<ObradaDogadjaja> logger)
     {
         _context = context;
+        _notifikacije = notifikacije;
         _email = email;
         _logger = logger;
     }
@@ -53,6 +59,10 @@ public class ObradaDogadjaja
 
             case Redovi.DozvolaVerifikovana:
                 await DozvolaVerifikovanaAsync(Procitaj<DozvolaPoruka>(tijelo).DozvolaId, ct);
+                break;
+
+            case Redovi.VoziloVraceno:
+                await VoziloVracenoAsync(Procitaj<PrimopredajaPoruka>(tijelo), ct);
                 break;
 
             case Redovi.PodsjetnikPreuzimanje:
@@ -167,6 +177,72 @@ public class ObradaDogadjaja
             tekst, ct);
     }
 
+    /// <summary>
+    /// Vozilo je vraceno i najam je zatvoren. Klijent u istoj poruci dobija i obracun
+    /// depozita - koliko je zadrzano i koliko mu se vraca.
+    /// </summary>
+    private async Task VoziloVracenoAsync(PrimopredajaPoruka poruka, CancellationToken ct)
+    {
+        var rezervacija = await UcitajRezervacijuAsync(poruka.RezervacijaId, ct);
+        if (rezervacija is null)
+        {
+            return;
+        }
+
+        var povrat = await _context.Primopredaje
+            .AsNoTracking()
+            .Include(x => x.EvidencijaStete)
+            .FirstOrDefaultAsync(x => x.Id == poruka.PrimopredajaId, ct);
+
+        if (povrat is null)
+        {
+            _logger.LogWarning("Primopredaja {Id} ne postoji, poruka se preskace.", poruka.PrimopredajaId);
+            return;
+        }
+
+        // Koliko se depozita vraca cita se iz zapisa o povratu novca koji je nastao uz
+        // ovu primopredaju, a ne racuna se ponovo. Obracun je vec uradjen jednom, u
+        // servisu, i ovdje se samo prepricava klijentu.
+        var vraceno = await _context.Refundi
+            .Where(x => x.Placanje.RezervacijaId == rezervacija.Id
+                        && x.DatumKreiranja >= povrat.DatumVrijeme
+                        && x.Status != StatusPlacanja.Failed
+                        && x.Status != StatusPlacanja.Canceled)
+            .SumAsync(x => (decimal?)x.Iznos, ct) ?? 0m;
+
+        var steta = povrat.EvidencijaStete?.Iznos ?? 0m;
+
+        var obracun = $"Uplaceni depozit: {rezervacija.IznosDepozita:0.00} EUR\n";
+
+        if (steta > 0)
+        {
+            obracun += $"Evidentirana steta: {steta:0.00} EUR ({povrat.EvidencijaStete!.Opis})\n";
+        }
+
+        obracun += vraceno > 0
+            ? $"Povrat depozita: {vraceno:0.00} EUR\n"
+            : "Povrat depozita: nema, depozit je u cijelosti iskoristen.\n";
+
+        var tekst =
+            $"Postovani/a {rezervacija.Korisnik.Ime},\n\n" +
+            $"vozilo po rezervaciji {rezervacija.Broj} je vraceno i najam je zatvoren.\n\n" +
+            OpisRezervacije(rezervacija) +
+            $"Vraceno: {povrat.DatumVrijeme:dd.MM.yyyy. HH:mm} (UTC), kilometraza {povrat.Kilometraza} km\n\n" +
+            obracun +
+            (vraceno > 0
+                ? "\nSredstva se vracaju na karticu kojom je placeno, obicno u roku od 5 do 10 radnih dana.\n"
+                : "") +
+            "\nHvala na povjerenju. Ocjenu najma mozete ostaviti u aplikaciji.\n\n" +
+            "SunnyRides";
+
+        var kratko = steta > 0
+            ? $"Evidentirana steta {steta:0.00} EUR, povrat depozita {vraceno:0.00} EUR."
+            : $"Povrat depozita: {vraceno:0.00} EUR.";
+
+        await JaviAsync(rezervacija.Korisnik, rezervacija.Id, TipNotifikacije.VoziloVraceno,
+            $"Najam {rezervacija.Broj} je zavrsen", kratko, tekst, ct);
+    }
+
     // --- novac -------------------------------------------------------------
 
     private async Task PovratIzvrsenAsync(PovratPoruka poruka, CancellationToken ct)
@@ -270,26 +346,18 @@ public class ObradaDogadjaja
     // --- zajednicko --------------------------------------------------------
 
     /// <summary>
-    /// Notifikacija u bazi i email idu zajedno. Prvo se upisuje notifikacija: ona je
-    /// trag da je dogadjaj obradjen, a email je stvar koja moze pasti zbog tudjeg
-    /// servera.
+    /// Notifikacija i email idu zajedno. Prvo notifikacija: ona je trag da je dogadjaj
+    /// obradjen, a email je stvar koja moze pasti zbog tudjeg servera.
+    ///
+    /// Upis ide kroz servis, ne kroz DbContext. Servis uz upis objavi poruku koju API
+    /// pokupi i gurne na uredjaj, pa se obavjestenje pojavi odmah umjesto pri sljedecem
+    /// otvaranju liste. Da se upisuje ovdje, taj korak bi se lako zaboravio.
     /// </summary>
     private async Task JaviAsync(
         Korisnik korisnik, int? rezervacijaId, TipNotifikacije tip,
         string naslov, string kratakTekst, string email, CancellationToken ct)
     {
-        _context.Notifikacije.Add(new Notifikacija
-        {
-            KorisnikId = korisnik.Id,
-            RezervacijaId = rezervacijaId,
-            Naslov = naslov,
-            Tekst = kratakTekst,
-            Tip = tip,
-            Procitana = false,
-            DatumKreiranja = DateTime.UtcNow
-        });
-
-        await _context.SaveChangesAsync(ct);
+        await _notifikacije.KreirajAsync(korisnik.Id, rezervacijaId, tip, naslov, kratakTekst, ct);
 
         await _email.PosaljiAsync(korisnik.Email, naslov, email, ct);
     }

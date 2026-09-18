@@ -13,7 +13,9 @@ using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Fajlovi;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Placanja;
+using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Rezervacije;
 
 namespace SunnyRides.Services.Primopredaje;
@@ -39,6 +41,7 @@ public class PrimopredajaService
     private readonly IPricingService _pricingService;
     private readonly IPohranaSlika _pohrana;
     private readonly IIzvrsilacPovrata _izvrsilacPovrata;
+    private readonly IObjavljivacPoruka _objavljivac;
     private readonly ILogger<PrimopredajaService> _logger;
 
     private int? _ogranicenjeNaKorisnika;
@@ -50,6 +53,7 @@ public class PrimopredajaService
         IPricingService pricingService,
         IPohranaSlika pohrana,
         IIzvrsilacPovrata izvrsilacPovrata,
+        IObjavljivacPoruka objavljivac,
         ILogger<PrimopredajaService> logger)
         : base(context)
     {
@@ -58,6 +62,7 @@ public class PrimopredajaService
         _pricingService = pricingService;
         _pohrana = pohrana;
         _izvrsilacPovrata = izvrsilacPovrata;
+        _objavljivac = objavljivac;
         _logger = logger;
     }
 
@@ -418,6 +423,12 @@ public class PrimopredajaService
 
         _logger.LogInformation(
             "Rezervacija {Broj}: vozilo vraceno. {Obrazlozenje}", rezervacija.Broj, obracun.Obrazlozenje);
+
+        // Poruka ide tek kad je sve upisano i kad je povrat depozita poslan, da klijent
+        // u istoj poruci dobije i konacan obracun. Objava je van transakcije - poruka o
+        // povratu koji nije prosao bila bi gora od poruke koja kasni.
+        await _objavljivac.ObjaviAsync(
+            Redovi.VoziloVraceno, new PrimopredajaPoruka(rezervacija.Id, povrat.Id), ct);
 
         return await base.GetByIdAsync(povrat.Id, ct);
     }

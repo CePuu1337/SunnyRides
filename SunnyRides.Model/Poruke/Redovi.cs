@@ -13,6 +13,7 @@ public static class Redovi
     public const string PovratIzvrsen = "povrat.izvrsen";
     public const string DozvolaVerifikovana = "dozvola.verifikovana";
     public const string PodsjetnikPreuzimanje = "podsjetnik.preuzimanje";
+    public const string VoziloVraceno = "vozilo.vraceno";
     public const string ResetLozinke = "reset.lozinke";
 
     /// <summary>Worker po ovoj listi pravi redove i pretplacuje se na njih.</summary>
@@ -24,6 +25,7 @@ public static class Redovi
         PovratIzvrsen,
         DozvolaVerifikovana,
         PodsjetnikPreuzimanje,
+        VoziloVraceno,
         ResetLozinke
     };
 
