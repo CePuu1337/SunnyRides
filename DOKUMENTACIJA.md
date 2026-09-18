@@ -36,7 +36,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 12 | Plaćanje, webhook, povrat novca | ✅ |
 | 12a | Razlozi otkazivanja kao šifrarnik | ✅ |
 | 13 | Primopredaja i obračun depozita | ✅ |
-| 14 | RabbitMQ i worker servis | ⬜ |
+| 14 | RabbitMQ i worker servis | 🟡 |
 | 15 | Notifikacije i SignalR | ⬜ |
 | 16 | Sistem preporuke | ⬜ |
 | 17–18 | Desktop i mobilna aplikacija | ⬜ |
@@ -466,8 +466,10 @@ public abstract class BaseController<TModel, TSearch> : ControllerBase
 
 Time je zaštita podrazumijevano stanje. Svaki novi kontroler koji naslijedi bazu
 zaštićen je prije nego u njemu bude napisana ijedna linija, a otvaranje endpointa
-traži svjestan potez. `[AllowAnonymous]` u cijelom projektu postoji na tačno dva
-mjesta: `login` i `register`.
+traži svjestan potez. `[AllowAnonymous]` u cijelom projektu postoji na četiri mjesta,
+sva četiri u `AuthController`-u: `login`, `register` i dva koraka reseta zaboravljene
+lozinke. Zadnja dva su dodata u fazi 14b i o njima piše sekcija „Reset zaboravljene
+lozinke", zajedno sa otvorenim pitanjem za mentora.
 
 Šifrarnici nose `[Authorize(Roles = Uloge.Administrator)]` na nivou kontrolera, jer
 je održavanje šifrarnika administratorski posao. Kad klijentskoj aplikaciji zatreba
@@ -1840,11 +1842,11 @@ aplikacija ne mora imati upisanog.
 
 ### Šta još nije povezano
 
-- ⬜ Poruka `placanje.uspjesno` na RabbitMQ i email potvrde — faza 14. Kad nastane,
-  objavljuje se samo za ishod „potvrđeno", pa ponovljena potvrda ne šalje drugi email.
+- ✅ Poruka `placanje.uspjesno` i email potvrde su tu od faze 14a. Objavljuje se samo
+  za ishod „potvrđeno", pa ponovljena potvrda ne šalje drugi email.
 - ⬜ Notifikacija klijentu — faza 15.
 - ⬜ Povrat depozita pri vraćanju vozila — faza 13, kroz isti `IzvrsilacPovrata`.
-- ⬜ Periodično ponovno slanje povrata koji su ostali `Created` — faza 14, u workeru.
+- ⬜ Periodično ponovno slanje povrata koji su ostali `Created` — faza 14b, u workeru.
 
 ### Testovi kojima je korak zatvoren
 
@@ -1996,7 +1998,7 @@ lista je paginirana kao i sve ostale.
 
 - Raniji povrat vozila ne vraća novac za neiskorištene dane. Politika to ne predviđa.
 - Šteta preko depozita se ne naplaćuje kroz sistem (vidi gore).
-- ⬜ Email i notifikacija o povratu depozita — faze 14 i 15.
+- ✅ Email i notifikacija o povratu depozita idu kroz `povrat.izvrsen` od faze 14a.
 
 ### Testovi kojima je korak zatvoren
 
@@ -2023,6 +2025,198 @@ Stripe sandboxa (192,90 EUR, depozit 150 EUR):
 | Vlasnik preuzima fotografiju / tuđi klijent / bez tokena | 200 / 403 / 401 |
 | Direktna adresa privatnog foldera | 404 |
 | Tuđi klijent u listi primopredaja | 0 zapisa |
+
+---
+
+## Poruke, worker i email
+
+> 🟢 Faza 14 je gotova: poruke i emailovi (14a), periodični poslovi i reset lozinke (14b).
+
+Uputstvo (sekcija 3.2) traži najmanje dva servisa i izričito kaže da `BackgroundService`
+unutar API projekta ne zadovoljava taj zahtjev, jer radi u istom procesu. Zato je
+`SunnyRides.Subscriber` zaseban projekat, sa vlastitim `Dockerfile`-om i vlastitim
+kontejnerom, koji ne izlaže nijedan HTTP endpoint.
+
+### Ko šalje, ko sluša
+
+| Red | Šalje | Worker radi |
+|---|---|---|
+| `rezervacija.kreirana` | `RezervacijaService` poslije upisa | email sa uputom za plaćanje i preostalim vremenom držanja |
+| `placanje.uspjesno` | `PlacanjeService`, samo kad je ishod `Potvrdjeno` | email potvrde sa detaljima preuzimanja |
+| `rezervacija.otkazana` | `RezervacijaService` poslije otkazivanja | email sa razlogom otkazivanja |
+| `povrat.izvrsen` | `IzvrsilacPovrata`, kad Stripe prihvati povrat | email sa iznosom povrata |
+| `dozvola.verifikovana` | `DozvolaService` kod odobrenja i odbijanja | email o ishodu, sa razlogom kad je odbijena |
+| `podsjetnik.preuzimanje` | periodični posao u workeru | podsjetnik 24 h prije preuzimanja |
+| `reset.lozinke` | `AuthService` kad neko zatraži novu lozinku | email sa kodom koji vrijedi 15 min |
+
+Posljednja dva reda znače da worker šalje poruke i sam sebi: periodični posao objavi
+poruku, a potrošač je pokupi iz reda kao i svaku drugu. Moglo je i kraće — posao bi
+mogao odmah poslati email — ali onda bi slanje emaila postojalo na dva mjesta, sa dva
+puta kroz koja se greška obrađuje drugačije.
+
+Uz svaki email worker upisuje i `Notifikacija` zapis. Notifikacije za sve ove događaje
+tako postoje već sada, a faza 15 dodaje endpointe i SignalR da ih klijent i vidi.
+
+### Poruka nosi identifikator, ne tekst
+
+Poruke su male: `{ "rezervacijaId": 371 }`. Worker sve ostalo pročita iz baze u trenutku
+obrade. Da poruka nosi gotov tekst emaila, obrada minutu kasnije slala bi podatke koji
+su možda već zastarjeli — a i svaka izmjena teksta tražila bi izmjenu na dva mjesta.
+
+Ugovor (nazivi redova i oblik poruka) živi u `SunnyRides.Model`, jer ga koriste i API
+koji šalje i worker koji sluša. Da svaka strana ima svoju kopiju, prvi preimenovan red
+bio bi tiha greška: poruke bi odlazile u red koji niko ne sluša.
+
+### Kad se poruka šalje
+
+Uvijek **poslije potvrđene transakcije**, nikad unutar nje. Obrnuto bi značilo da se
+email o plaćanju pošalje za transakciju koja se u međuvremenu poništila, a to se ne
+može povući.
+
+Objavljivač namjerno ne baca izuzetke. Ako je broker nedostupan, zahtjev korisnika je
+već uspio i ne smije pasti zbog emaila; greška se logira sa cijelim sadržajem poruke.
+Konekcija prema brokeru je jedna za cijelu aplikaciju (singleton), a kanal se otvara po
+objavi, jer kanali nisu sigurni za istovremeno korištenje iz više niti. Otvaranje nove
+konekcije po poruci uputstvo navodi kao grešku.
+
+### Kako worker obrađuje
+
+- `AsyncEventingBasicConsumer`, kako uputstvo traži.
+- `BasicQos` sa `prefetchCount = 1`: sljedeća poruka se uzima tek kad je prethodna
+  potvrđena.
+- `autoAck = false`: poruka se briše iz reda tek kad je posao stvarno obavljen. Da je
+  `true`, pad workera značio bi tiho izgubljen email.
+- Neuspjela obrada se ponavlja **1 s → 2 s → 4 s → 8 s**. Ako ni zadnji pokušaj ne
+  uspije, poruka se odbacuje bez vraćanja u red i logira se u cijelosti. Vraćanje u red
+  bi je vrtjelo u krug i zaglavilo sve poruke iza nje.
+- Nijedna greška se ne guta u praznom `catch` bloku.
+- Povezivanje na broker se ponavlja sa sve dužim razmakom, jer se worker u Dockeru
+  pokreće u isto vrijeme kad i RabbitMQ.
+
+Poruka koja se ponovo isporuči poslije pada workera može donijeti drugi email za isti
+događaj. To je svjesno prihvaćeno: bolje dva emaila nego nijedan, a stanje u bazi se
+time ne kvari jer worker samo dodaje notifikaciju.
+
+### Email
+
+MailKit, SMTP podaci iz `.env`. Konekcija se otvara po poruci i uredno zatvara — za
+nekoliko emaila u minuti to je jeftinije od držanja otvorene sesije koju server ionako
+zatvori.
+
+Kad SMTP podaci nisu postavljeni, worker i dalje radi: notifikacije se upisuju, a u log
+se upiše šta bi bilo poslano. Tako se sve ostalo može testirati bez SMTP naloga.
+
+**Demo podaci ne smiju slati poštu stvarnim ljudima.** Ovo je bio stvarni propust:
+seed je izmišljenim klijentima davao `@gmail.com` adrese, pa je worker, kad je počeo
+slati emailove, poslao poruku na adresu koja lako pripada nekoj stvarnoj osobi.
+Riješeno je u dva sloja:
+
+1. **Adrese u seed podacima su na rezervisanim domenama** — `example.com` za klijente i
+   `sunnyrides.example` za osoblje. Standard (RFC 2606) te domene drži po strani baš za
+   primjere i one ne mogu pripasti nikome, pa poruka nema kome da stigne.
+2. **`SMTP_PREUSMJERI_NA` u `.env`** — kad je postavljeno, svaki email ide na tu adresu
+   umjesto na korisnikovu, a u naslovu stoji `[za <stvarna adresa>]`. Tako se cijeli
+   tok može ispratiti na vlastitom sandučetu, a adresa unesena greškom ne može nikome
+   otići. U pravom radu polje ostaje prazno.
+
+### Periodični poslovi
+
+Pored slušanja redova, worker ima i četiri posla koje pokreće sat. Svaki nasljeđuje
+`PeriodicniPosao`, koji rješava ono što im je zajedničko: **svoj opseg po prolazu**
+(jer je `DbContext` Scoped i ne smije živjeti koliko i cijeli proces) i **greška koja
+ne obara posao** — prolaz koji padne se zabilježi, a sljedeći ide normalno.
+
+| Posao | Razmak | Šta radi |
+|---|---|---|
+| `OtkazivanjeNeplacenih` | 1 min | otkazuje rezervacije kojima je isteklo držanje, poništava otvoreni intent, javlja klijentu |
+| `PodsjetniciZaPreuzimanje` | 15 min | objavljuje `podsjetnik.preuzimanje` za preuzimanja u narednih 24 h |
+| `PonovnoSlanjePovrata` | 5 min | šalje povrate koji su zapisani, a nisu stigli do Stripe-a |
+| `CiscenjeIsteklihZapisa` | 6 h | briše istekle opozvane tokene i istekle kodove za reset |
+
+**Zašto otkazivanje uopšte treba.** Pretraga neplaćenu rezervaciju prestaje računati
+kao zauzeće čim `DrziDo` prođe, pa vozilo nije blokirano ni prije nego posao stigne.
+Ali rezervacija ne smije ostati vječno „na čekanju": klijent u svom pregledu mora
+vidjeti da je istekla, a otvoreni `PaymentIntent` mora biti poništen — inače bi se
+termin koji više ne važi mogao naplatiti.
+
+**Kako se ne sudari sa plaćanjem.** Posao zaključava isti red (`UPDLOCK, HOLDLOCK`)
+kojim se zaključava i potvrda plaćanja, pa **ponovo pročita stanje poslije
+zaključavanja**. Ako je klijent platio u međuvremenu, uslov više ne vrijedi i posao
+odustaje. Ako plaćanje stigne poslije otkazivanja, `PlacanjeService` ga zatekne kao
+otkazanu rezervaciju i vrati cijeli iznos — to je već opisano u sekciji o plaćanju.
+
+**Ko je otkazao.** Niko. `OtkazaoKorisnikId` ostaje prazan, a audit zapis nema
+izvršioca, jer ga stvarno nije bilo. `SistemskiKorisnik` u workeru je implementacija
+`ICurrentUserService` koja na sve odgovara prazno — umjesto izmišljenog „sistemskog
+naloga" koji bi u historiji izgledao kao da je neko pritisnuo dugme. Status i ovdje
+mijenja ista `RezervacijaStateMachine` koju koristi API: automatsko otkazivanje ne
+smije biti drugo pravilo od ručnog.
+
+Razlog otkazivanja je šifrarnički zapis **„Isteklo vrijeme za plaćanje"**, koji nije
+aktivan i ne nudi se ni klijentu ni agenciji, pa ga niko ne može izabrati ručno.
+Postoji samo da otkazana rezervacija ima čime objasniti zašto je otkazana — i u
+pregledu i u emailu.
+
+**Podsjetnici bez nove kolone.** Šta je poslano zna se po `Notifikacija` zapisu koji
+za tu rezervaciju već stoji u bazi; obrada poruke ga upisuje prije nego što krene
+slanje emaila. Trag o poslatom podsjetniku tako postoji tamo gdje mu je i inače
+mjesto, u notifikacijama koje klijent vidi u aplikaciji.
+
+**Ponovno slanje povrata** ide **istim idempotency ključem**, vezanim za zapis
+povrata. Ako je Stripe prvi zahtjev ipak primio, vratiće isti povrat umjesto da napravi
+novi — pa se novac ne može vratiti dvaput. Dira se samo povrat stariji od dvije minute;
+mlađi je vjerovatno upravo u slanju iz API-ja.
+
+**Čišćenje** briše opozvane tokene kojima je rok ionako istekao (od tada ih odbija
+provjera roka), i kodove za reset dan poslije isteka. Tabela kroz koju prolazi svaki
+zahtjev ne smije rasti zauvijek.
+
+### Reset zaboravljene lozinke
+
+Dva koraka, oba `[AllowAnonymous]`, jer korisnik koji ne zna lozinku ne može doći do
+tokena:
+
+1. `POST /api/auth/zaboravljena-lozinka` — prima email, uvijek vraća **204**.
+2. `POST /api/auth/reset-lozinke` — prima email, kod i novu lozinku.
+
+Šta je urađeno da ovaj put ne postane rupa:
+
+- **Kod se čuva hashiran** (BCrypt), isto kao lozinka. U bazi ne stoji ništa čime bi se
+  nalog mogao otvoriti — ni onome ko bazu vidi. U čitljivom obliku kod postoji samo u
+  poruci i u emailu.
+- **Kod se generiše `RandomNumberGenerator`-om**, nikad `System.Random`-om: Random je
+  predvidiv, a ovdje ta vrijednost otvara tuđi nalog.
+- **Osam znakova iz abecede od 32** daje preko 10¹² kombinacija. Šestocifreni PIN, koji
+  se obično viđa, ima ih milion — a milion pokušaja kroz API je izvodljivo. Abeceda je
+  bez `I`, `O`, `0` i `1`, jer se pri prepisivanju miješaju.
+- **Vrijedi 15 minuta i jednom.** Novi zahtjev poništava sve ranije kodove istog
+  korisnika, pa važeći kod je uvijek tačno jedan — onaj iz posljednjeg emaila.
+- **Odgovor je isti bez obzira na to postoji li nalog** sa tom adresom. Da nije tako,
+  ovaj endpoint bio bi besplatna provjera koje su adrese registrovane.
+- **Poruka o grešci je jedna jedina**: nepostojeći nalog, pogrešan kod i istekao kod
+  izgledaju identično. Različite poruke bi rekle napadaču kada je pogodio email, a kada
+  kod.
+- Kod ide **isključivo u email**. Notifikacija u aplikaciji samo kaže da je kod poslan,
+  da ga ne bi vidio neko ko je na tuđem uređaju otvorio spisak obavještenja.
+- **Kod ne ide u log.** Objavljivač i potrošač inače zapisuju cijeli sadržaj poruke, što
+  je korisno kad se posao mora ponoviti ručno — ali red `reset.lozinke` je označen kao
+  tajni (`Redovi.SadrziTajnu`) i za njega se logira samo naziv reda. Log čita više ljudi
+  nego bazu i najčešće se čuva duže nego što kod važi.
+
+**Otvoreno pitanje za mentora.** Uputstvo kaže da `[AllowAnonymous]` smije stajati samo
+na prijavi i registraciji. Reset zaboravljene lozinke po prirodi stvari ne može tražiti
+token — korisnik do njega ne može doći. Implementiran je sa mjerama iznad; ako se traži
+doslovno poštovanje pravila, funkcionalnost se uklanja iz mobilne aplikacije i lozinku
+resetuje administrator kroz upravljanje korisnicima.
+
+**Šta ovaj korak namjerno ne radi.** Postojeći tokeni se poslije promjene lozinke ne
+poništavaju — za to bi u `Korisnik` trebalo polje „tokeni izdati prije ovog trenutka ne
+važe", a odjava trenutno radi po `jti`-ju pojedinačnog tokena. Zapisano kao poznato
+ograničenje.
+
+### Šta još nije povezano
+
+- ⬜ Prikaz notifikacija klijentu i SignalR — faza 15.
 
 ---
 
@@ -2160,6 +2354,7 @@ token, zaključavanje reda ili uslovni upis. Gdje mehanizma nema, to i piše.
 | Isti Stripe događaj dvaput | provjera prije obrade i jedinstveni indeks na `ProviderEventId` | ✅ |
 | Dvije recenzije istog najma | jedinstveni indeks `(KorisnikId, RezervacijaId)` | 🟡 indeks postoji |
 | Dvije primopredaje istog tipa | zaključavanje reda rezervacije, provjera prije upisa i jedinstveni indeks `(RezervacijaId, Tip)` | ✅ |
+| Automatsko otkazivanje i plaćanje istovremeno | posao u workeru zaključava red rezervacije i **poslije toga ponovo pročita** status i `DrziDo`; ako je plaćeno, odustaje | ✅ |
 
 Razlog za 🟡 umjesto ✅ vrijedi razumjeti. Jedinstveni indeks stvarno **sprječava**
 duplikat i onda kad provjera u kodu ne uhvati trku — baza jednostavno odbije drugi
@@ -2181,7 +2376,9 @@ vrati razumnu poruku, pošteno je reći da stvar nije završena.
 | Kreiranje payment intenta | ako postoji otvoren `Created`/`Pending` intent koji Stripe još vodi, vraća se on | ✅ |
 | Stripe webhook | `ObradjeniWebhookEvent.ProviderEventId` je jedinstven; postojanje zapisa znači da je događaj već obrađen | ✅ |
 | Idempotency ključ prema Stripe-u | `rez-{id}-v{n}-{ticks}` za intent, `povrat-{id}-{ticks}` za povrat | ✅ |
-| Ponovno slanje povrata | isti zapis, isti ključ — Stripe vraća prethodni rezultat umjesto novog povrata | ✅ |
+| Ponovno slanje povrata | isti zapis, isti ključ — Stripe vraća prethodni rezultat umjesto novog povrata; periodični posao u workeru koristi isti put | ✅ |
+| Podsjetnik za preuzimanje | šalje se samo ako za tu rezervaciju ne postoji `Notifikacija` tipa `PodsjetnikPreuzimanje` | ✅ |
+| Kod za reset lozinke | novi zahtjev poništava sve ranije kodove; iskorišten kod se ne može upotrijebiti drugi put | ✅ |
 
 ---
 
@@ -2352,7 +2549,8 @@ kategorije — isti filter kao u pretrazi.
 
 | Pravilo | |
 |---|---|
-| `[Authorize]` na svim kontrolerima, `[AllowAnonymous]` samo na `login` i `register` | ✅ |
+| `[Authorize]` na svim kontrolerima, `[AllowAnonymous]` samo u `AuthController`-u (`login`, `register` i reset zaboravljene lozinke) | 🟡 vidi sekciju o resetu |
+| Kod za reset i lozinke hashirani BCrypt-om; kod se generiše `RandomNumberGenerator`-om | ✅ |
 | `userId` uvijek iz JWT tokena kroz `IHttpContextAccessor` | ✅ |
 | `RegisterRequest` bez polja `Role` i `IsAdmin` | ✅ |
 | Odjava invalidira token na serveru — `OpozvaniToken` plus middleware | ✅ |

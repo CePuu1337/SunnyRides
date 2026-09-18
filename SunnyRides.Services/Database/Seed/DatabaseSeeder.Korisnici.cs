@@ -49,14 +49,20 @@ public partial class DatabaseSeeder
         // --- osoblje ---
         // Korisnicka imena "desktop", "mobile", "administrator" i "uposlenik" trazi
         // uputstvo (sekcija 5) za pristup pri pregledu rada.
-        _administrator = Napravi("administrator", "Ammar", "Puce", "administrator@sunnyrides.ba", "+387 61 100 100", 28, _roleAdministrator);
-        var desktop = Napravi("desktop", "Desktop", "Pregled", "desktop@sunnyrides.ba", "+387 61 100 101", 30, _roleAdministrator);
-        _uposlenik = Napravi("uposlenik", "Emina", "Hodzic", "emina.hodzic@sunnyrides.ba", "+387 61 200 200", 26, _roleUposlenik);
-        var uposlenikDrugi = Napravi("mirza.begic", "Mirza", "Begic", "mirza.begic@sunnyrides.ba", "+387 61 200 201", 34, _roleUposlenik);
+        //
+        // Email adrese demo korisnika namjerno zavrsavaju na "example.com" i
+        // "sunnyrides.example". Te domene su standardom rezervisane za primjere i ne
+        // mogu pripasti nikome, pa worker ni slucajno ne moze poslati email stvarnoj
+        // osobi. Prije ovoga su izmisljena imena imala "@gmail.com" adrese - a takva
+        // adresa lako pripada nekoj stvarnoj osobi.
+        _administrator = Napravi("administrator", "Ammar", "Puce", "administrator@sunnyrides.example", "+387 61 100 100", 28, _roleAdministrator);
+        var desktop = Napravi("desktop", "Desktop", "Pregled", "desktop@sunnyrides.example", "+387 61 100 101", 30, _roleAdministrator);
+        _uposlenik = Napravi("uposlenik", "Emina", "Hodzic", "emina.hodzic@sunnyrides.example", "+387 61 200 200", 26, _roleUposlenik);
+        var uposlenikDrugi = Napravi("mirza.begic", "Mirza", "Begic", "mirza.begic@sunnyrides.example", "+387 61 200 201", 34, _roleUposlenik);
         _osoblje = new List<Korisnik> { _administrator, desktop, _uposlenik, uposlenikDrugi };
 
         // --- klijenti ---
-        var mobile = Napravi("mobile", "Mobilni", "Pregled", "mobile@sunnyrides.ba", "+387 62 300 300", 29, _roleKlijent);
+        var mobile = Napravi("mobile", "Mobilni", "Pregled", "mobile@sunnyrides.example", "+387 62 300 300", 29, _roleKlijent);
 
         var podaciKlijenata = new (string ime, string prezime, int godine)[]
         {
@@ -75,7 +81,7 @@ public partial class DatabaseSeeder
             var blokiran = brojac == 13; // jedan blokiran klijent, da se modul blokade ima na cemu vidjeti
             _klijenti.Add(Napravi(
                 korisnickoIme, ime, prezime,
-                $"{korisnickoIme}@gmail.com",
+                $"{korisnickoIme}@example.com",
                 $"+387 6{Broj(1, 6)} {Broj(100, 999)} {Broj(100, 999)}",
                 godine, _roleKlijent, blokiran));
             brojac++;

@@ -7,6 +7,7 @@ using SunnyRides.Services.Rezervacije;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
 using SunnyRides.Services.Placanja;
+using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Primopredaje;
 using SunnyRides.Services.Sifrarnici;
 
@@ -70,6 +71,10 @@ public static class RegistracijaServisa
         DodajPlacanja(services, stripePostavke);
 
         services.AddScoped<IPrimopredajaService, PrimopredajaService>();
+
+        // Jedna konekcija prema brokeru za cijelu aplikaciju, pa je objavljivac singleton.
+        services.AddSingleton(RabbitMqPostavke.IzOkruzenja());
+        services.AddSingleton<IObjavljivacPoruka, RabbitMqObjavljivac>();
 
         return services;
     }

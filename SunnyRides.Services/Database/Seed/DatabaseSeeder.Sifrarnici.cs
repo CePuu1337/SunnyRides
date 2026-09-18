@@ -177,7 +177,18 @@ public partial class DatabaseSeeder
             vrijeme
         };
 
-        _context.RazloziOtkazivanja.AddRange(_razloziKlijenta.Concat(_razloziAgencije).Append(ostalo).Distinct());
+        // Sistemski razlog: njime worker otkazuje rezervaciju koja nije placena u roku.
+        // Nije aktivan i ne nudi se nijednoj strani, pa ga niko ne moze izabrati rucno.
+        var isteklo = new RazlogOtkazivanja
+        {
+            Naziv = "Isteklo vrijeme za placanje",
+            ZaKlijenta = false,
+            ZaAgenciju = false,
+            Aktivan = false
+        };
+
+        _context.RazloziOtkazivanja.AddRange(
+            _razloziKlijenta.Concat(_razloziAgencije).Append(ostalo).Append(isteklo).Distinct());
 
         await _context.SaveChangesAsync(ct);
     }

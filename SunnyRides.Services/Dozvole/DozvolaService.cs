@@ -11,7 +11,9 @@ using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Fajlovi;
+using SunnyRides.Services.Poruke;
 
 namespace SunnyRides.Services.Dozvole;
 
@@ -24,17 +26,20 @@ public class DozvolaService
     private readonly ICurrentUserService _trenutniKorisnik;
     private readonly IMemoryCache _kes;
     private readonly IPohranaSlika _pohrana;
+    private readonly IObjavljivacPoruka _objavljivac;
 
     public DozvolaService(
         SunnyRidesDbContext context,
         ICurrentUserService trenutniKorisnik,
         IMemoryCache kes,
-        IPohranaSlika pohrana)
+        IPohranaSlika pohrana,
+        IObjavljivacPoruka objavljivac)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
         _kes = kes;
         _pohrana = pohrana;
+        _objavljivac = objavljivac;
     }
 
     protected override string NazivEntiteta => "Vozacka dozvola";
@@ -243,6 +248,8 @@ public class DozvolaService
 
         await Context.SaveChangesAsync(ct);
 
+        await _objavljivac.ObjaviAsync(Redovi.DozvolaVerifikovana, new DozvolaPoruka(id), ct);
+
         return await GetByIdAsync(id, ct);
     }
 
@@ -262,6 +269,9 @@ public class DozvolaService
         dozvola.DatumVerifikacije = DateTime.UtcNow;
 
         await Context.SaveChangesAsync(ct);
+
+        // Ista poruka za odobrenje i odbijanje - worker iz baze vidi ishod i razlog.
+        await _objavljivac.ObjaviAsync(Redovi.DozvolaVerifikovana, new DozvolaPoruka(id), ct);
 
         return await GetByIdAsync(id, ct);
     }

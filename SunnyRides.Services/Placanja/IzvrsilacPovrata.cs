@@ -1,17 +1,22 @@
 using Microsoft.Extensions.Logging;
 using SunnyRides.Model.Enums;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Poruke;
 
 namespace SunnyRides.Services.Placanja;
 
 public class IzvrsilacPovrata : IIzvrsilacPovrata
 {
     private readonly IStripeKlijent _stripe;
+    private readonly IObjavljivacPoruka _objavljivac;
     private readonly ILogger<IzvrsilacPovrata> _logger;
 
-    public IzvrsilacPovrata(IStripeKlijent stripe, ILogger<IzvrsilacPovrata> logger)
+    public IzvrsilacPovrata(
+        IStripeKlijent stripe, IObjavljivacPoruka objavljivac, ILogger<IzvrsilacPovrata> logger)
     {
         _stripe = stripe;
+        _objavljivac = objavljivac;
         _logger = logger;
     }
 
@@ -57,6 +62,11 @@ public class IzvrsilacPovrata : IIzvrsilacPovrata
             _logger.LogInformation(
                 "Povrat {PovratId} od {Iznos} EUR poslan Stripe-u kao {RefundId}, status {Status}.",
                 povrat.Id, povrat.Iznos, odgovor.Id, odgovor.Status);
+
+            // Klijenta se obavjestava tek kad je Stripe povrat prihvatio. Odbijen
+            // povrat ne salje nikakvu poruku - nema sta da se javi.
+            await _objavljivac.ObjaviAsync(Redovi.PovratIzvrsen,
+                new PovratPoruka(placanje.RezervacijaId, povrat.Id), ct);
         }
         catch (PlatniProvajderException ex) when (ex.Konacna)
         {

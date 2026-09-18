@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Konstante;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Model.Requests;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Poruke;
 
 namespace SunnyRides.Services.Auth;
 
@@ -13,15 +16,21 @@ public class AuthService : IAuthService
     private readonly SunnyRidesDbContext _context;
     private readonly ITokenService _tokenService;
     private readonly ICurrentUserService _trenutniKorisnik;
+    private readonly IObjavljivacPoruka _objavljivac;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         SunnyRidesDbContext context,
         ITokenService tokenService,
-        ICurrentUserService trenutniKorisnik)
+        ICurrentUserService trenutniKorisnik,
+        IObjavljivacPoruka objavljivac,
+        ILogger<AuthService> logger)
     {
         _context = context;
         _tokenService = tokenService;
         _trenutniKorisnik = trenutniKorisnik;
+        _objavljivac = objavljivac;
+        _logger = logger;
     }
 
     public async Task<PrijavaOdgovorDto> PrijaviAsync(LoginRequest request, CancellationToken ct = default)
@@ -131,6 +140,104 @@ public class AuthService : IAuthService
 
         korisnik.LozinkaHash = BCrypt.Net.BCrypt.HashPassword(request.NovaLozinka);
         await _context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Kod se salje i upisuje hashiran, isto kao lozinka. U bazi ne stoji nista cime
+    /// bi se nalog mogao otvoriti - ni onome ko bazu vidi.
+    ///
+    /// Odgovor je uvijek isti, i kad email postoji i kad ne postoji. Da nije tako,
+    /// ovaj endpoint bi bio besplatna provjera koje su adrese registrovane.
+    /// </summary>
+    public async Task ZatraziResetAsync(
+        ZaboravljenaLozinkaRequest request, CancellationToken ct = default)
+    {
+        var email = request.Email.Trim();
+
+        var korisnik = await _context.Korisnici.FirstOrDefaultAsync(x => x.Email == email, ct);
+
+        if (korisnik is null || !korisnik.Aktivan)
+        {
+            _logger.LogInformation("Zatrazen reset lozinke za adresu koja nema aktivan nalog.");
+            return;
+        }
+
+        // Stariji kodovi istog korisnika prestaju vaziti. Vazeci kod je uvijek tacno
+        // jedan - onaj iz posljednjeg emaila.
+        var raniji = await _context.KodoviZaResetLozinke
+            .Where(x => x.KorisnikId == korisnik.Id && !x.Iskoristen)
+            .ToListAsync(ct);
+
+        foreach (var stari in raniji)
+        {
+            stari.Iskoristen = true;
+        }
+
+        var kod = KodoviZaReset.Generisi();
+        var sada = DateTime.UtcNow;
+        var istice = sada.Add(KodoviZaReset.Trajanje);
+
+        _context.KodoviZaResetLozinke.Add(new KodZaResetLozinke
+        {
+            KorisnikId = korisnik.Id,
+            KodHash = BCrypt.Net.BCrypt.HashPassword(kod),
+            DatumIsteka = istice,
+            Iskoristen = false,
+            DatumKreiranja = sada
+        });
+
+        await _context.SaveChangesAsync(ct);
+
+        // Poruka ide tek kad je upis potvrdjen. Obrnutim redoslijedom bi klijent mogao
+        // dobiti kod koji u bazi ne postoji.
+        await _objavljivac.ObjaviAsync(
+            Redovi.ResetLozinke, new ResetLozinkePoruka(korisnik.Id, kod, istice), ct);
+    }
+
+    /// <summary>
+    /// Poruka o gresci je jedna jedina, bez obzira na to sta tacno nije u redu -
+    /// nepostojeci nalog, pogresan kod i istekao kod izgledaju isto. Razlicite poruke
+    /// bi rekle napadacu kada je pogodio email, a kada kod.
+    /// </summary>
+    public async Task PotvrdiResetAsync(ResetLozinkeRequest request, CancellationToken ct = default)
+    {
+        const string PorukaGreske = "Kod nije ispravan ili je istekao. Zatrazite novi.";
+
+        var email = request.Email.Trim();
+        var kod = KodoviZaReset.Normalizuj(request.Kod);
+
+        if (!KodoviZaReset.JeMogucOblik(kod))
+        {
+            throw new BusinessException(PorukaGreske);
+        }
+
+        var korisnik = await _context.Korisnici.FirstOrDefaultAsync(x => x.Email == email, ct)
+            ?? throw new BusinessException(PorukaGreske);
+
+        if (!korisnik.Aktivan)
+        {
+            throw new BusinessException(PorukaGreske);
+        }
+
+        var sada = DateTime.UtcNow;
+
+        // Hash se ne moze traziti upitom, pa se uzimaju kandidati ovog korisnika -
+        // najvise jedan vazeci - i provjerava se kroz BCrypt.
+        var kandidati = await _context.KodoviZaResetLozinke
+            .Where(x => x.KorisnikId == korisnik.Id && !x.Iskoristen && x.DatumIsteka > sada)
+            .OrderByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        var zapis = kandidati.FirstOrDefault(x => BCrypt.Net.BCrypt.Verify(kod, x.KodHash))
+            ?? throw new BusinessException(PorukaGreske);
+
+        // Kod vazi jednom. Bez ovoga bi isti email ostao kljuc naloga do isteka roka.
+        zapis.Iskoristen = true;
+        korisnik.LozinkaHash = BCrypt.Net.BCrypt.HashPassword(request.NovaLozinka);
+
+        await _context.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Korisnik {KorisnikId} je postavio novu lozinku kodom sa emaila.", korisnik.Id);
     }
 
     public async Task OdjaviAsync(CancellationToken ct = default)

@@ -5,6 +5,7 @@ using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
 using SunnyRides.Model.Konstante;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Base;
@@ -12,6 +13,7 @@ using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Rezervacije;
 
 namespace SunnyRides.Services.Placanja;
@@ -36,10 +38,14 @@ public class PlacanjeService
     private readonly IRezervacijaStateMachine _stateMachine;
     private readonly IAvailabilityService _dostupnost;
     private readonly StripePostavke _postavke;
+    private readonly IObjavljivacPoruka _objavljivac;
     private readonly ILogger<PlacanjeService> _logger;
 
     /// <summary>Kad zahtjev dolazi od klijenta, lista se suzava na njegova placanja.</summary>
     private int? _ogranicenjeNaKorisnika;
+
+    /// <summary>Placanje koje je upravo potvrdjeno kroz webhook, da se poruka objavi tek poslije commita.</summary>
+    private int? _potvrdjenoWebhookom;
 
     public PlacanjeService(
         SunnyRidesDbContext context,
@@ -49,6 +55,7 @@ public class PlacanjeService
         IRezervacijaStateMachine stateMachine,
         IAvailabilityService dostupnost,
         StripePostavke postavke,
+        IObjavljivacPoruka objavljivac,
         ILogger<PlacanjeService> logger)
         : base(context)
     {
@@ -58,6 +65,7 @@ public class PlacanjeService
         _stateMachine = stateMachine;
         _dostupnost = dostupnost;
         _postavke = postavke;
+        _objavljivac = objavljivac;
         _logger = logger;
     }
 
@@ -207,8 +215,9 @@ public class PlacanjeService
             if (IznosiStripe.StatusIntenta(intent.Status) == StatusPlacanja.Succeeded)
             {
                 // Novac je vec primljen, samo potvrda nije stigla - zavrsava se ovdje.
-                await PrimijeniStanjeAsync(rezervacija, otvoreno, intent, sada, ct);
+                var ishodOtvorenog = await PrimijeniStanjeAsync(rezervacija, otvoreno, intent, sada, ct);
                 await ZavrsiAsync(rezervacija, transakcija, ct);
+                await ObjaviAkoJePotvrdjenoAsync(ishodOtvorenog, rezervacija, otvoreno, ct);
 
                 return NapraviIntentDto(rezervacija, otvoreno, clientSecret: null);
             }
@@ -336,6 +345,7 @@ public class PlacanjeService
 
         var ishod = await PrimijeniStanjeAsync(rezervacija, placanje, intent, sada, ct);
         await ZavrsiAsync(rezervacija, transakcija, ct);
+        await ObjaviAkoJePotvrdjenoAsync(ishod, rezervacija, placanje, ct);
 
         switch (ishod)
         {
@@ -433,6 +443,12 @@ public class PlacanjeService
         if (rezervacija is not null)
         {
             await IzvrsiKodStripeaAsync(rezervacija, ct);
+
+            if (_potvrdjenoWebhookom is int placanjeId)
+            {
+                await _objavljivac.ObjaviAsync(Redovi.PlacanjeUspjesno,
+                    new PlacanjePoruka(rezervacija.Id, placanjeId), ct);
+            }
         }
 
         _logger.LogInformation("Webhook {EventId} ({Tip}) obradjen.", dogadjaj.Id, dogadjaj.Tip);
@@ -472,6 +488,8 @@ public class PlacanjeService
 
         _logger.LogInformation(
             "Webhook {EventId}: placanje {PlacanjeId}, ishod {Ishod}.", dogadjaj.Id, placanje.Id, ishod);
+
+        _potvrdjenoWebhookom = ishod == Ishod.Potvrdjeno ? placanje.Id : null;
 
         return rezervacija;
     }
@@ -670,6 +688,21 @@ public class PlacanjeService
     {
         await _izvrsilac.IzvrsiZaRezervacijuAsync(rezervacija, ct);
         await SacuvajAsync(ct);
+    }
+
+    /// <summary>
+    /// Poruka o uspjesnoj naplati ide samo kad je ovaj poziv stvarno potvrdio placanje.
+    /// Ponovljena potvrda vraca <c>VecObradjeno</c> i ne objavljuje nista, pa klijent
+    /// ne dobija drugi email za isto placanje.
+    /// </summary>
+    private async Task ObjaviAkoJePotvrdjenoAsync(
+        Ishod ishod, Rezervacija rezervacija, Placanje placanje, CancellationToken ct)
+    {
+        if (ishod == Ishod.Potvrdjeno)
+        {
+            await _objavljivac.ObjaviAsync(Redovi.PlacanjeUspjesno,
+                new PlacanjePoruka(rezervacija.Id, placanje.Id), ct);
+        }
     }
 
     private Refund NoviPovrat(Placanje placanje, decimal iznos, string razlog, DateTime sada)

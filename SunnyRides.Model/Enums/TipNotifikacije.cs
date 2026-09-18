@@ -10,5 +10,6 @@ public enum TipNotifikacije
     DozvolaOdobrena = 6,
     DozvolaOdbijena = 7,
     PodsjetnikPreuzimanje = 8,
-    VoziloVraceno = 9
+    VoziloVraceno = 9,
+    ResetLozinke = 10
 }

@@ -4,6 +4,7 @@ using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
 using SunnyRides.Model.Konstante;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
@@ -15,6 +16,7 @@ using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Placanja;
+using SunnyRides.Services.Poruke;
 
 namespace SunnyRides.Services.Rezervacije;
 
@@ -34,6 +36,7 @@ public class RezervacijaService
     private readonly IPricingService _pricingService;
     private readonly IRezervacijaStateMachine _stateMachine;
     private readonly IIzvrsilacPovrata _izvrsilacPovrata;
+    private readonly IObjavljivacPoruka _objavljivac;
 
     /// <summary>
     /// Kad zahtjev dolazi od klijenta, ovdje stoji njegov identifikator i lista se
@@ -49,7 +52,8 @@ public class RezervacijaService
         IAvailabilityService dostupnost,
         IPricingService pricingService,
         IRezervacijaStateMachine stateMachine,
-        IIzvrsilacPovrata izvrsilacPovrata)
+        IIzvrsilacPovrata izvrsilacPovrata,
+        IObjavljivacPoruka objavljivac)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -58,6 +62,7 @@ public class RezervacijaService
         _pricingService = pricingService;
         _stateMachine = stateMachine;
         _izvrsilacPovrata = izvrsilacPovrata;
+        _objavljivac = objavljivac;
     }
 
     protected override string NazivEntiteta => "Rezervacija";
@@ -289,6 +294,11 @@ public class RezervacijaService
 
         await transakcija.CommitAsync(ct);
 
+        // Poruka ide tek kad je rezervacija sigurno upisana. Worker iz nje salje
+        // uputu za placanje.
+        await _objavljivac.ObjaviAsync(Redovi.RezervacijaKreirana,
+            new RezervacijaPoruka(rezervacija.Id), ct);
+
         return await GetByIdOsnovnoAsync(rezervacija.Id, ct);
     }
 
@@ -374,6 +384,8 @@ public class RezervacijaService
         // Otvoreni intenti se ponistavaju, da se otkazana rezervacija ne moze naplatiti.
         await _izvrsilacPovrata.IzvrsiZaRezervacijuAsync(rezervacija, ct);
         await SacuvajAsync(ct);
+
+        await _objavljivac.ObjaviAsync(Redovi.RezervacijaOtkazana, new RezervacijaPoruka(id), ct);
 
         return await GetByIdOsnovnoAsync(id, ct);
     }
