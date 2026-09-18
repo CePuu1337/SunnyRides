@@ -19,6 +19,13 @@ public interface IRezervacijaService : IService<RezervacijaDto, RezervacijaSearc
     Task<RezervacijaDto> KreirajAsync(RezervacijaInsertRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Rucni unos rezervacije od strane osoblja, za navedenog klijenta. Prolazi kroz
+    /// iste provjere i zavrsava u istom statusu kao i klijentski unos.
+    /// </summary>
+    Task<RezervacijaDto> KreirajZaKlijentaAsync(
+        int klijentId, RezervacijaInsertRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Sta bi se vratilo kad bi se rezervacija otkazala u ovom trenutku. Nista ne
     /// mijenja - sluzi da klijent vidi posljedicu prije nego potvrdi.
     /// </summary>

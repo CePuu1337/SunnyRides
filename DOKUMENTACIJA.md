@@ -51,13 +51,13 @@ ne ispadne:
 
 | Iz prijave | Šta treba na backendu | |
 |---|---|---|
-| Upravljanje korisnicima i ulogama, administratorski reset lozinke | CRUD korisnika za administratora, dodjela uloga, reset bez stare lozinke | ⬜ |
-| Pregled i izmjena profila, profilna fotografija | izmjena vlastitih podataka i upload slike (magic bytes, vlasništvo) | ⬜ |
+| Upravljanje korisnicima i ulogama, administratorski reset lozinke | CRUD korisnika za administratora, dodjela uloga, reset bez stare lozinke | ✅ |
+| Pregled i izmjena profila, profilna fotografija | izmjena vlastitih podataka i upload slike (magic bytes, vlasništvo) | ✅ |
 | Reset lozinke kodom poslanim na email | kod kroz `RandomNumberGenerator`, čuvan kao hash, sa rokom (`KodZaResetLozinke`) | ✅ faza 14b |
-| Moderacija recenzija, ocjenjivanje nakon `Completed` | CRUD recenzija, skrivanje umjesto brisanja | ⬜ |
-| Obavijesti agencije na početnom ekranu | CRUD obavijesti sa slikom | ⬜ |
-| Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ⬜ |
-| Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ⬜ |
+| Moderacija recenzija, ocjenjivanje nakon `Completed` | CRUD recenzija, skrivanje umjesto brisanja | ✅ |
+| Obavijesti agencije na početnom ekranu | CRUD obavijesti sa slikom | ✅ |
+| Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ✅ |
+| Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ✅ |
 | Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
 | Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | cijena po vozilu u rezultatu pretrage, prosječna ocjena | ⬜ |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
@@ -2336,6 +2336,182 @@ tada nastao, ne računa se ponovo — obračun je već urađen jednom, u servisu
 
 `RezervacijaPotvrdjena` ostaje samo u seed podacima: potvrda rezervacije i uspješno
 plaćanje su isti trenutak, pa bi klijent na jedan događaj dobio dva obavještenja.
+
+---
+
+## Recenzije i obavijesti
+
+> 🟢 Urađeno nakon faze 16, kao priprema za desktop i mobilnu aplikaciju.
+
+### Recenzije
+
+Autor i vozilo se **izvode iz rezervacije**, ne iz zahtjeva. Zahtjev nosi samo
+`rezervacijaId`, ocjenu i komentar; da klijent šalje i vozilo, mogao bi ocijeniti vozilo
+koje nije vozio, a da šalje autora, mogao bi recenziju potpisati tuđim imenom.
+
+Prije upisa se provjerava troje:
+
+| Provjera | Zašto |
+|---|---|
+| rezervacija pripada onome ko piše | inače se ocjenjuje tuđi najam |
+| status je `Completed` | vozilo koje još nije vraćeno nema se šta ocijeniti |
+| za tu rezervaciju još nema recenzije | inače bi jedan najam pomjerao prosječnu ocjenu više puta |
+
+Treće je osigurano i jedinstvenim indeksom na `(KorisnikId, RezervacijaId)`, pa dvije
+istovremene forme ne mogu proći.
+
+**Izmjena je dozvoljena samo autoru i samo dok recenzija nije skrivena.** Drugi uslov nije
+sitnica: bez njega bi klijent čija je recenzija sklonjena zbog sadržaja mogao promijeniti
+tekst i vratiti je u opticaj, a da to niko iz agencije ne vidi.
+
+**Brisanja nema.** `DELETE /api/recenzije/{id}` izvršava se kao skrivanje — zapis ostaje
+u bazi, prosječna ocjena ostaje sljediva, a recenzija nestaje iz javnog prikaza,
+prosjeka i sistema preporuke. Klijentska aplikacija ima dugme „obriši" kao i svugdje, pa
+je bolje da ono radi ispravnu stvar nego da vraća grešku.
+
+Klijent u listi vidi neskrivene recenzije i **svoju** skrivenu — da zna šta je napisao i
+da je sklonjena. Osoblje vidi sve.
+
+`GET /api/recenzije/za-ocjenjivanje` vraća završene najmove prijavljenog korisnika koji
+još nisu ocijenjeni, jednim upitom sa provjerom nepostojanja recenzije. Mobilna
+aplikacija po tome zna kada uopšte ponuditi ocjenjivanje.
+
+### Obavijesti
+
+Piše ih administrator, čitaju svi klijenti. Klijentu se prikazuju **samo aktivne
+obavijesti čiji je datum objave prošao** — datum u budućnosti je zakazana objava. Obje
+provjere su na serveru, i u listi i na detalju; neobjavljena obavijest klijentu vraća 404,
+namjerno, da odgovor ne oda da nešto postoji i čeka objavu.
+
+Slika se snima na disk kroz istu pohranu kao i fotografije vozila, sa validacijom po
+magic bytes. U bazu ide samo putanja, a odgovor nosi URL slike i URL thumbnaila. Stara
+slika se briše tek kad je nova upisana u bazu — obrnutim redoslijedom bi pad upisa
+ostavio obavijest sa putanjom do fajla kojeg više nema. Brisanje obavijesti briše i njen
+fajl, da na disku ne ostane slika na koju ništa ne pokazuje.
+
+---
+
+## Nalozi, uloge i profil
+
+> 🟢 Urađeno nakon faze 16, kao priprema za desktop i mobilnu aplikaciju.
+
+Dva odvojena puta do istog entiteta, sa različitim pravilima:
+
+| Ruta | Ko | Kako se bira zapis |
+|---|---|---|
+| `/api/korisnici` | isključivo administrator | po identifikatoru, nad tuđim nalozima |
+| `/api/profil` | svaki prijavljeni korisnik | **nema identifikatora** — vlasnik se čita iz tokena |
+
+Na `/api/profil` zato i nema provjere vlasništva: tuđi profil se ne može ni adresirati,
+pa nema šta da se provjerava. To je isti obrazac koji već koriste vozačke dozvole.
+
+### Lozinka nikad nije dio forme za izmjenu
+
+Uputstvo traži da forma za izmjenu korisnika ne prikazuje polja za lozinku, nego da
+postoji zasebna radnja. Zato ni `KorisnikUpdateRequest` ni `ProfilUpdateRequest` nemaju
+ta polja, a postoje dvije odvojene radnje:
+
+| Radnja | Traži staru lozinku | Ko smije |
+|---|---|---|
+| `POST /api/auth/promjena-lozinke` | **da** | korisnik nad svojom |
+| `POST /api/korisnici/{id}/reset-lozinke` | ne | administrator nad tuđom |
+
+Administrator staru lozinku ne zna i ne treba je znati — zato je ta ruta administratorska
+i samo administratorska.
+
+### Šta se ne može ni sa administratorskim pravima
+
+| Radnja | Zašto je odbijena |
+|---|---|
+| ukloniti sebi administratorsku ulogu | ostao bi bez prava da tu grešku ispravi, a moguće je i da je jedini administrator |
+| deaktivirati vlastiti nalog | zaključao bi se van sistema |
+| blokirati uposlenika ili administratora | blokada se odnosi na klijente; nalog osoblja se deaktivira |
+
+### Brisanja nema
+
+`DELETE /api/korisnici/{id}` izvršava se kao **deaktivacija**. Rezervacije, plaćanja i
+recenzije korisnika moraju ostati — bez njih izvještaji o prihodu i iskorištenosti flote
+govore neistinu. Deaktiviran nalog se ne može prijaviti, a historija ostaje čitava.
+
+Blokada je nešto drugo od deaktivacije: blokiran klijent se i dalje može prijaviti i
+vidjeti svoje rezervacije, ali ne može napraviti novu. To pravilo provodi
+`RezervacijaService.ProvjeriKlijentaAsync` pri kreiranju, ne interfejs.
+
+### Uloge
+
+Uloge se ne unose kroz aplikaciju — fiksne su i dolaze iz seed podataka.
+`GET /api/korisnici/uloge` ih vraća za padajuću listu, a `PUT /api/korisnici/{id}/uloge`
+prima **cijelu novu listu**, ne dodavanje jedne po jedne. Tako je stanje poslije zahtjeva
+uvijek tačno ono što je poslano, bez obzira šta je bilo prije.
+
+Registracija kroz mobilnu aplikaciju i dalje nema nijedno polje za ulogu —
+`RegisterRequest` je netaknut i uvijek dodjeljuje `Klijent`. Uloge se biraju samo na
+administratorskom unosu, gdje ih bira administrator, a ne onaj ko nalog dobija.
+
+---
+
+## Pregled poslovanja i kalendar flote
+
+> 🟢 Urađeno nakon faze 16, kao priprema za desktop aplikaciju.
+
+### Pregled poslovanja
+
+`GET /api/pregled-poslovanja` vraća sve što početni ekran prikazuje, u jednom odgovoru:
+četiri metrike, raspored za danas, te presjek flote po tipu vozila i po poslovnici.
+
+Sve vrijednosti su **gotovi agregati**. Računaju se na bazi grupisanim upitima i stižu
+izračunate — Flutter ih samo prikazuje. Da se računaju u aplikaciji, morala bi povući sve
+rezervacije i sva plaćanja da bi ispisala četiri broja.
+
+Dvije definicije koje je bolje znati unaprijed:
+
+**Trenutna iskorištenost** je udio flote koji je u ovom trenutku kod klijenata, a ne
+mjesečna iskorištenost. Kartica odgovara na pitanje „koliko nam vozila sada radi".
+Iskorištenost kroz period je nešto drugo — broj dana izdato — i računa se u izvještaju o
+floti.
+
+**Prihod** se računa iz `Placanje.NaplaceniIznos`, dakle iz stvarno naplaćenog, a ne iz
+iznosa rezervacije. Rezervacija nosi koliko je trebalo naplatiti, a plaćanje koliko
+jeste. Od toga se oduzimaju povrati koji nisu odbijeni ni poništeni, pa je neto prihod
+broj koji agenciju stvarno zanima.
+
+„Čeka obradu" je zbir neverifikovanih dozvola i neplaćenih rezervacija koje još drže
+termin, i **razložen je** na te dvije stavke — da uposlenik odmah zna gdje da klikne
+umjesto da traži. Rezervacije kojima je držanje isteklo se ne broje: njih preuzima
+periodični posao u workeru i osoblje s njima nema šta raditi.
+
+### Kalendar flote
+
+`GET /api/kalendar-flote` vraća jedan red po vozilu sa blokovima zauzeća. Bez zadatog
+perioda vraća tekuću sedmicu, od ponedjeljka; period je ograničen na 62 dana.
+
+Blokovi se grade iz **istih zapisa** koje provjera dostupnosti smatra zauzećem —
+potvrđene rezervacije, one koje čekaju plaćanje a još drže termin, i blokade vozila. Zato
+prazan prostor u kalendaru znači da je vozilo stvarno slobodno, a ne da neko nije upisao
+podatak. Uz njih se crtaju i završene rezervacije, jer se kalendar gleda i unazad: da se
+ne crtaju, prošla sedmica bi izgledala kao da flota nije radila. Otkazanih nema — one
+nikad nisu ni držale termin.
+
+Odgovor nosi i `bufferSati`. Blok pokazuje stvarni termin najma, a buffer je podatak
+kojim interfejs može nacrtati razmak i objasniti zašto termin odmah uz tuđi najam nije
+slobodan. Deaktivirana vozila se ne prikazuju — njihov prazan red ne bi značio
+„slobodno" nego „ne postoji".
+
+### Ručni unos rezervacije
+
+`POST /api/rezervacije/klijent/{klijentId}`, samo za osoblje.
+
+Ovo je jedini put na kojem korisnik za kojeg se rezerviše dolazi izvana, i to nije
+izuzetak od pravila da se identitet čita iz tokena: iz tokena se i dalje čita **ko
+unosi**, i to mora biti osoblje. Klijent je ovdje podatak o kome se radi, isto kao vozilo
+ili termin — a ne tvrdnja o tome ko poziva. Zato je u ruti, gdje je vidljiv, a ne u
+tijelu zahtjeva.
+
+Sve provjere su iste kao kod klijentskog unosa: kategorija i rok važenja dozvole,
+dostupnost pod zaključanim vozilom, zalihe opreme, obračun cijene na serveru. Rezervacija
+nastaje kao `Pending` i drži termin — status se ne može preskočiti samo zato što unos
+dolazi sa šaltera. Dodatno se provjerava da je ciljni korisnik zaista klijent, da se
+rezervacija ne zavede na nalog uposlenika.
 
 ---
 

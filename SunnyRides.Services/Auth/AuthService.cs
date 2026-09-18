@@ -288,7 +288,10 @@ public class AuthService : IAuthService
         Prezime = korisnik.Prezime,
         Email = korisnik.Email,
         Telefon = korisnik.Telefon,
+        DatumRodjenja = korisnik.DatumRodjenja,
+        DatumRegistracije = korisnik.DatumRegistracije,
         PutanjaSlike = korisnik.PutanjaSlike,
+        ThumbnailUrl = Fajlovi.PutanjeSlika.Thumbnail(korisnik.PutanjaSlike),
         Aktivan = korisnik.Aktivan,
         Blokiran = korisnik.Blokiran,
         Uloge = uloge

@@ -48,9 +48,9 @@ public class RezervacijaController : ControllerBase
     /// Kreiranje rezervacije. Iskljucivo za klijenta - rezervise za sebe, a ko je to
     /// cita se iz tokena.
     ///
-    /// Rucni unos rezervacije od strane osoblja, iz kalendara flote, trazi da se
-    /// klijent navede izvana. To je zaseban endpoint sa vlastitom provjerom uloge i
-    /// dolazi uz kalendar; ovaj put se time ne otvara.
+    /// Rucni unos rezervacije od strane osoblja trazi da se klijent navede izvana, pa
+    /// ide kroz zaseban endpoint (<c>POST klijent/{klijentId}</c>) sa vlastitom
+    /// provjerom uloge. Ovaj put se time ne otvara.
     /// </summary>
     [HttpPost]
     [Authorize(Roles = Uloge.Klijent)]
@@ -58,6 +58,22 @@ public class RezervacijaController : ControllerBase
         [FromBody] RezervacijaInsertRequest request, CancellationToken ct)
     {
         return await _rezervacijaService.KreirajAsync(request, ct);
+    }
+
+    /// <summary>
+    /// Rucni unos rezervacije od strane osoblja, iz kalendara flote.
+    ///
+    /// Klijent je ovdje u ruti, a ne u tijelu zahtjeva, i to je namjerno vidljivo: nije
+    /// rijec o tome ko poziva - to se i dalje cita iz tokena i mora biti osoblje - nego
+    /// o tome za koga se rezervise. Rezervacija prolazi kroz iste provjere i zavrsava u
+    /// istom statusu kao da ju je klijent sam napravio.
+    /// </summary>
+    [HttpPost("klijent/{klijentId:int}")]
+    [Authorize(Roles = Uloge.AdministratorIliUposlenik)]
+    public async Task<RezervacijaDto> KreirajZaKlijentaAsync(
+        int klijentId, [FromBody] RezervacijaInsertRequest request, CancellationToken ct)
+    {
+        return await _rezervacijaService.KreirajZaKlijentaAsync(klijentId, request, ct);
     }
 
     /// <summary>

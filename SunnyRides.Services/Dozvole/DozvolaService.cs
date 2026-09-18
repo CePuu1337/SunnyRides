@@ -411,6 +411,11 @@ public class DozvolaService
     public async Task ObaveznoSmijeVozitiAsync(
         int korisnikId, int voziloId, DateTime datumPreuzimanja, CancellationToken ct = default)
     {
+        // Ista provjera sluzi na dva mjesta: klijentu koji rezervise za sebe i uposleniku
+        // koji unosi rezervaciju za klijenta. Poruku zato treba obratiti pravoj osobi -
+        // "vasa dozvola" uposleniku ne znaci nista.
+        var zaSebe = _trenutniKorisnik.KorisnikId == korisnikId;
+
         var vozilo = await Context.Vozila
             .Include(x => x.ModelVozila).ThenInclude(m => m.KategorijaDozvole)
             .AsNoTracking()
@@ -431,9 +436,11 @@ public class DozvolaService
             throw new BusinessException(dozvoljene.Obrazlozenje);
         }
 
+        var cijaDozvola = zaSebe ? "vasa dozvola" : "dozvola klijenta";
+
         throw new BusinessException(
             $"Za ovo vozilo je potrebna kategorija {vozilo.ModelVozila.KategorijaDozvole.Oznaka}, " +
-            $"a vasa dozvola pokriva {string.Join(" i ", dozvoljene.DozvoljeneKategorije)}.");
+            $"a {cijaDozvola} pokriva {string.Join(" i ", dozvoljene.DozvoljeneKategorije)}.");
     }
 
     // --- interno -----------------------------------------------------------

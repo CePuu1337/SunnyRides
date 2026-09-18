@@ -8,10 +8,15 @@ using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Flota;
 using SunnyRides.Services.Notifikacije;
 using SunnyRides.Services.Placanja;
+using SunnyRides.Services.Pregled;
 using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Preporuke;
 using SunnyRides.Services.Preporuke.Ml;
 using SunnyRides.Services.Primopredaje;
+using SunnyRides.Services.Kalendar;
+using SunnyRides.Services.Korisnici;
+using SunnyRides.Services.Obavijesti;
+using SunnyRides.Services.Recenzije;
 using SunnyRides.Services.Sifrarnici;
 
 namespace SunnyRides.API.Extensions;
@@ -74,6 +79,13 @@ public static class RegistracijaServisa
         DodajPlacanja(services, stripePostavke);
 
         services.AddScoped<IPrimopredajaService, PrimopredajaService>();
+        services.AddScoped<IRecenzijaService, RecenzijaService>();
+        services.AddScoped<IObavijestService, ObavijestService>();
+        services.AddScoped<IKorisnikService, KorisnikService>();
+
+        // Pregled poslovanja i kalendar flote samo citaju i broje - nista ne mijenjaju.
+        services.AddScoped<IPregledService, PregledService>();
+        services.AddScoped<IKalendarService, KalendarService>();
 
         // Preporuke i biljezenje pretraga. Historija je ulaz za preporuke, pa se upisuje
         // u istom zahtjevu u kojem pretraga i nastaje.

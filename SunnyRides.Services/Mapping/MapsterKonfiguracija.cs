@@ -2,6 +2,7 @@ using Mapster;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Fajlovi;
 
 namespace SunnyRides.Services.Mapping;
 
@@ -24,6 +25,9 @@ public static class MapsterKonfiguracija
         RegistrujPlacanja();
         RegistrujPrimopredaje();
         RegistrujNotifikacije();
+        RegistrujRecenzije();
+        RegistrujObavijesti();
+        RegistrujKorisnike();
     }
 
     /// <summary>
@@ -253,5 +257,44 @@ public static class MapsterKonfiguracija
     {
         TypeAdapterConfig<Notifikacija, NotifikacijaDto>.NewConfig()
             .Map(dto => dto.RezervacijaBroj, e => e.Rezervacija != null ? e.Rezervacija.Broj : null);
+    }
+
+    /// <summary>
+    /// Recenzija u odgovoru nosi imena, ne samo identifikatore: autor imenom i prezimenom,
+    /// vozilo markom i modelom. Bez toga bi lista za moderaciju bila spisak brojeva.
+    /// </summary>
+    private static void RegistrujRecenzije()
+    {
+        TypeAdapterConfig<Recenzija, RecenzijaDto>.NewConfig()
+            .Map(dto => dto.KorisnikImePrezime,
+                 e => e.Korisnik != null ? e.Korisnik.Ime + " " + e.Korisnik.Prezime : null)
+            .Map(dto => dto.RezervacijaBroj, e => e.Rezervacija != null ? e.Rezervacija.Broj : null)
+            .Map(dto => dto.RegistarskaOznaka, e => e.Vozilo != null ? e.Vozilo.RegistarskaOznaka : null)
+            .Map(dto => dto.VoziloOpis,
+                 e => e.Vozilo != null && e.Vozilo.ModelVozila != null && e.Vozilo.ModelVozila.Marka != null
+                      ? e.Vozilo.ModelVozila.Marka.Naziv + " " + e.Vozilo.ModelVozila.Naziv
+                      : null);
+    }
+
+    /// <summary>
+    /// Obavijest u bazi ima jednu putanju do slike, a prikaz treba i malu verziju za
+    /// listu. Putanja thumbnaila se izvodi po istom pravilu po kojem se slika i snima.
+    /// </summary>
+    private static void RegistrujObavijesti()
+    {
+        TypeAdapterConfig<Obavijest, ObavijestDto>.NewConfig()
+            .Map(dto => dto.SlikaUrl, e => e.PutanjaSlike)
+            .Map(dto => dto.ThumbnailUrl, e => PutanjeSlika.Thumbnail(e.PutanjaSlike));
+    }
+
+    /// <summary>
+    /// Korisnik u odgovoru nosi **nazive** uloga, ne identifikatore: po njima klijentska
+    /// aplikacija odlucuje sta ce prikazati, a i lista ih prikazuje korisniku.
+    /// </summary>
+    private static void RegistrujKorisnike()
+    {
+        TypeAdapterConfig<Korisnik, KorisnikDto>.NewConfig()
+            .Map(dto => dto.Uloge, e => e.KorisnikRole.Select(kr => kr.Role.Naziv).ToList())
+            .Map(dto => dto.ThumbnailUrl, e => PutanjeSlika.Thumbnail(e.PutanjaSlike));
     }
 }

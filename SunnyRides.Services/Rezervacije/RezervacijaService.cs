@@ -210,8 +210,40 @@ public class RezervacijaService
     public async Task<RezervacijaDto> KreirajAsync(
         RezervacijaInsertRequest request, CancellationToken ct = default)
     {
-        var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+        // Klijent rezervise za sebe, a ko je to cita se iz tokena.
+        return await KreirajZaAsync(_trenutniKorisnik.ObaveznoKorisnikId(), request, ct);
+    }
 
+    /// <summary>
+    /// Rucni unos rezervacije od strane osoblja, iz kalendara flote.
+    ///
+    /// Ovo je jedini put na kojem korisnik za kojeg se rezervise dolazi izvana. To nije
+    /// izuzetak od pravila da se identitet cita iz tokena: iz tokena se i dalje cita ko
+    /// **unosi**, i to mora biti osoblje. Klijent je ovdje podatak o kome se radi, isto
+    /// kao vozilo ili termin - a ne tvrdnja o tome ko poziva.
+    ///
+    /// Sve ostale provjere su iste kao kod klijentskog unosa: dozvola, dostupnost pod
+    /// zakljucanim vozilom, zalihe opreme i obracun cijene na serveru. Rezervacija
+    /// nastaje kao <c>Pending</c> i drzi termin, pa se naplata radi na isti nacin -
+    /// status se ne moze preskociti samo zato sto unos dolazi sa salterа.
+    /// </summary>
+    public async Task<RezervacijaDto> KreirajZaKlijentaAsync(
+        int klijentId, RezervacijaInsertRequest request, CancellationToken ct = default)
+    {
+        if (!JeOsoblje())
+        {
+            throw new ForbiddenException(
+                "Rezervaciju za drugog korisnika moze unijeti samo osoblje agencije.");
+        }
+
+        await ObaveznoKlijentAsync(klijentId, ct);
+
+        return await KreirajZaAsync(klijentId, request, ct);
+    }
+
+    private async Task<RezervacijaDto> KreirajZaAsync(
+        int korisnikId, RezervacijaInsertRequest request, CancellationToken ct)
+    {
         await ProvjeriKlijentaAsync(korisnikId, ct);
         ProvjeriTermin(request.DatumOd, request.DatumDo);
 
@@ -589,6 +621,22 @@ public class RezervacijaService
             ?? throw NotFoundException.Za(NazivEntiteta, id);
 
         return rezervacija.Adapt<RezervacijaDto>();
+    }
+
+    /// <summary>
+    /// Osoblje unosi rezervaciju za klijenta, ne za drugog uposlenika. Bez ove provjere
+    /// bi se rezervacija mogla zavesti na nalog koji nema ni vozacku dozvolu u sistemu.
+    /// </summary>
+    private async Task ObaveznoKlijentAsync(int klijentId, CancellationToken ct)
+    {
+        var jeKlijent = await Context.KorisnikRole
+            .AnyAsync(x => x.KorisnikId == klijentId && x.Role.Naziv == Uloge.Klijent, ct);
+
+        if (!jeKlijent)
+        {
+            throw new BusinessException(
+                "Rezervacija se moze unijeti samo za korisnika koji je klijent agencije.");
+        }
     }
 
     private async Task ProvjeriKlijentaAsync(int korisnikId, CancellationToken ct)
