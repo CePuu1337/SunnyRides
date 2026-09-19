@@ -14,6 +14,10 @@ namespace SunnyRides.API.Controllers;
 /// Cijeli kontroler je administratorski. Uposlenik ne upravlja nalozima, a klijent nad
 /// svojim nalogom radi kroz <c>/api/profil</c>, gdje identifikator ne postoji - cita se
 /// iz tokena.
+///
+/// Uloga na klasi se ne moze olabaviti atributom na metodi: ASP.NET Core ih ne zamjenjuje
+/// nego zahtijeva da prodju oba. Zato pretraga klijenata, koju smije i uposlenik, ima
+/// svoj kontroler - <see cref="KlijentController"/>.
 /// </summary>
 [Route("api/korisnici")]
 [Authorize(Roles = Uloge.Administrator)]
@@ -30,7 +34,6 @@ public class KorisnikController
 
     /// <summary>Uloge za padajucu listu na formi. Uloge se ne unose kroz aplikaciju.</summary>
     [HttpGet("uloge")]
-    [Authorize(Roles = Uloge.AdministratorIliUposlenik)]
     public async Task<List<RoleDto>> UlogeAsync(CancellationToken ct)
     {
         return await _korisnikService.UlogeAsync(ct);

@@ -2529,6 +2529,20 @@ nastaje kao `Pending` i drži termin — status se ne može preskočiti samo zat
 dolazi sa šaltera. Dodatno se provjerava da je ciljni korisnik zaista klijent, da se
 rezervacija ne zavede na nalog uposlenika.
 
+**Odabir klijenta.** Da bi uposlenik unio rezervaciju, mora pronaći klijenta — a
+`/api/korisnici` je administratorski. Umjesto da se cijela lista naloga otvori i
+uposleniku, postoji zasebna ruta `GET /api/korisnici/klijenti?tekst=` u vlastitom
+kontroleru (`KlijentController`). Vlastiti kontroler nije stvar ukusa: ASP.NET Core
+atribute `[Authorize]` sa klase i metode sabira, pa metoda u administratorskom
+kontroleru ne može pustiti uposlenika ma šta na njoj pisalo. Test
+`PravilaAutorizacijeTests` prolazi kroz sve kontrolere i pada ako neka metoda navede
+ulogu koju njena klasa odbija. Ruta vraća samo aktivne naloge s ulogom klijenta i samo
+polja potrebna za odabir: ime, prezime, email, telefon, je li blokiran i stanje vozačke
+dozvole. Nalozi osoblja se tu ne pojavljuju ni pri pretrazi po imenu, a uloge se ne
+vraćaju. Stanje dozvole i blokada su tu da uposlenik unaprijed vidi hoće li rezervacija
+proći — server je bez odobrene dozvole ionako odbija, ali je bolje da se to vidi prije
+nego se popuni cijela forma.
+
 ---
 
 ## PDF izvještaji

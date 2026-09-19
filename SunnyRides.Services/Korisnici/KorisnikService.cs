@@ -1,5 +1,7 @@
 using Mapster;
 using Microsoft.EntityFrameworkCore;
+using SunnyRides.Model;
+using SunnyRides.Model.Enums;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Konstante;
 using SunnyRides.Model.Requests;
@@ -40,6 +42,57 @@ public class KorisnikService
 
     protected override string PorukaZaDuplikat() =>
         "Korisnik sa tim korisnickim imenom ili email adresom vec postoji.";
+
+    // --- odabir klijenta pri rucnom unosu ----------------------------------
+
+    public async Task<PagedResult<KlijentZaOdabirDto>> KlijentiZaOdabirAsync(
+        KlijentSearchObject search, CancellationToken ct = default)
+    {
+        // Samo aktivni nalozi sa ulogom klijenta. Nalozi osoblja se ovdje ne pojavljuju
+        // ni kad se trazi po imenu - uposlenik preko ove liste ne moze doci do njih.
+        var upit = Context.Korisnici
+            .AsNoTracking()
+            .Where(x => x.Aktivan && x.KorisnikRole.Any(kr => kr.Role.Naziv == Uloge.Klijent));
+
+        if (!string.IsNullOrWhiteSpace(search.Tekst))
+        {
+            var tekst = search.Tekst.Trim();
+
+            upit = upit.Where(x =>
+                x.Ime.Contains(tekst)
+                || x.Prezime.Contains(tekst)
+                || x.Email.Contains(tekst)
+                || (x.Telefon != null && x.Telefon.Contains(tekst)));
+        }
+
+        int? ukupno = search.IncludeTotalCount ? await upit.CountAsync(ct) : null;
+
+        var stranica = Math.Max(search.Page ?? 0, 0);
+        var velicina = Math.Clamp(
+            search.PageSize ?? PodrazumijevanaVelicinaStranice, 1, MaksimalnaVelicinaStranice);
+
+        var stavke = await upit
+            .OrderBy(x => x.Prezime)
+            .ThenBy(x => x.Ime)
+            .ThenBy(x => x.Id)
+            .Skip(stranica * velicina)
+            .Take(velicina)
+            .Select(x => new KlijentZaOdabirDto
+            {
+                Id = x.Id,
+                Ime = x.Ime,
+                Prezime = x.Prezime,
+                Email = x.Email,
+                Telefon = x.Telefon,
+                Blokiran = x.Blokiran,
+                StatusDozvole = x.VozackaDozvola == null
+                    ? null
+                    : (StatusDozvole?)x.VozackaDozvola.Status
+            })
+            .ToListAsync(ct);
+
+        return new PagedResult<KlijentZaOdabirDto> { Items = stavke, TotalCount = ukupno };
+    }
 
     // --- citanje -----------------------------------------------------------
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../widgeti/u_izradi.dart';
+import '../kalendar/kalendar_ekran.dart';
 import '../pregled/pregled_ekran.dart';
 import '../rezervacije/rezervacije_ekran.dart';
 import '../vozila/vozila_ekran.dart';
@@ -93,7 +94,7 @@ class Meni {
           naziv: 'Kalendar flote',
           podnaslov: 'Zauzeće vozila po danima',
           ikona: Icons.calendar_month_outlined,
-          gradi: _uIzradi,
+          gradi: _kalendar,
         ),
         StavkaMenija(
           id: 'rezervacije',
@@ -184,3 +185,5 @@ Widget _pregled(BuildContext context) => const PregledEkran();
 Widget _vozila(BuildContext context) => const VozilaEkran();
 
 Widget _rezervacije(BuildContext context) => const RezervacijeEkran();
+
+Widget _kalendar(BuildContext context) => const KalendarEkran();

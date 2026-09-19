@@ -20,6 +20,7 @@ export 'src/dizajn/razmaci.dart';
 export 'src/dizajn/statusna_pilula.dart';
 export 'src/dizajn/tema.dart';
 
+export 'src/modeli/cijena.dart';
 export 'src/modeli/enumi.dart';
 export 'src/modeli/korisnik.dart';
 export 'src/modeli/pretvaranje.dart';

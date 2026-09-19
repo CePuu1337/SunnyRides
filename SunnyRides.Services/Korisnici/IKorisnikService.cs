@@ -1,3 +1,4 @@
+using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
@@ -26,6 +27,13 @@ public interface IKorisnikService
     Task<KorisnikDto> BlokirajAsync(int id, CancellationToken ct = default);
 
     Task<KorisnikDto> OdblokirajAsync(int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Aktivni klijenti za odabir pri rucnom unosu rezervacije. Dostupno i uposleniku,
+    /// pa vraca samo klijente i samo polja potrebna za odabir.
+    /// </summary>
+    Task<PagedResult<KlijentZaOdabirDto>> KlijentiZaOdabirAsync(
+        KlijentSearchObject search, CancellationToken ct = default);
 
     // --- vlastiti profil ---------------------------------------------------
 

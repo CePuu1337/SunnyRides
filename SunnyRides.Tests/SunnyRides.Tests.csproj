@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SunnyRides.Services\SunnyRides.Services.csproj" />
     <ProjectReference Include="..\SunnyRides.Model\SunnyRides.Model.csproj" />
+    <ProjectReference Include="..\SunnyRides.API\SunnyRides.API.csproj" />
   </ItemGroup>
 
 </Project>
