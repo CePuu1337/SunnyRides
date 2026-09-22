@@ -106,6 +106,48 @@ class BlokKalendara {
   }
 }
 
+/// Rezervacija koju bi planirana blokada pogodila.
+///
+/// Nosi i kontakt klijenta, jer uposlenik koji blokira vozilo zbog kvara mora znati
+/// koga treba nazvati - blokada sama po sebi nikoga ne obavjestava.
+class PogodjenaRezervacija {
+  const PogodjenaRezervacija({
+    required this.id,
+    required this.broj,
+    required this.datumOd,
+    required this.datumDo,
+    required this.status,
+    required this.isPaid,
+    this.klijentImePrezime,
+    this.klijentEmail,
+    this.klijentTelefon,
+  });
+
+  final int id;
+  final String broj;
+  final DateTime datumOd;
+  final DateTime datumDo;
+  final StatusRezervacije? status;
+  final bool isPaid;
+  final String? klijentImePrezime;
+  final String? klijentEmail;
+  final String? klijentTelefon;
+
+  factory PogodjenaRezervacija.izJsona(Map<String, dynamic> json) {
+    return PogodjenaRezervacija(
+      id: citajInt(json['id']),
+      broj: json['broj']?.toString() ?? '',
+      datumOd: citajDatum(json['datumOd']),
+      datumDo: citajDatum(json['datumDo']),
+      status: StatusRezervacije.izBroja(citajInt(json['status'])),
+      isPaid: citajBool(json['isPaid']),
+      klijentImePrezime: json['klijentImePrezime']?.toString(),
+      klijentEmail: json['klijentEmail']?.toString(),
+      klijentTelefon: json['klijentTelefon']?.toString(),
+    );
+  }
+}
+
 /// Klijent u padajucoj listi pri rucnom unosu rezervacije.
 class KlijentZaOdabir {
   const KlijentZaOdabir({

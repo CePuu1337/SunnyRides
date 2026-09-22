@@ -55,6 +55,7 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.MarkaNaziv, e => e.Marka != null ? e.Marka.Naziv : null)
             .Map(dto => dto.TipVozilaNaziv, e => e.TipVozila != null ? e.TipVozila.Naziv : null)
             .Map(dto => dto.TipGorivaNaziv, e => e.TipGoriva != null ? e.TipGoriva.Naziv : null)
+            .Map(dto => dto.JeElektricno, e => e.TipGoriva != null && e.TipGoriva.JeElektricni)
             .Map(dto => dto.KategorijaDozvoleOznaka,
                  e => e.KategorijaDozvole != null ? e.KategorijaDozvole.Oznaka : null);
 
@@ -87,6 +88,9 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.TipGorivaNaziv,
                  e => e.ModelVozila != null && e.ModelVozila.TipGoriva != null
                       ? e.ModelVozila.TipGoriva.Naziv : null)
+            .Map(dto => dto.JeElektricno,
+                 e => e.ModelVozila != null && e.ModelVozila.TipGoriva != null
+                      && e.ModelVozila.TipGoriva.JeElektricni)
             .Map(dto => dto.KategorijaDozvoleOznaka,
                  e => e.ModelVozila != null && e.ModelVozila.KategorijaDozvole != null
                       ? e.ModelVozila.KategorijaDozvole.Oznaka : null)

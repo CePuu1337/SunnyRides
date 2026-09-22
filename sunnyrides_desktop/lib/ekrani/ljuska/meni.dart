@@ -4,6 +4,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 import '../../widgeti/u_izradi.dart';
 import '../kalendar/kalendar_ekran.dart';
 import '../pregled/pregled_ekran.dart';
+import '../primopredaja/primopredaja_ekran.dart';
 import '../rezervacije/rezervacije_ekran.dart';
 import '../vozila/vozila_ekran.dart';
 
@@ -108,7 +109,7 @@ class Meni {
           naziv: 'Primopredaja',
           podnaslov: 'Izdavanje i povrat vozila',
           ikona: Icons.compare_arrows_outlined,
-          gradi: _uIzradi,
+          gradi: _primopredaja,
         ),
       ],
     ),
@@ -187,3 +188,5 @@ Widget _vozila(BuildContext context) => const VozilaEkran();
 Widget _rezervacije(BuildContext context) => const RezervacijeEkran();
 
 Widget _kalendar(BuildContext context) => const KalendarEkran();
+
+Widget _primopredaja(BuildContext context) => const PrimopredajaEkran();

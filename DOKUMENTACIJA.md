@@ -1914,13 +1914,62 @@ Provjere redom:
 2. Najviše deset fotografija
 3. Zaključavanje reda rezervacije
 4. Rezervacija je `Confirmed` i plaćena
-5. Vozilo za nju još nije izdato
-6. Nije ranije od dva sata prije termina (koliko traje i priprema vozila) i termin
-   nije prošao
+5. Vozilo za nju još nije izdato, i povrat nije već evidentiran
+6. Vrijeme izdavanja nije ranije od dva sata prije termina (koliko traje i priprema
+   vozila), nije poslije ugovorenog vraćanja i nije u budućnosti
 7. Kilometraža nije manja od zadnje evidentirane na vozilu
 
-Vrijeme izdavanja i uposlenika upisuje server. Kilometraža vozila se ažurira, pa
-sljedeće izdavanje ima s čim da poredi.
+Uposlenika upisuje server, iz tokena. Kilometraža vozila se ažurira, pa sljedeće
+izdavanje ima s čim da poredi.
+
+### Kad se desilo i kad je upisano nisu isto
+
+Zapis `Primopredaja` ima dva vremena: `DatumVrijeme` je kad se primopredaja stvarno
+desila, `DatumUnosa` kad je zapis nastao. Obično su isti, jer se oba dese na šalteru.
+
+Razlikuju se kad uposlenik naknadno evidentira nešto što je propustio — najčešće
+izdavanje, kojeg se sjeti tek kad klijent dođe vratiti vozilo. Zahtjevi zato imaju
+opcione `DatumIzdavanja` i `DatumPovrata`; prazno znači „sada".
+
+Dva polja a ne jedno, jer o svakom ovisi nešto drugo. **O vremenu događaja ovisi
+novac**: kašnjenje pri povratu se računa iz njega i umanjuje povrat depozita, pa bi
+klijent koji je vozilo vratio na vrijeme platio kašnjenje uposlenika koji je unos
+odgodio. **O vremenu unosa ovisi trag**: ko je i kada šta upisao. Kad bi postojalo
+samo jedno polje, naknadni unos bi morao ili falsifikovati trenutak unosa ili
+naplatiti kašnjenje koje se nije desilo.
+
+Vrijeme događaja nije slobodno: ne smije biti u budućnosti (uz dvije minute
+tolerancije, jer sat na računaru uposlenika nije tačan u sekundu), izdavanje mora pasti
+unutar ugovorenog termina, a povrat ne prije izdavanja. `PrimopredajaDto` vraća
+`unesenoNaknadno`, pa se u pregledu vidi da zapis nije nastao u trenutku događaja.
+
+### Struja nije gorivo
+
+Primopredaja u oba slučaja bilježi isti broj — procenat — jer je to ista mjera: koliko
+je ostalo od punog. Ali skuter na struju nema rezervoar, pa je natpis „nivo goriva" na
+formi koju uposlenik ispunjava jednostavno netačan.
+
+Da bi aplikacija znala razliku, tip goriva u šifarniku ima zastavicu `JeElektricni`.
+Namjerno **nije** poređenje naziva u kodu (`Naziv == "Elektricni"`): naziv je podatak
+koji administrator može preimenovati ili dopuniti novim zapisom („Struja", „EV"), pa bi
+provjera po nazivu tiho prestala važiti, a niko to ne bi primijetio dok neko ne pogleda
+formu. Ovako svojstvo stoji uz zapis koji ga opisuje.
+
+Zastavica se prenosi kroz `VoziloDto`, `ModelVozilaDto` i `RasporedStavkaDto`, pa
+ekran ne mora ništa zaključivati: klizač piše „Napunjenost baterije" s ikonom baterije,
+a lista vozila prikazuje snagu u kW umjesto kubikaže, koja za takva vozila ne postoji.
+
+### Raspored zna šta se po redu može uraditi
+
+`RasporedStavkaDto` uz `Obavljeno` nosi i `IzdavanjeEvidentirano`. Bez toga red za
+vraćanje izgleda isto bilo da vozilo jeste ili nije izdato, a razlika je velika: povrat
+bez izdavanja server odbija. Desktop zato takvom redu nudi „Evidentiraj izdavanje"
+umjesto „Zaprimi vozilo", pa uposlenik iz istog reda riješi ono što je propušteno.
+
+Seed prati isto pravilo: najam koji je u toku — potvrđen, a preuzimanje mu je prošlo —
+dobija zapis o izdavanju bez povrata. Ranije su primopredaje nastajale samo za završene
+rezervacije, pa je u demo podacima postojao najam u toku bez ijednog traga da je vozilo
+predato klijentu.
 
 ### Povrat i obračun depozita
 
@@ -2512,6 +2561,25 @@ Odgovor nosi i `bufferSati`. Blok pokazuje stvarni termin najma, a buffer je pod
 kojim interfejs može nacrtati razmak i objasniti zašto termin odmah uz tuđi najam nije
 slobodan. Deaktivirana vozila se ne prikazuju — njihov prazan red ne bi značio
 „slobodno" nego „ne postoji".
+
+### Kvar vozila iz kalendara
+
+Klik na slobodan dan u kalendaru otvara ručni unos, a na dnu te forme stoji i prijava
+kvara — isti potez, isto vozilo i isti termin, pa nema razloga tjerati uposlenika na
+drugi ekran.
+
+Blokada se ponaša drukčije nego što se na prvu očekuje: server je **ne odbija** ni kad
+preklapa postojeću rezervaciju. To je namjerno, jer se vozilo pokvari bez obzira na to
+što je iznajmljeno; kad bi sistem to odbijao, uposlenik ne bi imao način da zabilježi
+stvarno stanje flote. Zato forma prije potvrde poziva
+`GET /api/dostupnost/pogodjene-rezervacije` i prikazuje svaku pogođenu rezervaciju sa
+**kontaktom klijenta** — blokada nikoga ne obavještava sama, pa uposlenik mora znati
+koga zove.
+
+Uz to stoji kvadratić „Skrati blokadu do prve rezervacije", uključen po defaultu: kvar
+se tada evidentira od sada do početka prve rezervacije, a šta će sa tom rezervacijom —
+otkazivanje, drugo vozilo, dogovor — ostaje odluka koju uposlenik donosi telefonom.
+Forma tu odluku ne donosi umjesto njega, ali mu ne dozvoljava ni da je previdi.
 
 ### Ručni unos rezervacije
 

@@ -128,7 +128,8 @@ class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
       greska: _greska,
       uToku: _snimanje,
       natpisPotvrde: 'Otkaži rezervaciju',
-      naSnimanje: mozeOtkazati ? _otkazi : () {},
+      potvrdaOmogucena: mozeOtkazati,
+      naSnimanje: _otkazi,
       sirina: 580,
       dijete: _ucitavanje
           ? const Padding(

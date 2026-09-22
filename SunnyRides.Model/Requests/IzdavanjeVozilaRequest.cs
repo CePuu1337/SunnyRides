@@ -22,4 +22,13 @@ public class IzdavanjeVozilaRequest
 
     [MaxLength(1000, ErrorMessage = "Napomena moze imati najvise 1000 znakova.")]
     public string? Napomena { get; set; }
+
+    /// <summary>
+    /// Kad je vozilo stvarno preuzeto, ako se evidentira naknadno. Prazno znaci sada.
+    ///
+    /// Postoji zato sto uposlenik ponekad zaboravi evidentirati izdavanje pa se sjeti
+    /// tek kad klijent dodje vratiti vozilo. Bez ovog polja bi tada morao upisati
+    /// pogresno vrijeme ili ne upisati nista.
+    /// </summary>
+    public DateTime? DatumIzdavanja { get; set; }
 }

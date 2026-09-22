@@ -73,7 +73,7 @@ public partial class DatabaseSeeder
 
         var benzin = new TipGoriva { Naziv = "Benzin" };
         var dizel = new TipGoriva { Naziv = "Dizel" };
-        var elektricni = new TipGoriva { Naziv = "Elektricni" };
+        var elektricni = new TipGoriva { Naziv = "Elektricni", JeElektricni = true };
         _context.TipoviGoriva.AddRange(benzin, dizel, elektricni);
 
         // --- kategorije dozvola ---

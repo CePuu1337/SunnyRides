@@ -19,6 +19,7 @@ class Vozilo {
     required this.kubikaza,
     required this.snagaKw,
     required this.kategorijaDozvoleId,
+    required this.jeElektricno,
     this.modelNaziv,
     this.markaNaziv,
     this.tipVozilaNaziv,
@@ -43,6 +44,9 @@ class Vozilo {
   final double snagaKw;
   final int kategorijaDozvoleId;
 
+  /// Vozilo na struju. Umjesto kubikaze mu se prikazuje snaga.
+  final bool jeElektricno;
+
   final String? modelNaziv;
   final String? markaNaziv;
   final String? tipVozilaNaziv;
@@ -54,8 +58,9 @@ class Vozilo {
 
   /// Kubikaza, a za elektricna vozila snaga - njima je kubikaza nula, pa bi "0 ccm"
   /// izgledalo kao da podatak nedostaje.
-  String get pogon =>
-      kubikaza > 0 ? '$kubikaza ccm' : '${snagaKw.toStringAsFixed(1)} kW';
+  String get pogon => jeElektricno || kubikaza == 0
+      ? '${snagaKw.toStringAsFixed(1)} kW'
+      : '$kubikaza ccm';
 
   /// Marka i model zajedno, kako se vozilo svuda i imenuje.
   String get puniNaziv => [
@@ -78,6 +83,7 @@ class Vozilo {
       kubikaza: citajInt(json['kubikaza']),
       snagaKw: citajDouble(json['snagaKw']),
       kategorijaDozvoleId: citajInt(json['kategorijaDozvoleId']),
+      jeElektricno: citajBool(json['jeElektricno']),
       modelNaziv: json['modelNaziv']?.toString(),
       markaNaziv: json['markaNaziv']?.toString(),
       tipVozilaNaziv: json['tipVozilaNaziv']?.toString(),

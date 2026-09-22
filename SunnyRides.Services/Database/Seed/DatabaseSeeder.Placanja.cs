@@ -76,6 +76,17 @@ public partial class DatabaseSeeder
             }
 
             // --- primopredaja ---
+            //
+            // Najam koji je u toku ima samo izdavanje: vozilo je kod klijenta i jos
+            // nije vraceno. Bez toga bi u bazi postojao najam u toku bez ijednog traga
+            // da je vozilo ikad predato, a uposlenik na salteru ne bi mogao evidentirati
+            // povrat jer server trazi da izdavanje postoji.
+            if (rezervacija.Status == StatusRezervacije.Confirmed
+                && rezervacija.DatumOd <= DateTime.UtcNow)
+            {
+                DodajIzdavanje(rezervacija, fotografija);
+            }
+
             if (rezervacija.Status == StatusRezervacije.Completed)
             {
                 var iznosStete = DodajPrimopredaju(rezervacija, fotografija);
@@ -146,8 +157,8 @@ public partial class DatabaseSeeder
         });
     }
 
-    /// <summary>Vraca iznos evidentirane stete, ili nulu ako je stete nema.</summary>
-    private decimal DodajPrimopredaju(Rezervacija rezervacija, string? fotografija)
+    /// <summary>Zapis o izdavanju vozila. Vraca kilometrazu pri izdavanju.</summary>
+    private int DodajIzdavanje(Rezervacija rezervacija, string? fotografija)
     {
         var kmPriIzdavanju = rezervacija.Vozilo.Kilometraza - Broj(200, 3000);
         if (kmPriIzdavanju < 0)
@@ -155,11 +166,17 @@ public partial class DatabaseSeeder
             kmPriIzdavanju = 0;
         }
 
+        var kada = rezervacija.DatumOd.AddMinutes(Broj(0, 40));
+
         var izdavanje = new Primopredaja
         {
             Rezervacija = rezervacija,
             Tip = TipPrimopredaje.Izdavanje,
-            DatumVrijeme = rezervacija.DatumOd.AddMinutes(Broj(0, 40)),
+            DatumVrijeme = kada,
+
+            // U seedu je sve evidentirano u trenutku kad se desilo. Naknadni unos
+            // postoji kao mogucnost, ali nema razloga praviti ga u demo podacima.
+            DatumUnosa = kada,
             Kilometraza = kmPriIzdavanju,
             NivoGoriva = Broj(80, 101),
             Napomena = "Vozilo izdato u ispravnom stanju.",
@@ -169,6 +186,14 @@ public partial class DatabaseSeeder
         DodajFotografiju(izdavanje, fotografija);
         _context.Primopredaje.Add(izdavanje);
 
+        return kmPriIzdavanju;
+    }
+
+    /// <summary>Vraca iznos evidentirane stete, ili nulu ako je stete nema.</summary>
+    private decimal DodajPrimopredaju(Rezervacija rezervacija, string? fotografija)
+    {
+        var kmPriIzdavanju = DodajIzdavanje(rezervacija, fotografija);
+
         var predjeno = Broj(40, 900);
         var kasnjenjeMinuta = Sansa(25) ? Broj(5, 240) : Broj(0, 45);
 
@@ -177,6 +202,7 @@ public partial class DatabaseSeeder
             Rezervacija = rezervacija,
             Tip = TipPrimopredaje.Povrat,
             DatumVrijeme = rezervacija.DatumDo.AddMinutes(kasnjenjeMinuta),
+            DatumUnosa = rezervacija.DatumDo.AddMinutes(kasnjenjeMinuta),
             Kilometraza = kmPriIzdavanju + predjeno,
             NivoGoriva = Broj(20, 101),
             KontrolnaListaProdjena = true,

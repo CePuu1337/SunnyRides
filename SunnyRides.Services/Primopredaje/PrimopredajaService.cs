@@ -36,6 +36,13 @@ public class PrimopredajaService
 
     private const int MaksimalnoFotografija = 10;
 
+    /// <summary>
+    /// Koliko vrijeme dogadjaja smije biti ispred servera. Sat na racunaru uposlenika
+    /// nije uvijek tacan u sekundu, pa se par minuta unaprijed ne tretira kao pokusaj
+    /// upisa u buducnost.
+    /// </summary>
+    private static readonly TimeSpan DozvoljenoOdstupanje = TimeSpan.FromMinutes(2);
+
     private readonly ICurrentUserService _trenutniKorisnik;
     private readonly IRezervacijaStateMachine _stateMachine;
     private readonly IPricingService _pricingService;
@@ -212,6 +219,7 @@ public class PrimopredajaService
                 x.Status,
                 Vozilo = x.Vozilo.ModelVozila.Marka.Naziv + " " + x.Vozilo.ModelVozila.Naziv,
                 x.Vozilo.RegistarskaOznaka,
+                Elektricno = x.Vozilo.ModelVozila.TipGoriva.JeElektricni,
                 Klijent = x.Korisnik.Ime + " " + x.Korisnik.Prezime,
                 Poslovnica = x.Poslovnica.Naziv,
                 Izdato = x.Primopredaje.Any(p => p.Tip == TipPrimopredaje.Izdavanje),
@@ -229,12 +237,16 @@ public class PrimopredajaService
                 Broj = r.Broj,
                 Akcija = akcija,
                 Vrijeme = vrijeme,
+                DatumOd = r.DatumOd,
+                DatumDo = r.DatumDo,
                 VoziloNaziv = r.Vozilo,
+                JeElektricno = r.Elektricno,
                 RegistarskaOznaka = r.RegistarskaOznaka,
                 KlijentImePrezime = r.Klijent,
                 PoslovnicaNaziv = r.Poslovnica,
                 StatusRezervacije = r.Status,
-                Obavljeno = obavljeno
+                Obavljeno = obavljeno,
+                IzdavanjeEvidentirano = r.Izdato
             };
 
             if (r.DatumOd >= od && r.DatumOd < @do)
@@ -252,6 +264,27 @@ public class PrimopredajaService
         {
             Items = stavke.OrderBy(x => x.Vrijeme).ToList(),
             TotalCount = ukupno
+        };
+    }
+
+    /// <summary>
+    /// Vrijeme iz zahtjeva u UTC-u, ili zadana vrijednost kad ga nema.
+    ///
+    /// Vrijeme bez oznake zone se tretira kao UTC, jer server radi iskljucivo u UTC-u.
+    /// Da se tretira kao lokalno, isti unos bi na dva servera dao dva razlicita trenutka.
+    /// </summary>
+    private static DateTime UUtc(DateTime? vrijeme, DateTime podrazumijevano)
+    {
+        if (vrijeme is not { } vrijednost)
+        {
+            return podrazumijevano;
+        }
+
+        return vrijednost.Kind switch
+        {
+            DateTimeKind.Utc => vrijednost,
+            DateTimeKind.Local => vrijednost.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(vrijednost, DateTimeKind.Utc)
         };
     }
 
@@ -285,18 +318,36 @@ public class PrimopredajaService
             throw new BusinessException("Vozilo je za ovu rezervaciju vec izdato.");
         }
 
+        // Povrat bez izdavanja ne postoji, pa ni izdavanje nakon povrata.
+        if (rezervacija.Primopredaje.Any(x => x.Tip == TipPrimopredaje.Povrat))
+        {
+            throw new BusinessException(
+                "Za ovu rezervaciju je vec evidentiran povrat, pa se izdavanje ne moze naknadno upisati.");
+        }
+
         var sada = DateTime.UtcNow;
 
-        if (sada < rezervacija.DatumOd - RanoIzdavanje)
+        // Vrijeme dogadjaja, ne vrijeme unosa. Kad uposlenik naknadno evidentira
+        // izdavanje, provjere se odnose na trenutak kad je vozilo stvarno preuzeto.
+        var izdatoU = UUtc(request.DatumIzdavanja, sada);
+
+        if (izdatoU > sada + DozvoljenoOdstupanje)
+        {
+            throw new BusinessException("Vrijeme izdavanja ne moze biti u buducnosti.");
+        }
+
+        if (izdatoU < rezervacija.DatumOd - RanoIzdavanje)
         {
             throw new BusinessException(
                 $"Vozilo se moze izdati najranije {RanoIzdavanje.TotalHours:0} sata prije termina " +
                 $"({rezervacija.DatumOd:dd.MM.yyyy. HH:mm} UTC).");
         }
 
-        if (sada >= rezervacija.DatumDo)
+        if (izdatoU >= rezervacija.DatumDo)
         {
-            throw new BusinessException("Termin rezervacije je prosao, pa se vozilo vise ne moze izdati.");
+            throw new BusinessException(
+                "Vrijeme izdavanja mora biti prije ugovorenog vracanja " +
+                $"({rezervacija.DatumDo:dd.MM.yyyy. HH:mm} UTC).");
         }
 
         if (request.Kilometraza < rezervacija.Vozilo.Kilometraza)
@@ -309,7 +360,8 @@ public class PrimopredajaService
         {
             RezervacijaId = rezervacija.Id,
             Tip = TipPrimopredaje.Izdavanje,
-            DatumVrijeme = sada,
+            DatumVrijeme = izdatoU,
+            DatumUnosa = sada,
             Kilometraza = request.Kilometraza,
             NivoGoriva = request.NivoGoriva,
             KontrolnaListaProdjena = true,
@@ -366,13 +418,30 @@ public class PrimopredajaService
                 $"Kilometraza pri povratu ne moze biti manja nego pri izdavanju ({izdavanje.Kilometraza} km).");
         }
 
-        var obracun = await IzracunajAsync(rezervacija, sada, iznosStete, ct);
+        var vraceno = UUtc(request.DatumPovrata, sada);
+
+        if (vraceno > sada + DozvoljenoOdstupanje)
+        {
+            throw new BusinessException("Vrijeme povrata ne moze biti u buducnosti.");
+        }
+
+        if (vraceno < izdavanje.DatumVrijeme)
+        {
+            throw new BusinessException(
+                "Vrijeme povrata ne moze biti prije izdavanja " +
+                $"({izdavanje.DatumVrijeme:dd.MM.yyyy. HH:mm} UTC).");
+        }
+
+        // Obracun ide po trenutku kad je vozilo stvarno vraceno. Da ide po trenutku
+        // unosa, klijent koji je vratio na vrijeme platio bi kasnjenje uposlenika.
+        var obracun = await IzracunajAsync(rezervacija, vraceno, iznosStete, ct);
 
         var povrat = new Primopredaja
         {
             RezervacijaId = rezervacija.Id,
             Tip = TipPrimopredaje.Povrat,
-            DatumVrijeme = sada,
+            DatumVrijeme = vraceno,
+            DatumUnosa = sada,
             Kilometraza = request.Kilometraza,
             NivoGoriva = request.NivoGoriva,
             KontrolnaListaProdjena = true,

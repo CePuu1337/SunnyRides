@@ -151,7 +151,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
       return;
     }
 
-    final sacuvano = await showDialog<bool>(
+    final ishod = await showDialog<IshodUnosa>(
       context: context,
       barrierDismissible: false,
       builder: (context) => RucniUnosDijalog(
@@ -161,19 +161,25 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
       ),
     );
 
-    if (sacuvano == true) {
-      _ucitaj();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Rezervacija je unesena i drži termin dok klijent ne plati.',
-            ),
-          ),
-        );
-      }
+    if (ishod == null) {
+      return;
     }
+
+    _ucitaj();
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ishod == IshodUnosa.rezervacija
+              ? 'Rezervacija je unesena i drži termin dok klijent ne plati.'
+              : 'Vozilo je blokirano i više se ne nudi za taj period.',
+        ),
+      ),
+    );
   }
 
   @override

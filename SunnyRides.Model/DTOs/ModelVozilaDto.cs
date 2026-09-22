@@ -14,6 +14,7 @@ public class ModelVozilaDto
     public string? MarkaNaziv { get; set; }
     public string? TipVozilaNaziv { get; set; }
     public string? TipGorivaNaziv { get; set; }
+    public bool JeElektricno { get; set; }
 
     /// <summary>Oznaka kategorije potrebne za upravljanje ovim modelom, npr. "A1".</summary>
     public string? KategorijaDozvoleOznaka { get; set; }

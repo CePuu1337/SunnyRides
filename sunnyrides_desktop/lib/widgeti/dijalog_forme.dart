@@ -16,6 +16,7 @@ class DijalogForme extends StatelessWidget {
     this.podnaslov,
     this.greska,
     this.uToku = false,
+    this.potvrdaOmogucena = true,
     this.natpisPotvrde = 'Sačuvaj',
     this.sirina = 640,
   });
@@ -26,6 +27,11 @@ class DijalogForme extends StatelessWidget {
   final VoidCallback naSnimanje;
   final String? greska;
   final bool uToku;
+
+  /// Kad je netacno, dugme za potvrdu je sivo. Koristi se kad se vec zna da zahtjev
+  /// ne moze proci - bolje da se vidi odmah nego nakon popunjene forme.
+  final bool potvrdaOmogucena;
+
   final String natpisPotvrde;
   final double sirina;
 
@@ -77,9 +83,12 @@ class DijalogForme extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: 'Zatvori',
-                    onPressed: uToku
-                        ? null
-                        : () => Navigator.of(context).pop(false),
+
+                    // Prazan pop, bez vrijednosti. Dijalozi vracaju razlicite tipove
+                    // (bool, int, enum), a odustajanje nije nijedan od njih. Kad bi se
+                    // vracao false, Flutter bi pop odbio svuda gdje tip nije bool i
+                    // dugme jednostavno ne bi radilo.
+                    onPressed: uToku ? null : () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close, size: 20),
                   ),
                 ],
@@ -109,14 +118,12 @@ class DijalogForme extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: uToku
-                        ? null
-                        : () => Navigator.of(context).pop(false),
+                    onPressed: uToku ? null : () => Navigator.of(context).pop(),
                     child: const Text('Odustani'),
                   ),
                   const SizedBox(width: Razmaci.m),
                   ElevatedButton(
-                    onPressed: uToku ? null : naSnimanje,
+                    onPressed: uToku || !potvrdaOmogucena ? null : naSnimanje,
                     child: uToku
                         ? const SizedBox(
                             width: 16,

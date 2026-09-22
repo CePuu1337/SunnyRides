@@ -86,6 +86,50 @@ class ApiKlijent {
     });
   }
 
+  /// Forma sa poljima i vise fajlova odjednom.
+  ///
+  /// Koristi se tamo gdje podaci i fotografije cine jedan zapis - izdavanje i povrat
+  /// vozila. Da se salju odvojeno, postojao bi trenutak u kojem je povrat upisan a
+  /// fotografije stete jos nisu, pa bi pravilo "steta mora imati fotografiju" imalo
+  /// rupu kroz koju se prolazi tako sto se drugi zahtjev jednostavno ne posalje.
+  Future<dynamic> posaljiFormu(
+    String putanja, {
+    required Map<String, dynamic> polja,
+    String nazivPoljaFajlova = 'fotografije',
+    List<FajlZaSlanje> fajlovi = const [],
+  }) async {
+    final zahtjev = http.MultipartRequest('POST', _adresa(putanja, null))
+      ..headers.addAll(_zaglavlja());
+
+    for (final unos in polja.entries) {
+      final vrijednost = unos.value;
+
+      if (vrijednost == null) {
+        continue;
+      }
+
+      zahtjev.fields[unos.key] = vrijednost is DateTime
+          ? vrijednost.toUtc().toIso8601String()
+          : vrijednost.toString();
+    }
+
+    for (final fajl in fajlovi) {
+      zahtjev.files.add(
+        http.MultipartFile.fromBytes(
+          nazivPoljaFajlova,
+          fajl.sadrzaj,
+          filename: fajl.ime,
+        ),
+      );
+    }
+
+    return _posalji(() async {
+      final tok = await _klijent.send(zahtjev);
+
+      return http.Response.fromStream(tok);
+    });
+  }
+
   void zatvori() => _klijent.close();
 
   // --- unutrasnjost ------------------------------------------------------
@@ -244,4 +288,12 @@ class ApiKlijent {
         return 'Došlo je do greške. Pokušajte ponovo.';
     }
   }
+}
+
+/// Jedan fajl koji ide uz formu.
+class FajlZaSlanje {
+  const FajlZaSlanje({required this.ime, required this.sadrzaj});
+
+  final String ime;
+  final List<int> sadrzaj;
 }

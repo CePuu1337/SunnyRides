@@ -25,6 +25,9 @@ public class VoziloDto
     public string? MarkaNaziv { get; set; }
     public string? TipVozilaNaziv { get; set; }
     public string? TipGorivaNaziv { get; set; }
+
+    /// <summary>Vozilo na struju. Prikaz po ovome bira izmedju kubikaze i snage, i izmedju goriva i baterije.</summary>
+    public bool JeElektricno { get; set; }
     public int Kubikaza { get; set; }
     public decimal SnagaKw { get; set; }
 

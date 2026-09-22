@@ -35,4 +35,13 @@ public class PovratVozilaRequest
     /// datuma, pa ga pretraga vise ne nudi.
     /// </summary>
     public DateTime? BlokirajVoziloDo { get; set; }
+
+    /// <summary>
+    /// Kad je vozilo stvarno vraceno, ako se evidentira naknadno. Prazno znaci sada.
+    ///
+    /// Utice na novac: iz ovog vremena se racuna kasnjenje, a iz kasnjenja doplata koja
+    /// se zadrzava od depozita. Zato server prima vrijeme, ali ne i iznos - iznos i
+    /// dalje racuna sam.
+    /// </summary>
+    public DateTime? DatumPovrata { get; set; }
 }

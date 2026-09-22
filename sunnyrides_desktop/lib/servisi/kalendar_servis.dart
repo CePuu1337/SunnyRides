@@ -87,4 +87,44 @@ class KalendarServis {
       tijelo: zahtjev.uJson(),
     );
   }
+
+  /// Rezervacije koje bi planirana blokada pogodila. Nista ne mijenja.
+  Future<List<PogodjenaRezervacija>> pogodjeneRezervacije({
+    required int voziloId,
+    required DateTime od,
+    required DateTime doDatuma,
+  }) async {
+    final odgovor = await _klijent.get(
+      '/api/dostupnost/pogodjene-rezervacije',
+      upit: {'voziloId': voziloId, 'datumOd': od, 'datumDo': doDatuma},
+    );
+
+    if (odgovor is! List) {
+      return const [];
+    }
+
+    return odgovor
+        .whereType<Map<String, dynamic>>()
+        .map(PogodjenaRezervacija.izJsona)
+        .toList();
+  }
+
+  /// Blokada vozila. Server je ne odbija ni kad preklapa rezervaciju - vozilo se
+  /// pokvari bez obzira na to sto je iznajmljeno - pa je na formi da to pokaze.
+  Future<void> blokirajVozilo({
+    required int voziloId,
+    required DateTime od,
+    required DateTime doDatuma,
+    required String razlog,
+  }) async {
+    await _klijent.post(
+      '/api/blokade',
+      tijelo: {
+        'voziloId': voziloId,
+        'datumOd': od.toUtc().toIso8601String(),
+        'datumDo': doDatuma.toUtc().toIso8601String(),
+        'razlog': razlog,
+      },
+    );
+  }
 }

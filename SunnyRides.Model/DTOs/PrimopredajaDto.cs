@@ -13,7 +13,14 @@ public class PrimopredajaDto
     public string? RezervacijaBroj { get; set; }
 
     public TipPrimopredaje Tip { get; set; }
+    /// <summary>Kad se primopredaja desila.</summary>
     public DateTime DatumVrijeme { get; set; }
+
+    /// <summary>Kad je zapis unesen.</summary>
+    public DateTime DatumUnosa { get; set; }
+
+    /// <summary>Je li zapis unesen naknadno, a ne u trenutku primopredaje.</summary>
+    public bool UnesenoNaknadno => DatumUnosa - DatumVrijeme > TimeSpan.FromMinutes(5);
     public int Kilometraza { get; set; }
 
     /// <summary>Procenat punog rezervoara, od 0 do 100.</summary>

@@ -250,7 +250,7 @@ class MrezaKalendara extends StatelessWidget {
         message: 'Priprema vozila nakon najma (${Formati.broj(bufferSati)} h)',
         child: Container(
           decoration: BoxDecoration(
-            color: Boje.ivica.withValues(alpha: 0.7),
+            color: Boje.ivicaJaca,
             borderRadius: const BorderRadius.horizontal(
               right: Radius.circular(4),
             ),
@@ -313,7 +313,19 @@ class MrezaKalendara extends StatelessWidget {
     );
   }
 
+  /// Pozadina, boja teksta i boja ivice bloka.
+  ///
+  /// Ista pastelna porodica boja kao na pilulama statusa, ali malo dublja - blijeda
+  /// verzija se na bijeloj podlozi kalendara gubila. Tekst ostaje taman, pa se cita
+  /// kao i prije; puna boja bi ga natjerala da postane bijel i cijela sedmica bi
+  /// izgledala kao da gori.
   static (Color, Color, Color) _boje(BlokKalendara blok) {
+    final (blaga, tekst, jaka) = _porodica(blok);
+
+    return (Color.lerp(blaga, jaka, 0.22)!, tekst, jaka);
+  }
+
+  static (Color, Color, Color) _porodica(BlokKalendara blok) {
     if (blok.jeBlokada) {
       return (Boje.greskaPozadina, Boje.greskaTekst, Boje.greska);
     }
