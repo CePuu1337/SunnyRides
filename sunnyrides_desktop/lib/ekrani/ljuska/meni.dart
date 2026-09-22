@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../widgeti/u_izradi.dart';
+import '../dozvole/dozvole_ekran.dart';
 import '../kalendar/kalendar_ekran.dart';
 import '../pregled/pregled_ekran.dart';
 import '../primopredaja/primopredaja_ekran.dart';
@@ -129,7 +130,7 @@ class Meni {
           naziv: 'Vozačke dozvole',
           podnaslov: 'Verifikacija predanih dozvola',
           ikona: Icons.badge_outlined,
-          gradi: _uIzradi,
+          gradi: _dozvole,
         ),
         StavkaMenija(
           id: 'recenzije',
@@ -190,3 +191,5 @@ Widget _rezervacije(BuildContext context) => const RezervacijeEkran();
 Widget _kalendar(BuildContext context) => const KalendarEkran();
 
 Widget _primopredaja(BuildContext context) => const PrimopredajaEkran();
+
+Widget _dozvole(BuildContext context) => const DozvoleEkran();

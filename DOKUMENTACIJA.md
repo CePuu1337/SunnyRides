@@ -1324,6 +1324,24 @@ Rute su podijeljene po istom principu kao i ostatak modula. **Upload** ide na
 korisniku iz tokena, pa se tuđa ne može ni adresirati. **Preuzimanje** ima
 identifikator, jer uposlenik mora moći otvoriti tuđu, i tu provjera radi posao.
 
+### Dvije strane, ne jedna
+
+Dozvola se fotografiše s obje strane: na prednjoj su ime, broj i rok važenja, na
+zadnjoj **kategorije** i datumi po kategoriji. Jedna fotografija nije dovoljna da se
+dozvola provjeri — a kategorije su upravo ono zbog čega se dozvola i verifikuje, jer
+određuju šta klijent smije voziti.
+
+Zato entitet ima dvije putanje (`PutanjaSlikePrednja`, `PutanjaSlikeZadnja`), otprema
+prima `strana` uz fajl, a preuzimanje uz identifikator. Odobrenje **odbija** dozvolu
+kojoj neka strana nedostaje; desktop to i ne dozvoljava — dugme „Odobri" je sivo dok
+obje nisu tu, pa uposlenik vidi da mu nedostaje podatak prije klika, a ne poslije.
+
+Migracija postojeću kolonu preimenuje u prednju stranu (to je ono što se dosad tražilo
+od klijenta) i zadnju postavlja na isti fajl, da već odobrene dozvole ne postanu
+nepotpune preko noći. Zbog toga dvije putanje mogu pokazivati na isti fajl, pa servis
+pri zamjeni jedne strane provjerava pokazuje li na taj fajl i druga — inače bi zamjena
+prednje strane obrisala sliku zadnje.
+
 ### Nova fotografija vraća dozvolu na čekanje
 
 Bez toga bi klijent odobrenu dozvolu mogao zamijeniti drugom slikom, a odobrenje bi

@@ -153,7 +153,7 @@ public class DozvolaService
     }
 
     public async Task<VozackaDozvolaDto> PostaviFotografijuAsync(
-        Stream sadrzaj, long duzinaBajta, CancellationToken ct = default)
+        StranaDozvole strana, Stream sadrzaj, long duzinaBajta, CancellationToken ct = default)
     {
         var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
 
@@ -161,12 +161,23 @@ public class DozvolaService
             .FirstOrDefaultAsync(x => x.KorisnikId == korisnikId, ct)
             ?? throw new BusinessException("Prvo prijavite dozvolu, pa onda dodajte fotografiju.");
 
-        var stara = dozvola.PutanjaSlike;
+        var stara = strana == StranaDozvole.Prednja
+            ? dozvola.PutanjaSlikePrednja
+            : dozvola.PutanjaSlikeZadnja;
 
         // Folder po korisniku, ne po dozvoli: korisnik ima najvise jednu dozvolu, a
         // ovako se pri brisanju naloga zna sta sve treba ukloniti.
-        dozvola.PutanjaSlike = await _pohrana.SacuvajPrivatnoAsync(
+        var nova = await _pohrana.SacuvajPrivatnoAsync(
             sadrzaj, duzinaBajta, $"dozvole/{korisnikId}", ct);
+
+        if (strana == StranaDozvole.Prednja)
+        {
+            dozvola.PutanjaSlikePrednja = nova;
+        }
+        else
+        {
+            dozvola.PutanjaSlikeZadnja = nova;
+        }
 
         // Nova fotografija znaci da uposlenik mora ponovo pogledati dozvolu. Bez ovoga
         // bi klijent odobrenu dozvolu mogao zamijeniti drugom slikom, a odobrenje bi
@@ -184,18 +195,27 @@ public class DozvolaService
         {
             // Upis je pao, a fajl je vec na disku - inace bi ostao bez ijednog zapisa
             // koji na njega pokazuje.
-            _pohrana.ObrisiPrivatno(dozvola.PutanjaSlike);
+            _pohrana.ObrisiPrivatno(nova);
             throw;
         }
 
-        // Stara fotografija se brise tek kad je nova sigurno upisana.
-        _pohrana.ObrisiPrivatno(stara);
+        // Stara fotografija se brise tek kad je nova sigurno upisana, i to samo ako na
+        // nju ne pokazuje i druga strana. Demo podaci obje strane vezu za isti fajl,
+        // pa bi zamjena jedne strane inace obrisala sliku one druge.
+        var drugaStrana = strana == StranaDozvole.Prednja
+            ? dozvola.PutanjaSlikeZadnja
+            : dozvola.PutanjaSlikePrednja;
+
+        if (stara != drugaStrana)
+        {
+            _pohrana.ObrisiPrivatno(stara);
+        }
 
         return await GetByIdAsync(dozvola.Id, ct);
     }
 
     public async Task<PrivatniFajl> PreuzmiFotografijuAsync(
-        int dozvolaId, CancellationToken ct = default)
+        int dozvolaId, StranaDozvole strana, CancellationToken ct = default)
     {
         var dozvola = await Context.VozackeDozvole
             .AsNoTracking()
@@ -215,13 +235,20 @@ public class DozvolaService
             throw new ForbiddenException("Mozete preuzeti samo fotografiju svoje dozvole.");
         }
 
-        if (string.IsNullOrWhiteSpace(dozvola.PutanjaSlike))
+        var putanja = strana == StranaDozvole.Prednja
+            ? dozvola.PutanjaSlikePrednja
+            : dozvola.PutanjaSlikeZadnja;
+
+        var nazivStrane = strana == StranaDozvole.Prednja ? "prednja" : "zadnja";
+
+        if (string.IsNullOrWhiteSpace(putanja))
         {
-            throw new NotFoundException("Uz ovu dozvolu nije prilozena fotografija.");
+            throw new NotFoundException(
+                $"Uz ovu dozvolu nije prilozena fotografija ({nazivStrane} strana).");
         }
 
         return await _pohrana.OtvoriPrivatnoAsync(
-            dozvola.PutanjaSlike, $"dozvola-{dozvola.BrojDozvole}.jpg", ct);
+            putanja, $"dozvola-{dozvola.BrojDozvole}-{nazivStrane}.jpg", ct);
     }
 
     // --- uposlenicka strana ------------------------------------------------
@@ -239,6 +266,15 @@ public class DozvolaService
         {
             throw new BusinessException(
                 "Dozvola je istekla i ne moze se odobriti. Klijent mora prijaviti vazecu dozvolu.");
+        }
+
+        // Obje strane su uslov, ne preporuka: kategorije stoje na zadnjoj strani, pa
+        // se bez nje ne moze provjeriti ono zbog cega se dozvola i verifikuje.
+        if (string.IsNullOrWhiteSpace(dozvola.PutanjaSlikePrednja)
+            || string.IsNullOrWhiteSpace(dozvola.PutanjaSlikeZadnja))
+        {
+            throw new BusinessException(
+                "Dozvola se ne moze odobriti dok klijent ne prilozi fotografije obje strane.");
         }
 
         dozvola.Status = StatusDozvole.Odobrena;

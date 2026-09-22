@@ -146,7 +146,8 @@ public static class MapsterKonfiguracija
     private static void RegistrujDozvole()
     {
         TypeAdapterConfig<VozackaDozvola, VozackaDozvolaDto>.NewConfig()
-            .Map(dto => dto.ImaFotografiju, e => e.PutanjaSlike != null)
+            .Map(dto => dto.ImaPrednjuStranu, e => e.PutanjaSlikePrednja != null)
+            .Map(dto => dto.ImaZadnjuStranu, e => e.PutanjaSlikeZadnja != null)
             .Map(dto => dto.Istekla, e => e.DatumIsteka <= DateTime.UtcNow)
             .Map(dto => dto.Kategorije,
                  e => e.Kategorije.Select(k => k.KategorijaDozvole.Oznaka).OrderBy(x => x).ToList())

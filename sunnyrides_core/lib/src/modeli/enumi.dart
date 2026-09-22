@@ -71,6 +71,27 @@ enum StatusDozvole {
   }
 }
 
+/// Strana vozacke dozvole na fotografiji.
+enum StranaDozvole {
+  prednja(1, 'Prednja strana'),
+  zadnja(2, 'Zadnja strana');
+
+  const StranaDozvole(this.vrijednost, this.naziv);
+
+  final int vrijednost;
+  final String naziv;
+
+  static StranaDozvole? izBroja(int? broj) {
+    for (final strana in StranaDozvole.values) {
+      if (strana.vrijednost == broj) {
+        return strana;
+      }
+    }
+
+    return null;
+  }
+}
+
 enum TipPrimopredaje {
   izdavanje(1, 'Izdavanje'),
   povrat(2, 'Povrat');

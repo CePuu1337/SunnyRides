@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
+using SunnyRides.Model.Enums;
 using SunnyRides.Model.Konstante;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
@@ -63,7 +64,8 @@ public class VozackaDozvolaController : ControllerBase
     /// </summary>
     [HttpPost("moja/fotografija")]
     [RequestSizeLimit(6 * 1024 * 1024)]
-    public async Task<VozackaDozvolaDto> PostaviFotografijuAsync(IFormFile fajl, CancellationToken ct)
+    public async Task<VozackaDozvolaDto> PostaviFotografijuAsync(
+        [FromQuery] StranaDozvole strana, IFormFile fajl, CancellationToken ct)
     {
         if (fajl is null || fajl.Length == 0)
         {
@@ -72,7 +74,7 @@ public class VozackaDozvolaController : ControllerBase
 
         await using var sadrzaj = fajl.OpenReadStream();
 
-        return await _dozvolaService.PostaviFotografijuAsync(sadrzaj, fajl.Length, ct);
+        return await _dozvolaService.PostaviFotografijuAsync(strana, sadrzaj, fajl.Length, ct);
     }
 
     /// <summary>
@@ -84,9 +86,10 @@ public class VozackaDozvolaController : ControllerBase
     /// su prijavljeni korisnici.
     /// </summary>
     [HttpGet("{id:int}/fotografija")]
-    public async Task<IActionResult> PreuzmiFotografijuAsync(int id, CancellationToken ct)
+    public async Task<IActionResult> PreuzmiFotografijuAsync(
+        int id, [FromQuery] StranaDozvole strana, CancellationToken ct)
     {
-        var fajl = await _dozvolaService.PreuzmiFotografijuAsync(id, ct);
+        var fajl = await _dozvolaService.PreuzmiFotografijuAsync(id, strana, ct);
 
         return File(fajl.Sadrzaj, fajl.ContentType, fajl.NazivFajla);
     }

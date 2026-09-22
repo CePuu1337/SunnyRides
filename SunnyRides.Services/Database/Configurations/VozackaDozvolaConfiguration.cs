@@ -11,7 +11,8 @@ public class VozackaDozvolaConfiguration : IEntityTypeConfiguration<VozackaDozvo
         builder.ToTable("VozackaDozvola");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.BrojDozvole).IsRequired().HasMaxLength(50);
-        builder.Property(x => x.PutanjaSlike).HasMaxLength(500);
+        builder.Property(x => x.PutanjaSlikePrednja).HasMaxLength(500);
+        builder.Property(x => x.PutanjaSlikeZadnja).HasMaxLength(500);
         builder.Property(x => x.RazlogOdbijanja).HasMaxLength(500);
         builder.Property(x => x.Status).HasConversion<int>();
 

@@ -10,7 +10,11 @@ public class VozackaDozvola
     public string BrojDozvole { get; set; } = null!;
     public DateTime DatumIzdavanja { get; set; }
     public DateTime DatumIsteka { get; set; }
-    public string? PutanjaSlike { get; set; }
+    /// <summary>Fotografija prednje strane - ime, broj dozvole i rok vazenja.</summary>
+    public string? PutanjaSlikePrednja { get; set; }
+
+    /// <summary>Fotografija zadnje strane - kategorije i datumi po kategoriji.</summary>
+    public string? PutanjaSlikeZadnja { get; set; }
     public StatusDozvole Status { get; set; } = StatusDozvole.NaCekanju;
     public string? RazlogOdbijanja { get; set; }
     public int? VerifikovaoKorisnikId { get; set; }

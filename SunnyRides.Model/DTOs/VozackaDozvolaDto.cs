@@ -21,7 +21,13 @@ public class VozackaDozvolaDto
     /// Ovdje stoji samo je li prilozena; preuzima se kroz endpoint koji provjerava
     /// vlasnistvo nad resursom.
     /// </summary>
-    public bool ImaFotografiju { get; set; }
+    public bool ImaPrednjuStranu { get; set; }
+
+    /// <summary>Zadnja strana nosi kategorije, pa bez nje verifikacija nema sta provjeriti.</summary>
+    public bool ImaZadnjuStranu { get; set; }
+
+    /// <summary>Obje strane su prilozene. Dozvola se ne moze odobriti dok nisu.</summary>
+    public bool ImaObjeStrane => ImaPrednjuStranu && ImaZadnjuStranu;
 
     /// <summary>Istekla je ako joj je rok prosao, bez obzira na status verifikacije.</summary>
     public bool Istekla { get; set; }

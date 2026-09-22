@@ -129,7 +129,8 @@ public partial class DatabaseSeeder
                 BrojDozvole = $"BA{Broj(100000, 999999)}{i:D2}",
                 DatumIzdavanja = datumIzdavanja,
                 DatumIsteka = datumIzdavanja.AddYears(10),
-                PutanjaSlike = kljucFotografije,
+                PutanjaSlikePrednja = kljucFotografije,
+                PutanjaSlikeZadnja = kljucFotografije,
                 Status = status,
                 DatumKreiranja = klijent.DatumRegistracije.AddDays(Broj(0, 5))
             };
