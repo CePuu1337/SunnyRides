@@ -4,6 +4,9 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 import '../../widgeti/u_izradi.dart';
 import '../dozvole/dozvole_ekran.dart';
 import '../kalendar/kalendar_ekran.dart';
+import '../korisnici/korisnici_ekran.dart';
+import '../obavijesti/obavijesti_ekran.dart';
+import '../recenzije/recenzije_ekran.dart';
 import '../pregled/pregled_ekran.dart';
 import '../primopredaja/primopredaja_ekran.dart';
 import '../rezervacije/rezervacije_ekran.dart';
@@ -122,7 +125,7 @@ class Meni {
           naziv: 'Korisnici',
           podnaslov: 'Nalozi klijenata i osoblja',
           ikona: Icons.people_outline,
-          gradi: _uIzradi,
+          gradi: _korisnici,
           samoAdministrator: true,
         ),
         StavkaMenija(
@@ -137,7 +140,7 @@ class Meni {
           naziv: 'Recenzije',
           podnaslov: 'Ocjene klijenata i moderacija',
           ikona: Icons.star_outline,
-          gradi: _uIzradi,
+          gradi: _recenzije,
         ),
       ],
     ),
@@ -149,7 +152,7 @@ class Meni {
           naziv: 'Obavijesti',
           podnaslov: 'Objave koje klijenti vide u aplikaciji',
           ikona: Icons.campaign_outlined,
-          gradi: _uIzradi,
+          gradi: _obavijesti,
           samoAdministrator: true,
         ),
         StavkaMenija(
@@ -193,3 +196,9 @@ Widget _kalendar(BuildContext context) => const KalendarEkran();
 Widget _primopredaja(BuildContext context) => const PrimopredajaEkran();
 
 Widget _dozvole(BuildContext context) => const DozvoleEkran();
+
+Widget _recenzije(BuildContext context) => const RecenzijeEkran();
+
+Widget _korisnici(BuildContext context) => const KorisniciEkran();
+
+Widget _obavijesti(BuildContext context) => const ObavijestiEkran();
