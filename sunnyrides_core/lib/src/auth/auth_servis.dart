@@ -4,9 +4,7 @@ import 'pohrana_tokena.dart';
 
 /// Prijava, odjava i sve sto se tice lozinke.
 class AuthServis {
-  AuthServis({required ApiKlijent klijent, required PohranaTokena pohrana})
-      : _klijent = klijent,
-        _pohrana = pohrana;
+  AuthServis({required this._klijent, required this._pohrana});
 
   final ApiKlijent _klijent;
   final PohranaTokena _pohrana;

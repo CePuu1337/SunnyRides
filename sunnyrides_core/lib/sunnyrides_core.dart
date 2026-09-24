@@ -21,6 +21,12 @@ export 'src/dizajn/statusna_pilula.dart';
 export 'src/dizajn/tema.dart';
 
 export 'src/modeli/cijena.dart';
+export 'src/modeli/dozvola.dart';
 export 'src/modeli/enumi.dart';
 export 'src/modeli/korisnik.dart';
 export 'src/modeli/pretvaranje.dart';
+export 'src/modeli/rezervacija.dart';
+
+export 'src/realtime/veza_notifikacija.dart';
+
+export 'src/stanje/notifikacije_stanje.dart';

@@ -267,6 +267,11 @@ public class RecenzijaService
                         && x.Status == StatusRezervacije.Completed
                         && !Context.Recenzije.Any(r => r.RezervacijaId == x.Id))
             .OrderByDescending(x => x.DatumDo)
+            .ThenByDescending(x => x.Id)
+
+            // Lista nema stranice jer je po prirodi kratka, ali gornja granica ipak
+            // postoji - endpoint koji vraca "sve" bez limita uputstvo ne prihvata.
+            .Take(MaksimalnaVelicinaStranice)
             .Select(x => new RezervacijaZaRecenzijuDto
             {
                 RezervacijaId = x.Id,

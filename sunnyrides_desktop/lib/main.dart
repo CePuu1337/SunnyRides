@@ -31,6 +31,7 @@ void main() {
       providers: [
         Provider<Okruzenje>.value(value: okruzenje),
         Provider<ApiKlijent>.value(value: apiKlijent),
+        Provider<PohranaTokena>.value(value: pohranaTokena),
         ChangeNotifierProvider<Sesija>.value(value: sesija),
       ],
       child: const DesktopAplikacija(),

@@ -40,4 +40,13 @@ public class VoziloDto
 
     /// <summary>URL male slike, nikad sadrzaj slike. Prazno ako vozilo nema glavnu fotografiju.</summary>
     public string? ThumbnailUrl { get; set; }
+
+    /// <summary>
+    /// Prosjecna ocjena iz neskrivenih recenzija, zaokruzena na jednu decimalu.
+    /// Prazno kad vozilo jos nije ocijenjeno - nula bi se citala kao losa ocjena.
+    /// </summary>
+    public double? ProsjecnaOcjena { get; set; }
+
+    /// <summary>Broj recenzija iza prosjeka. Bez njega ocjena 5,0 iz jedne recenzije izgleda isto kao iz pedeset.</summary>
+    public int BrojRecenzija { get; set; }
 }

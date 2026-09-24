@@ -146,7 +146,40 @@ public abstract class BaseService<TModel, TSearch, TEntity> : IService<TModel, T
             upit.Expression,
             Expression.Quote(lambda));
 
-        return upit.Provider.CreateQuery<TEntity>(poziv);
+        var sortirano = upit.Provider.CreateQuery<TEntity>(poziv);
+
+        return svojstvo.Name == "Id" ? sortirano : DodajPoredakPoId(sortirano);
+    }
+
+    /// <summary>
+    /// Dodaje Id kao drugi kljuc poretka.
+    ///
+    /// Kolona po kojoj se sortira cesto nije jedinstvena - vise vozila ima istu
+    /// dnevnu tarifu, vise recenzija isti datum. Za takve redove SQL Server ne
+    /// garantuje isti redoslijed u dva upita, pa bi se kod listanja po stranicama isti
+    /// zapis mogao pojaviti na dvije stranice, a neki ni na jednoj. Id poredak cini
+    /// potpunim. Poziva se samo nad upitom koji je upravo sortiran.
+    /// </summary>
+    protected static IQueryable<TEntity> DodajPoredakPoId(IQueryable<TEntity> sortirano)
+    {
+        var id = typeof(TEntity).GetProperty("Id", BindingFlags.Public | BindingFlags.Instance);
+
+        if (id is null)
+        {
+            return sortirano;
+        }
+
+        var parametar = Expression.Parameter(typeof(TEntity), "x");
+        var lambda = Expression.Lambda(Expression.MakeMemberAccess(parametar, id), parametar);
+
+        var poziv = Expression.Call(
+            typeof(Queryable),
+            nameof(Queryable.ThenBy),
+            new[] { typeof(TEntity), id.PropertyType },
+            sortirano.Expression,
+            Expression.Quote(lambda));
+
+        return sortirano.Provider.CreateQuery<TEntity>(poziv);
     }
 
     /// <summary>Uslov po primarnom kljucu, gradjen izrazom da ostane na bazi.</summary>

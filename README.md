@@ -110,6 +110,10 @@ Sve lozinke su `test`.
 
 Nalozi se kreiraju seedom pri prvom pokretanju API-ja nad praznom bazom.
 
+Plaćanje ide kroz Stripe sandbox. Testna kartica je `4242 4242 4242 4242`, bilo koji
+budući datum isteka i bilo koji CVC (npr. `123`). Kartica `4000 0000 0000 9995` se
+odbija, pa se na njoj vidi i neuspjelo plaćanje.
+
 ---
 
 ## Struktura repozitorija
@@ -120,12 +124,18 @@ SunnyRides/
 ├── .env                        # tajne, nije u gitu
 ├── .env.example                # šablon, jeste u gitu
 ├── DOKUMENTACIJA.md            # kako sistem radi iznutra
+├── recommender-dokumentacija.md
 │
 ├── SunnyRides.Model/           # DTO, request i search objekti, enumi
 ├── SunnyRides.Services/        # entiteti, DbContext, migracije, poslovna logika
 ├── SunnyRides.API/             # kontroleri, filteri, SignalR hub
 ├── SunnyRides.Subscriber/      # worker: RabbitMQ consumeri, email, periodični poslovi
+├── SunnyRides.Tests/           # unit testovi (cijena, povrat, dozvole, preporuke...)
 │
+├── uploads/seeds/              # slike vozila za seed, jesu u gitu
+├── privatno/                   # dozvole i fotografije štete, nije u gitu
+│
+├── sunnyrides_core/            # zajednički Flutter paket: API klijent, modeli, tema
 ├── sunnyrides_desktop/         # Flutter Windows
 └── sunnyrides_mobile/          # Flutter Android
 ```

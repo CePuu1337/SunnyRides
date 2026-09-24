@@ -10,6 +10,9 @@ namespace SunnyRides.Services.Dostupnost;
 
 public class AvailabilityService : IAvailabilityService
 {
+    /// <summary>Isti limit kao za stranicu liste u baznom servisu.</summary>
+    private const int NajvisePogodjenih = 100;
+
     private readonly SunnyRidesDbContext _context;
 
     public AvailabilityService(SunnyRidesDbContext context)
@@ -116,9 +119,14 @@ public class AvailabilityService : IAvailabilityService
     {
         ProvjeriPeriod(datumOd, datumDo);
 
+        // Gornja granica postoji iako je lista po prirodi kratka: endpoint bez limita
+        // uputstvo ne prihvata. Poredak po pocetku znaci da prva pogodjena rezervacija,
+        // po kojoj se blokada skracuje, uvijek ostaje u listi.
         var rezervacije = await ZauzimajuceRezervacije(voziloId, datumOd, datumDo, null)
             .Include(x => x.Korisnik)
             .OrderBy(x => x.DatumOd)
+            .ThenBy(x => x.Id)
+            .Take(NajvisePogodjenih)
             .AsNoTracking()
             .ToListAsync(ct);
 

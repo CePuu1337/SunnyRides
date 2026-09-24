@@ -61,6 +61,10 @@ class ApiKlijent {
       () => _klijent.get(_adresa(putanja, upit), headers: _zaglavlja()),
     );
 
+    if (odgovor.statusCode == 401) {
+      await _zavrsiSesiju();
+    }
+
     if (odgovor.statusCode >= 400) {
       throw _uGresku(odgovor);
     }
@@ -135,7 +139,7 @@ class ApiKlijent {
   // --- unutrasnjost ------------------------------------------------------
 
   Uri _adresa(String putanja, Map<String, dynamic>? upit) {
-    final puna = putanja.startsWith('/') ? putanja : '/' + putanja;
+    final puna = putanja.startsWith('/') ? putanja : '/$putanja';
     final adresa = Uri.parse(okruzenje.osnovnaAdresa + puna);
 
     if (upit == null || upit.isEmpty) {
@@ -189,7 +193,7 @@ class ApiKlijent {
     final token = _pohrana.token;
 
     if (token != null && token.isNotEmpty) {
-      zaglavlja['Authorization'] = 'Bearer ' + token;
+      zaglavlja['Authorization'] = 'Bearer $token';
     }
 
     return zaglavlja;
@@ -199,9 +203,7 @@ class ApiKlijent {
     final odgovor = await _uhvatiMreznu(poziv);
 
     if (odgovor.statusCode == 401) {
-      // Token je istekao ili je odjavom ponisten. Nema smisla ga dalje slati.
-      await _pohrana.obrisi();
-      naIstekSesije?.call();
+      await _zavrsiSesiju();
     }
 
     if (odgovor.statusCode >= 400) {
@@ -213,6 +215,14 @@ class ApiKlijent {
     }
 
     return jsonDecode(utf8.decode(odgovor.bodyBytes));
+  }
+
+  /// Token je istekao ili je odjavom ponisten. Nema smisla ga dalje slati, a
+  /// aplikacija vraca korisnika na prijavu - i kad je odbijen JSON poziv, i kad je
+  /// odbijen dohvat fotografije ili PDF-a.
+  Future<void> _zavrsiSesiju() async {
+    await _pohrana.obrisi();
+    naIstekSesije?.call();
   }
 
   /// Mrezna greska se pretvara u istu vrstu izuzetka kao i greska sa servera,

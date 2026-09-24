@@ -1,7 +1,7 @@
 /// Adresa API-ja se ne upisuje u kod nego stize kroz --dart-define pri pokretanju.
 ///
 /// Desktop i emulator ne vide isti host: desktop zove localhost, a Android emulator
-/// istu masinu vidi kao 10.2.2. Zato svaka aplikacija zada svoju podrazumijevanu
+/// istu masinu vidi kao 10.0.2.2. Zato svaka aplikacija zada svoju podrazumijevanu
 /// vrijednost, a --dart-define je nadjacava kad se pusta na stvarnom uredjaju.
 class Okruzenje {
   const Okruzenje({required this.osnovnaAdresa});

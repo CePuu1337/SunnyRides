@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-import '../../stanje/notifikacije_stanje.dart';
 import '../../stanje/sesija.dart';
 import 'bocna_traka.dart';
 import 'meni.dart';
@@ -30,8 +29,12 @@ class _LjuskaStanje extends State<Ljuska> {
     _grupe = Meni.zaKorisnika(korisnik);
     _aktivna = _grupe.first.stavke.first;
 
-    _notifikacije = NotifikacijeStanje(context.read<ApiKlijent>());
-    _notifikacije.osvjezi();
+    _notifikacije = NotifikacijeStanje(
+      klijent: context.read<ApiKlijent>(),
+      okruzenje: context.read<Okruzenje>(),
+      pohrana: context.read<PohranaTokena>(),
+    );
+    _notifikacije.pokreni();
   }
 
   @override

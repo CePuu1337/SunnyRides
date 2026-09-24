@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-import '../../modeli/rezervacija.dart';
 import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/rezervacija_servis.dart';
 import '../../servisi/sifrarnik_servis.dart';

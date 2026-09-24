@@ -39,7 +39,8 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 14 | RabbitMQ i worker servis | ✅ |
 | 15 | Notifikacije i SignalR | ✅ |
 | 16 | Sistem preporuke | ✅ |
-| 17–18 | Desktop i mobilna aplikacija | ⬜ |
+| 17 | Desktop aplikacija | ✅ |
+| 18 | Mobilna aplikacija | 🟡 |
 | 19 | PDF izvještaji | ✅ |
 
 ### Šta prijava obećava, a plan izrade nema kao zasebnu fazu
@@ -59,9 +60,9 @@ ne ispadne:
 | Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ✅ |
 | Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ✅ |
 | Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
-| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | cijena po vozilu u rezultatu pretrage, prosječna ocjena | ⬜ |
+| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | prosječna ocjena i poredak po cijeni i ocjeni su gotovi; ukupna cijena po vozilu u rezultatu i poredak po preporuci još nisu | 🟡 |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
-| Detalji vozila: recenzije i slična vozila | slična vozila su gotova (`/api/preporuke/slicna/{id}`); lista recenzija po vozilu još nije | 🟡 |
+| Detalji vozila: recenzije i slična vozila | `/api/preporuke/slicna/{id}` i `/api/recenzije?voziloId=` | ✅ |
 | Otkazivanje: „korisnik bira razlog iz padajuće liste" | šifrarnik `RazlogOtkazivanja`, padajuća lista se puni iz baze | ✅ |
 
 Dvije stvari iz prijave su riješene malo drugačije nego što tekst doslovno kaže, i to
@@ -73,13 +74,6 @@ je namjerno:
   `[AllowAnonymous]` i zato ostaje bez fajlova. Za korisnika je to isti tok.
 - Politika otkazivanja u specifikaciji je imala rupu između 48 sati i 3 dana. Pravilo je
   zatvoreno kao „manje od 3 dana → 0 %" (vidi sekciju o povratu novca).
-
-### Ostaci koje treba počistiti prije predaje
-
-- `SunnyRides.API/SunnyRides.API.http` je ostatak šablona i poziva `/weatherforecast`
-  (uputstvo 8.1 to navodi kao primjer za odbijanje).
-- `SunnyRides.Subscriber/Worker.cs` je još šablonski worker koji samo loguje; zamjenjuje
-  ga faza 14 (uputstvo 3.2: pomoćni servis mora raditi stvarne zadatke).
 
 ---
 
@@ -3069,6 +3063,116 @@ praktično iste, što znači da model nije naučio podatke napamet.
 > Uputstvo (sekcija 2.4) izričito kaže da svaki signal naveden u dokumentaciji mora
 > biti stvarno korišten u kodu. Ako se algoritam ikad promijeni, `recommender-dokumentacija.md`
 > se mijenja u istom commitu.
+
+---
+
+## Klijentske aplikacije
+
+> 🟡 Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
+> pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije i profil. Iz prijave
+> još nedostaju ekran za reset zaboravljene lozinke, filteri po poslovnici i marki,
+> poredak „po preporuci" i ukupna cijena za period u rezultatima pretrage.
+
+Tri Flutter paketa, ne dva: `sunnyrides_core`, `sunnyrides_desktop` i
+`sunnyrides_mobile`. Desktop i mobilna dijele API klijent, čuvanje tokena, boje i
+modele — sve što je isto sa obje strane. Ekrani se razlikuju i oni ostaju u svojim
+paketima.
+
+### Šta je zajedničko, a šta nije
+
+U `sunnyrides_core` je model onda kad ga obje aplikacije čitaju iz istog odgovora:
+`Rezervacija`, `VozackaDozvola`, `Korisnik`, `CijenaRezervacije`, `ObracunOtkazivanja`,
+enumi i pomoćnici za JSON. Filteri liste nisu zajednički — desktop traži po klijentu i
+poslovnici, mobilna po terminu i gradu — pa `UpitRezervacija` i `UpitDozvola` ostaju u
+desktopu, a mobilna ima svoje.
+
+`Vozilo` je namjerno na dva mjesta. Desktopu treba kilometraža i status aktivnosti radi
+administracije flote, a mobilnoj prikaz cijene i lokacije; kad bi bio jedan model, nosio
+bi polja koja jedna strana nikad ne koristi.
+
+### Sve što se naplaćuje dolazi sa servera
+
+Nijedan ekran ne sabira iznose. Promjena termina, opreme ili osiguranja šalje novi
+`POST /api/cijene/obracun` i prikazuje ono što server vrati. Razrada cijene u mobilnoj
+aplikaciji je preslikan odgovor tog poziva, red po red, a ne vlastiti račun iz tarifa.
+Zato prikazani i naplaćeni iznos ne mogu da se raziđu.
+
+Isto važi i za otkazivanje: iznos povrata se traži sa
+`GET /api/rezervacije/{id}/obracun-otkazivanja` **prije** nego se prikaže dugme, pa
+korisnik vidi šta gubi prije nego potvrdi. Taj odgovor je prikaz, ne obećanje — server
+ga pri samom otkazivanju računa ponovo.
+
+### Plaćanje
+
+`POST /api/rezervacije/{id}/payment-intent` nema tijelo. Aplikacija dobija `clientSecret`
+i javni Stripe ključ — ključ dolazi sa servera, iz `.env`, pa ne stoji upisan u APK-u.
+Kad PaymentSheet javi uspjeh, to se ne uzima kao dokaz: poziva se
+`POST /api/placanja/{id}/confirm`, gdje server pita Stripe i tek onda mijenja status.
+
+Odbrojavanje do isteka držanja vozila polazi od `PreostaloSekundiDrzanja` koje je
+poslao server, a ne od sata na telefonu — pogrešno postavljen sat bi inače pomjerio rok.
+
+### Zvono i SignalR
+
+Broj neprocitanih dolazi sa dva puta. Pri otvaranju aplikacije jednim zahtjevom, jer hub
+javlja samo promjene — obavještenja nastala prije povezivanja se inače ne bi vidjela.
+Nakon toga hub gura i novo obavještenje i novi broj, pa aplikacija zbog oznake na zvonu
+ne radi još jedan zahtjev.
+
+`NotifikacijeStanje` i veza sa hubom su u `sunnyrides_core`, jer desktop i mobilna imaju
+isti posao. Token se čita pri svakom uspostavljanju veze, ne jednom pri gradnji —
+ponovno povezivanje nakon prekida inače bi poslalo stari token. Ako se veza ne uspostavi,
+aplikacija radi bez nje i broj se osvježava zahtjevom; korisniku se to ne prikazuje kao
+greška, jer za njega nije.
+
+### Zašto je promijenjen Android manifest
+
+Tri stvari koje šablon iz `flutter create` ne pokriva:
+
+| Promjena | Zašto |
+|---|---|
+| `MainActivity : FlutterFragmentActivity` | PaymentSheet se prikazuje kao fragment |
+| `LaunchTheme`/`NormalTheme` na `Theme.AppCompat` | PaymentSheet koristi AppCompat komponente |
+| `INTERNET` dozvola u glavnom manifestu | Flutter je upisuje samo u debug, pa release APK bez nje ne može pozvati API |
+| `networkSecurityConfig` | Android od verzije 9 blokira običan HTTP; dozvola je sužena na `10.0.2.2` i `localhost`, gdje API u razvoju stvarno stoji |
+
+### Prosječna ocjena vozila
+
+Pretraga u mobilnoj aplikaciji nudi poredak „najbolje ocijenjeno", pa `VoziloDto` nosi
+`ProsjecnaOcjena` i `BrojRecenzija`. Oba su dopisana posebnim upitom, nakon što je
+stranica već sužena — `Include` nad recenzijama bi povukao svaki komentar svakog vozila
+samo da bi se izračunao prosjek, a odgovor liste ne smije nositi ono što mu ne treba.
+
+Prosjek je prazan kad vozilo nije ocijenjeno; nula bi se čitala kao loša ocjena. Broj
+recenzija stoji uz prosjek jer ocjena 5,0 iz jedne recenzije ne znači isto kao iz pedeset.
+
+Poredak po ocjeni ne može kroz `BaseService.AddSort` — ona sortira po kolonama entiteta,
+a prosjek nije kolona. `VoziloService` ga zato obrađuje sam, izrazom nad upitom umjesto
+međuprojekcijom: projekcija bi odbacila `Include`-ove postavljene prije sortiranja i
+vozilo bi ostalo bez marke, tipa i poslovnice. Vozila bez ijedne recenzije završavaju na
+kraju u oba smjera.
+
+### Poredak mora biti potpun da bi stranice imale smisla
+
+Mobilna pretraga učitava stranicu po stranicu dok korisnik skrola, sortirano po tarifi
+ili ocjeni. Te vrijednosti nisu jedinstvene — svi primjerci istog modela imaju istu
+tarifu. Za redove sa istom vrijednošću SQL Server ne garantuje isti redoslijed u dva
+upita, pa bi `OFFSET/FETCH` mogao isto vozilo vratiti na dvije stranice, a neko drugo
+ni na jednoj. Zato `BaseService.AddSort` iza traženog poretka uvijek dodaje `ThenBy(Id)`,
+a isto radi i poredak po ocjeni u `VoziloService`. Id je jedinstven, pa je poredak
+potpun i svaka stranica je uvijek ista.
+
+### Preporuke se ne objašnjavaju u aplikaciji
+
+Uz svaku preporučenu karticu stoji žuti okvir sa rečenicom iz `Obrazlozenje`. Tu rečenicu
+sastavlja server, od signala koji su preporuci stvarno najviše doprinijeli. Da je sastavlja
+aplikacija, pisala bi objašnjenje za račun koji nije vidjela.
+
+### Šta mobilna aplikacija ne radi
+
+Prijava nalogom osoblja se odbija sa objašnjenjem, a ne tiho — server bi mu većinu poziva
+ionako odbio, pa je bolje reći zašto. Klijent ne vidi tuđe rezervacije ni kontakte: to
+sužava servis po korisniku iz tokena, ne filter koji bi aplikacija trebala poslati.
 
 ---
 

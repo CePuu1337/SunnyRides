@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-import '../../stanje/notifikacije_stanje.dart';
 import '../../stanje/sesija.dart';
 import 'meni.dart';
 

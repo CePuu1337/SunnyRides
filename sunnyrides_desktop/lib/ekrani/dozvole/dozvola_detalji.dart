@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-import '../../modeli/dozvola.dart';
 import '../../servisi/dozvola_servis.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/obavjestenje.dart';

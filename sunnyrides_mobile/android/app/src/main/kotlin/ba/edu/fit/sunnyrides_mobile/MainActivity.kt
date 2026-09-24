@@ -1,5 +1,7 @@
 package ba.edu.fit.sunnyrides_mobile
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity, a ne FlutterActivity: Stripe PaymentSheet se prikazuje
+// kao fragment, pa mu treba aktivnost koja fragmente podrzava.
+class MainActivity : FlutterFragmentActivity()

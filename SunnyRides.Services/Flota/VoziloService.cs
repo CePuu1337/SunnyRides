@@ -76,8 +76,90 @@ public class VoziloService
         // mjesta koja je pozivaju.
         await _historijaPretrage.ZabiljeziAsync(search, ct);
 
-        return await base.GetAsync(search, ct);
+        var rezultat = await base.GetAsync(search, ct);
+
+        await DodajOcjeneAsync(rezultat.Items, ct);
+
+        return rezultat;
     }
+
+    public override async Task<VoziloDto> GetByIdAsync(int id, CancellationToken ct = default)
+    {
+        var vozilo = await base.GetByIdAsync(id, ct);
+
+        await DodajOcjeneAsync(new[] { vozilo }, ct);
+
+        return vozilo;
+    }
+
+    /// <summary>
+    /// Prosjecna ocjena se dopisuje posebnim upitom, nakon sto je stranica vec
+    /// suzena. Include nad recenzijama bi povukao svaki komentar svakog vozila samo
+    /// da bi se izracunao prosjek; ovako se po stranici racuna jedan grupisani upit
+    /// nad ocjenama, bez teksta.
+    /// </summary>
+    private async Task DodajOcjeneAsync(IReadOnlyCollection<VoziloDto> vozila, CancellationToken ct)
+    {
+        if (vozila.Count == 0)
+        {
+            return;
+        }
+
+        var ids = vozila.Select(x => x.Id).ToList();
+
+        var ocjene = await Context.Recenzije
+            .Where(x => ids.Contains(x.VoziloId) && !x.Skrivena)
+            .GroupBy(x => x.VoziloId)
+            .Select(g => new
+            {
+                VoziloId = g.Key,
+                Prosjek = g.Average(x => (double)x.Ocjena),
+                Broj = g.Count(),
+            })
+            .ToDictionaryAsync(x => x.VoziloId, ct);
+
+        foreach (var vozilo in vozila)
+        {
+            if (!ocjene.TryGetValue(vozilo.Id, out var stavka))
+            {
+                continue;
+            }
+
+            vozilo.ProsjecnaOcjena = Math.Round(stavka.Prosjek, 1);
+            vozilo.BrojRecenzija = stavka.Broj;
+        }
+    }
+
+    /// <summary>
+    /// Poredak po ocjeni ne moze kroz osnovnu implementaciju - ona sortira po
+    /// kolonama entiteta, a prosjecna ocjena nije kolona nego racun nad recenzijama.
+    /// Vozila bez ijedne recenzije zavrsavaju na kraju, bez obzira na smjer.
+    /// </summary>
+    protected override IQueryable<Vozilo> AddSort(VoziloSearchObject search, IQueryable<Vozilo> upit)
+    {
+        if (search.OrderBy is null
+            || !search.OrderBy.StartsWith(PoredakPoOcjeni, StringComparison.OrdinalIgnoreCase))
+        {
+            return base.AddSort(search, upit);
+        }
+
+        var rastuce = search.OrderBy.Contains("asc", StringComparison.OrdinalIgnoreCase);
+
+        // Poredak se pise kao izraz nad samim upitom, bez medjuprojekcije: projekcija
+        // bi odbacila Include-ove postavljene prije sortiranja, pa bi vozilo ostalo
+        // bez marke, tipa i poslovnice. Zamjenska vrijednost za neocijenjena vozila
+        // je van skale u oba smjera, da uvijek zavrse na kraju.
+        var sortirano = rastuce
+            ? upit.OrderBy(x => x.Recenzije.Where(r => !r.Skrivena).Average(r => (double?)r.Ocjena) ?? 6d)
+            : upit.OrderByDescending(x => x.Recenzije.Where(r => !r.Skrivena).Average(r => (double?)r.Ocjena) ?? -1d);
+
+        // Vozila iste ocjene (i sva neocijenjena) inace nemaju stalan redoslijed, pa bi
+        // beskonacni skrol u mobilnoj aplikaciji mogao dvaput prikazati isto vozilo.
+        return sortirano.ThenBy(x => x.Id);
+    }
+
+    /// <summary>Vrijednost koju mobilna aplikacija salje kad korisnik sortira po ocjeni.</summary>
+    public const string PoredakPoOcjeni = "ProsjecnaOcjena";
 
     protected override string NazivEntiteta => "Vozilo";
 
