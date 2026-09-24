@@ -96,14 +96,13 @@ class _DozvoleEkranStanje extends State<DozvoleEkran> {
                     ? 'Dozvole predane na verifikaciju'
                     : '${_strana.ukupno} po trenutnim filterima',
                 bezUnutrasnjegRazmaka: true,
+                rastegni: true,
                 dijete: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _Filteri(upit: _upit, naPromjenu: _promijeniUpit),
                     const Divider(height: 1),
-                    SizedBox(
-                      height: 470,
+                    Expanded(
                       child: Sadrzaj(
                         ucitavanje: _ucitavanje,
                         greska: _greska,
@@ -146,6 +145,7 @@ class _DozvoleEkranStanje extends State<DozvoleEkran> {
             Expanded(
               child: _odabrana == null
                   ? const Kartica(
+                      rastegni: true,
                       naslov: 'Detalji zahtjeva',
                       dijete: PrazanPopis(
                         poruka: 'Odaberite zahtjev iz liste.',

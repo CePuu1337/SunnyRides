@@ -20,6 +20,7 @@ class SifrarnikServis {
   static const tipoviVozila = '/api/tipovi-vozila';
   static const tipoviGoriva = '/api/tipovi-goriva';
   static const kategorijeDozvola = '/api/kategorije-dozvola';
+  static const pravilaKategorija = '/api/pravila-kategorija';
   static const poslovnice = '/api/poslovnice';
   static const paketiOsiguranja = '/api/paketi-osiguranja';
   static const vrsteOpreme = '/api/vrste-opreme';
@@ -53,4 +54,48 @@ class SifrarnikServis {
   void zaboravi(String putanja) => _zapamceno.remove(putanja);
 
   void zaboraviSve() => _zapamceno.clear();
+}
+
+/// Citanje i pisanje jednog sifrarnika, bez obzira kojeg.
+///
+/// Sifrarnici imaju isti oblik rute i istu podjelu ovlastenja, pa im ne treba svaki
+/// svoj servis. Zapisi se ovdje ne pretvaraju u modele nego ostaju mape - ekran koji
+/// ih prikazuje je generican i cita ih po kljucu iz definicije.
+class SifrarnikCrudServis {
+  const SifrarnikCrudServis(this._klijent);
+
+  final ApiKlijent _klijent;
+
+  Future<Strana<Map<String, dynamic>>> lista(
+    String putanja, {
+    int stranica = 0,
+    int velicinaStranice = 20,
+  }) async {
+    final odgovor = await _klijent.get(
+      putanja,
+      upit: {
+        'page': stranica,
+        'pageSize': velicinaStranice,
+        'includeTotalCount': true,
+      },
+    );
+
+    return Strana.izJsona(odgovor as Map<String, dynamic>, (json) => json);
+  }
+
+  Future<void> dodaj(String putanja, Map<String, dynamic> zahtjev) async {
+    await _klijent.post(putanja, tijelo: zahtjev);
+  }
+
+  Future<void> izmijeni(
+    String putanja,
+    int id,
+    Map<String, dynamic> zahtjev,
+  ) async {
+    await _klijent.put('$putanja/$id', tijelo: zahtjev);
+  }
+
+  Future<void> obrisi(String putanja, int id) async {
+    await _klijent.delete('$putanja/$id');
+  }
 }

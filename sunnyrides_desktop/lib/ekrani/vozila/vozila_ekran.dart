@@ -171,6 +171,7 @@ class _VozilaEkranStanje extends State<VozilaEkran> {
           naslov: 'Flota',
           podnaslov: 'Skuteri, motocikli i kvadovi sa tarifama i poslovnicom',
           bezUnutrasnjegRazmaka: true,
+          rastegni: true,
           akcija: ElevatedButton.icon(
             onPressed: () => _otvoriFormu(),
             icon: const Icon(Icons.add, size: 18),
@@ -178,7 +179,6 @@ class _VozilaEkranStanje extends State<VozilaEkran> {
           ),
           dijete: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
             children: [
               _Filteri(
                 upit: _upit,
@@ -188,8 +188,7 @@ class _VozilaEkranStanje extends State<VozilaEkran> {
                 naPromjenu: _promijeniUpit,
               ),
               const Divider(height: 1),
-              SizedBox(
-                height: 460,
+              Expanded(
                 child: Sadrzaj(
                   ucitavanje: _ucitavanje,
                   greska: _greska,

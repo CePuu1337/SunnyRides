@@ -10,6 +10,7 @@ class Kartica extends StatelessWidget {
     this.podnaslov,
     this.akcija,
     this.bezUnutrasnjegRazmaka = false,
+    this.rastegni = false,
   });
 
   final String naslov;
@@ -23,12 +24,19 @@ class Kartica extends StatelessWidget {
   /// Tabele idu do ivice kartice, pa im se unutrasnji razmak iskljucuje.
   final bool bezUnutrasnjegRazmaka;
 
+  /// Kartica zauzima svu raspolozivu visinu, a sadrzaj se rasteze ispod zaglavlja.
+  ///
+  /// Bez ovoga kartica visi tacno onoliko koliko joj sadrzaj trazi, pa lista sa
+  /// zadatom visinom ostaje ista i na malom i na velikom ekranu. Sa ovim, tabela
+  /// prati prozor: prosiris ga i vidis vise redova.
+  final bool rastegni;
+
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: rastegni ? MainAxisSize.max : MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -68,12 +76,22 @@ class Kartica extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          Padding(
-            padding: bezUnutrasnjegRazmaka
-                ? EdgeInsets.zero
-                : const EdgeInsets.all(Razmaci.karticaUnutra),
-            child: dijete,
-          ),
+          if (rastegni)
+            Expanded(
+              child: Padding(
+                padding: bezUnutrasnjegRazmaka
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.all(Razmaci.karticaUnutra),
+                child: dijete,
+              ),
+            )
+          else
+            Padding(
+              padding: bezUnutrasnjegRazmaka
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.all(Razmaci.karticaUnutra),
+              child: dijete,
+            ),
         ],
       ),
     );

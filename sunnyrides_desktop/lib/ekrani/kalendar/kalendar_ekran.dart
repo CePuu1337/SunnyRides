@@ -193,6 +193,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
           naslov: '${Formati.danIMjesec(_pocetak)} – ${Formati.datum(kraj)}',
           podnaslov: 'Zauzeće po satu. Pređite mišem preko bloka za detalje.',
           bezUnutrasnjegRazmaka: true,
+          rastegni: true,
           akcija: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -214,7 +215,6 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
           ),
           dijete: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
                 padding: const EdgeInsets.all(Razmaci.karticaUnutra),
@@ -251,8 +251,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
                 ),
               ),
               const Divider(height: 1),
-              SizedBox(
-                height: 520,
+              Expanded(
                 child: Sadrzaj(
                   ucitavanje: _ucitavanje,
                   greska: _greska,

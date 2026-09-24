@@ -163,6 +163,7 @@ class _DozvolaDetaljiStanje extends State<DozvolaDetalji> {
     final dozvola = _dozvola;
 
     return Kartica(
+      rastegni: true,
       naslov: dozvola?.klijentImePrezime ?? 'Detalji zahtjeva',
       podnaslov: dozvola == null
           ? null

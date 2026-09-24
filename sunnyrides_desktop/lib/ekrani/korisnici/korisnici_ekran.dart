@@ -211,13 +211,13 @@ class _KorisniciEkranStanje extends State<KorisniciEkran> {
           naslov: 'Korisnici',
           podnaslov: 'Nalozi klijenata i osoblja',
           bezUnutrasnjegRazmaka: true,
+          rastegni: true,
           akcija: ElevatedButton.icon(
             onPressed: _uloge.isEmpty ? null : () => _otvoriFormu(),
             icon: const Icon(Icons.person_add_alt, size: 18),
             label: const Text('Novi nalog'),
           ),
           dijete: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
@@ -296,8 +296,7 @@ class _KorisniciEkranStanje extends State<KorisniciEkran> {
                 ),
               ),
               const Divider(height: 1),
-              SizedBox(
-                height: 470,
+              Expanded(
                 child: Sadrzaj(
                   ucitavanje: _ucitavanje,
                   greska: _greska,

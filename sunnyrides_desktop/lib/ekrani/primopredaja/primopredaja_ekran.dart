@@ -166,7 +166,7 @@ class _PrimopredajaEkranStanje extends State<PrimopredajaEkran> {
         .toList();
 
     return Scaffold(
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(Razmaci.ekranMargina),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -183,62 +183,50 @@ class _PrimopredajaEkranStanje extends State<PrimopredajaEkran> {
               },
             ),
             const SizedBox(height: Razmaci.l),
-            SizedBox(
-              height: 520,
+
+            // Dvije liste dijele preostalu visinu prozora. Ranije su imale zadatu
+            // visinu, pa su na velikom ekranu ostavljale prazninu ispod sebe.
+            Expanded(
               child: Sadrzaj(
                 ucitavanje: _ucitavanje,
                 greska: _greska,
                 naPonovniPokusaj: _ucitaj,
-                dijete: LayoutBuilder(
-                  builder: (context, ogranicenja) {
-                    final preuzimanjaKartica = Kartica(
-                      naslov: 'Preuzimanja',
-                      podnaslov: '${preuzimanja.length} zakazanih za ovaj dan',
-                      bezUnutrasnjegRazmaka: true,
-                      dijete: _Lista(
-                        stavke: preuzimanja,
-                        prazno: 'Nema zakazanih preuzimanja.',
-                        natpisAkcije: 'Izdaj vozilo',
-                        naAkciju: _obradi,
-                        naDetalje: _otvoriRezervaciju,
-                      ),
-                    );
-
-                    final vracanjaKartica = Kartica(
-                      naslov: 'Vraćanja',
-                      podnaslov: '${vracanja.length} zakazanih za ovaj dan',
-                      bezUnutrasnjegRazmaka: true,
-                      dijete: _Lista(
-                        stavke: vracanja,
-                        prazno: 'Nema zakazanih vraćanja.',
-                        natpisAkcije: 'Zaprimi vozilo',
-                        naAkciju: _obradi,
-                        naDetalje: _otvoriRezervaciju,
-                      ),
-                    );
-
-                    if (ogranicenja.maxWidth < 1000) {
-                      return SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            preuzimanjaKartica,
-                            const SizedBox(height: Razmaci.l),
-                            vracanjaKartica,
-                          ],
+                dijete: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Kartica(
+                        naslov: 'Preuzimanja',
+                        podnaslov:
+                            '${preuzimanja.length} zakazanih za ovaj dan',
+                        bezUnutrasnjegRazmaka: true,
+                        rastegni: true,
+                        dijete: _Lista(
+                          stavke: preuzimanja,
+                          prazno: 'Nema zakazanih preuzimanja.',
+                          natpisAkcije: 'Izdaj vozilo',
+                          naAkciju: _obradi,
+                          naDetalje: _otvoriRezervaciju,
                         ),
-                      );
-                    }
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: preuzimanjaKartica),
-                        const SizedBox(width: Razmaci.l),
-                        Expanded(child: vracanjaKartica),
-                      ],
-                    );
-                  },
+                      ),
+                    ),
+                    const SizedBox(width: Razmaci.l),
+                    Expanded(
+                      child: Kartica(
+                        naslov: 'Vraćanja',
+                        podnaslov: '${vracanja.length} zakazanih za ovaj dan',
+                        bezUnutrasnjegRazmaka: true,
+                        rastegni: true,
+                        dijete: _Lista(
+                          stavke: vracanja,
+                          prazno: 'Nema zakazanih vraćanja.',
+                          natpisAkcije: 'Zaprimi vozilo',
+                          naAkciju: _obradi,
+                          naDetalje: _otvoriRezervaciju,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -336,22 +324,19 @@ class _Lista extends StatelessWidget {
       return PrazanPopis(poruka: prazno, ikona: Icons.event_available_outlined);
     }
 
-    return SizedBox(
-      height: 420,
-      child: ListView.separated(
-        itemCount: stavke.length,
-        separatorBuilder: (context, indeks) => const Divider(height: 1),
-        itemBuilder: (context, indeks) {
-          final stavka = stavke[indeks];
+    return ListView.separated(
+      itemCount: stavke.length,
+      separatorBuilder: (context, indeks) => const Divider(height: 1),
+      itemBuilder: (context, indeks) {
+        final stavka = stavke[indeks];
 
-          return _Red(
-            stavka: stavka,
-            natpisAkcije: natpisAkcije,
-            naAkciju: () => naAkciju(stavka),
-            naDetalje: () => naDetalje(stavka.rezervacijaId),
-          );
-        },
-      ),
+        return _Red(
+          stavka: stavka,
+          natpisAkcije: natpisAkcije,
+          naAkciju: () => naAkciju(stavka),
+          naDetalje: () => naDetalje(stavka.rezervacijaId),
+        );
+      },
     );
   }
 }

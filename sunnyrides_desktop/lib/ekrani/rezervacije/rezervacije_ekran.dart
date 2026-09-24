@@ -140,9 +140,9 @@ class _RezervacijeEkranStanje extends State<RezervacijeEkran> {
           naslov: 'Rezervacije',
           podnaslov: 'Sve rezervacije agencije, najnovije prvo',
           bezUnutrasnjegRazmaka: true,
+          rastegni: true,
           dijete: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
             children: [
               _Filteri(
                 upit: _upit,
@@ -151,8 +151,7 @@ class _RezervacijeEkranStanje extends State<RezervacijeEkran> {
                 naPeriod: _odaberiPeriod,
               ),
               const Divider(height: 1),
-              SizedBox(
-                height: 460,
+              Expanded(
                 child: Sadrzaj(
                   ucitavanje: _ucitavanje,
                   greska: _greska,

@@ -13,7 +13,10 @@ import 'birac_lokacije.dart';
 /// Otvara se i samostalno, iz sifrarnika, i iz forme za vozilo - zato vraca
 /// identifikator umjesto obicnog "sacuvano", da ga forma za vozilo odmah odabere.
 class PoslovnicaForma extends StatefulWidget {
-  const PoslovnicaForma({super.key});
+  const PoslovnicaForma({super.key, this.poslovnica});
+
+  /// Postojeci zapis pri izmjeni, prazno pri unosu.
+  final Map<String, dynamic>? poslovnica;
 
   @override
   State<PoslovnicaForma> createState() => _PoslovnicaFormaStanje();
@@ -36,12 +39,30 @@ class _PoslovnicaFormaStanje extends State<PoslovnicaForma> {
   bool _snimanje = false;
   String? _greska;
 
+  bool get _jeIzmjena => widget.poslovnica != null;
+
   @override
   void initState() {
     super.initState();
 
     _klijent = context.read<ApiKlijent>();
     _sifrarnici = SifrarnikServis(_klijent);
+
+    final postojeca = widget.poslovnica;
+
+    if (postojeca != null) {
+      _naziv.text = postojeca['naziv']?.toString() ?? '';
+      _adresa.text = postojeca['adresa']?.toString() ?? '';
+      _radnoVrijeme.text = postojeca['radnoVrijeme']?.toString() ?? '';
+      _gradId = citajInt(postojeca['gradId']);
+
+      final sirina = citajDoubleIliNista(postojeca['latituda']);
+      final duzina = citajDoubleIliNista(postojeca['longituda']);
+
+      if (sirina != null && duzina != null) {
+        _lokacija = LatLng(sirina, duzina);
+      }
+    }
 
     _ucitajGradove();
   }
@@ -94,20 +115,28 @@ class _PoslovnicaFormaStanje extends State<PoslovnicaForma> {
       _greska = null;
     });
 
+    final zahtjev = <String, dynamic>{
+      'gradId': _gradId,
+      'naziv': _naziv.text.trim(),
+      'adresa': _adresa.text.trim(),
+      'latituda': _lokacija?.latitude,
+      'longituda': _lokacija?.longitude,
+      'radnoVrijeme': _radnoVrijeme.text.trim().isEmpty
+          ? null
+          : _radnoVrijeme.text.trim(),
+    };
+
     try {
-      final odgovor = await _klijent.post(
-        '/api/poslovnice',
-        tijelo: {
-          'gradId': _gradId,
-          'naziv': _naziv.text.trim(),
-          'adresa': _adresa.text.trim(),
-          'latituda': _lokacija?.latitude,
-          'longituda': _lokacija?.longitude,
-          'radnoVrijeme': _radnoVrijeme.text.trim().isEmpty
-              ? null
-              : _radnoVrijeme.text.trim(),
-        },
-      );
+      final odgovor = _jeIzmjena
+          ? await _klijent.put(
+              '/api/poslovnice/${citajInt(widget.poslovnica!['id'])}',
+              tijelo: zahtjev,
+            )
+          : await _klijent.post('/api/poslovnice', tijelo: zahtjev);
+
+      // Lista poslovnica se pamti dok aplikacija radi, pa se poslije izmjene mora
+      // zaboraviti - inace bi padajuce liste drugdje pokazivale staro stanje.
+      _sifrarnici.zaboravi(SifrarnikServis.poslovnice);
 
       if (!mounted) {
         return;
@@ -131,7 +160,7 @@ class _PoslovnicaFormaStanje extends State<PoslovnicaForma> {
   @override
   Widget build(BuildContext context) {
     return DijalogForme(
-      naslov: 'Nova poslovnica',
+      naslov: _jeIzmjena ? 'Izmjena poslovnice' : 'Nova poslovnica',
       podnaslov: 'Grad se bira iz šifarnika, a lokacija klikom na kartu',
       greska: _greska,
       uToku: _snimanje,

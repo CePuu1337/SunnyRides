@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-import '../../widgeti/u_izradi.dart';
+import '../cjenovnik/cjenovnik_ekran.dart';
 import '../dozvole/dozvole_ekran.dart';
+import '../izvjestaji/izvjestaji_ekran.dart';
 import '../kalendar/kalendar_ekran.dart';
 import '../korisnici/korisnici_ekran.dart';
 import '../obavijesti/obavijesti_ekran.dart';
 import '../recenzije/recenzije_ekran.dart';
+import '../sifrarnici/sifrarnici_ekran.dart';
 import '../pregled/pregled_ekran.dart';
 import '../primopredaja/primopredaja_ekran.dart';
 import '../rezervacije/rezervacije_ekran.dart';
@@ -160,7 +162,7 @@ class Meni {
           naziv: 'Cjenovnik',
           podnaslov: 'Tarife, popusti i paketi osiguranja',
           ikona: Icons.sell_outlined,
-          gradi: _uIzradi,
+          gradi: _cjenovnik,
           samoAdministrator: true,
         ),
         StavkaMenija(
@@ -168,7 +170,7 @@ class Meni {
           naziv: 'Šifarnici',
           podnaslov: 'Gradovi, marke, tipovi i poslovnice',
           ikona: Icons.list_alt_outlined,
-          gradi: _uIzradi,
+          gradi: _sifarnici,
           samoAdministrator: true,
         ),
         StavkaMenija(
@@ -176,14 +178,12 @@ class Meni {
           naziv: 'Izvještaji',
           podnaslov: 'Iskorištenost flote i finansijski pregled',
           ikona: Icons.insert_chart_outlined,
-          gradi: _uIzradi,
+          gradi: _izvjestaji,
         ),
       ],
     ),
   ];
 }
-
-Widget _uIzradi(BuildContext context) => const UIzradi();
 
 Widget _pregled(BuildContext context) => const PregledEkran();
 
@@ -200,5 +200,11 @@ Widget _dozvole(BuildContext context) => const DozvoleEkran();
 Widget _recenzije(BuildContext context) => const RecenzijeEkran();
 
 Widget _korisnici(BuildContext context) => const KorisniciEkran();
+
+Widget _sifarnici(BuildContext context) => const SifrarniciEkran();
+
+Widget _cjenovnik(BuildContext context) => const CjenovnikEkran();
+
+Widget _izvjestaji(BuildContext context) => const IzvjestajiEkran();
 
 Widget _obavijesti(BuildContext context) => const ObavijestiEkran();

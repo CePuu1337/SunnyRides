@@ -114,14 +114,13 @@ class _RecenzijeEkranStanje extends State<RecenzijeEkran> {
           naslov: 'Recenzije',
           podnaslov: 'Ocjene klijenata nakon završenog najma',
           bezUnutrasnjegRazmaka: true,
+          rastegni: true,
           dijete: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _Filteri(upit: _upit, naPromjenu: _promijeniUpit),
               const Divider(height: 1),
-              SizedBox(
-                height: 480,
+              Expanded(
                 child: Sadrzaj(
                   ucitavanje: _ucitavanje,
                   greska: _greska,

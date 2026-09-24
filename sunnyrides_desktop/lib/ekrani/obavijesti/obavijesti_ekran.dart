@@ -132,13 +132,13 @@ class _ObavijestiEkranStanje extends State<ObavijestiEkran> {
           naslov: 'Obavijesti',
           podnaslov: 'Objave koje klijenti vide na početnom ekranu',
           bezUnutrasnjegRazmaka: true,
+          rastegni: true,
           akcija: ElevatedButton.icon(
             onPressed: () => _otvoriFormu(),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Nova obavijest'),
           ),
           dijete: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
@@ -189,8 +189,7 @@ class _ObavijestiEkranStanje extends State<ObavijestiEkran> {
                 ),
               ),
               const Divider(height: 1),
-              SizedBox(
-                height: 470,
+              Expanded(
                 child: Sadrzaj(
                   ucitavanje: _ucitavanje,
                   greska: _greska,
