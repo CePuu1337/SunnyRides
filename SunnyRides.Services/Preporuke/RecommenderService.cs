@@ -155,6 +155,47 @@ public class RecommenderService : IRecommenderService
         return await SastaviAsync(poredani.Take(koliko).ToList(), ct);
     }
 
+    public async Task<List<RangiranoVozilo>> RangirajAsync(
+        IReadOnlyCollection<int> voziloIds, CancellationToken ct = default)
+    {
+        if (voziloIds.Count == 0)
+        {
+            return new List<RangiranoVozilo>();
+        }
+
+        var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+        var ids = voziloIds.ToList();
+
+        // Iz baze samo atributi koji ulaze u bodovanje, jednim upitom za sva vozila.
+        var redovi = await _context.Vozila
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => new
+            {
+                x.Id,
+                x.ModelVozilaId,
+                x.ModelVozila.TipVozilaId,
+                x.ModelVozila.MarkaId,
+                x.Poslovnica.GradId,
+                x.ModelVozila.Kubikaza,
+                x.DnevnaTarifa
+            })
+            .ToListAsync(ct);
+
+        var kandidati = redovi
+            .Select(x => new KandidatVozilo(
+                x.Id, x.ModelVozilaId, x.TipVozilaId, x.MarkaId, x.GradId, x.Kubikaza, x.DnevnaTarifa))
+            .ToList();
+
+        var bodovani = _model.ZnaKorisnika(korisnikId)
+            ? PredvidiModelom(kandidati, korisnikId)
+            : await RezervnimPutemAsync(kandidati, korisnikId, ct);
+
+        return bodovani
+            .Select(x => new RangiranoVozilo(x.Vozilo.VoziloId, x.Vozilo.ModelVozilaId, x.Skor))
+            .ToList();
+    }
+
     // --- kandidati ---------------------------------------------------------
 
     /// <summary>

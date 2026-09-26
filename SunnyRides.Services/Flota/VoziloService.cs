@@ -1,3 +1,4 @@
+using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
@@ -24,6 +25,14 @@ public class VoziloService
     private readonly IDozvolaService _dozvolaService;
     private readonly ICurrentUserService _trenutniKorisnik;
     private readonly IHistorijaPretrageService _historijaPretrage;
+    private readonly IRecommenderService _recommender;
+
+    /// <summary>
+    /// Gornja granica vozila koja ulaze u rangiranje po preporuci. Flota je desetak puta
+    /// manja, pa granica nikad ne odsijeca stvarnu ponudu - stoji da bi upit ostao
+    /// ogranicen i kad flota naraste.
+    /// </summary>
+    private const int MaksimalnoZaRangiranje = 500;
 
     /// <summary>
     /// Kategorije koje prijavljeni korisnik smije voziti, razrijesene na pocetku
@@ -41,7 +50,8 @@ public class VoziloService
         IAvailabilityService dostupnost,
         IDozvolaService dozvolaService,
         ICurrentUserService trenutniKorisnik,
-        IHistorijaPretrageService historijaPretrage)
+        IHistorijaPretrageService historijaPretrage,
+        IRecommenderService recommender)
         : base(context)
     {
         _pohrana = pohrana;
@@ -49,6 +59,7 @@ public class VoziloService
         _dozvolaService = dozvolaService;
         _trenutniKorisnik = trenutniKorisnik;
         _historijaPretrage = historijaPretrage;
+        _recommender = recommender;
     }
 
     /// <summary>
@@ -76,12 +87,62 @@ public class VoziloService
         // mjesta koja je pozivaju.
         await _historijaPretrage.ZabiljeziAsync(search, ct);
 
-        var rezultat = await base.GetAsync(search, ct);
+        var rezultat = JePoredakPoPreporuci(search)
+            ? await PoPreporuciAsync(search, ct)
+            : await base.GetAsync(search, ct);
 
         await DodajOcjeneAsync(rezultat.Items, ct);
 
         return rezultat;
     }
+
+    /// <summary>
+    /// Pretraga poredana po relevantnosti za prijavljenog korisnika.
+    ///
+    /// Svi uslovi pretrage - kategorije dozvole, dostupnost, grad, tip, cijena - idu
+    /// kroz isti <see cref="AddFilter"/> i ostaju na bazi. Samo se poredak racuna u
+    /// memoriji, jer skor nije kolona nego rezultat sistema preporuke; zato se iz baze
+    /// za rangiranje vuku samo identifikatori, a puni zapisi tek za trazenu stranicu.
+    /// </summary>
+    private async Task<PagedResult<VoziloDto>> PoPreporuciAsync(
+        VoziloSearchObject search, CancellationToken ct)
+    {
+        var upit = AddFilter(search, Context.Vozila.AsQueryable());
+
+        int? ukupno = search.IncludeTotalCount ? await upit.CountAsync(ct) : null;
+
+        var ids = await upit
+            .OrderBy(x => x.Id)
+            .Take(MaksimalnoZaRangiranje)
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+
+        var poredak = PoredakPoPreporuci.Poredaj(await _recommender.RangirajAsync(ids, ct));
+
+        var stranica = Math.Max(search.Page ?? 0, 0);
+        var velicina = Math.Clamp(
+            search.PageSize ?? PodrazumijevanaVelicinaStranice, 1, MaksimalnaVelicinaStranice);
+
+        var naStranici = poredak.Skip(stranica * velicina).Take(velicina).ToList();
+
+        var vozila = await AddInclude(search, Context.Vozila.Where(x => naStranici.Contains(x.Id)))
+            .AsNoTracking()
+            .ToDictionaryAsync(x => x.Id, ct);
+
+        // Baza ne zna za poredak po preporuci, pa se redoslijed vraca iz liste.
+        return new PagedResult<VoziloDto>
+        {
+            Items = naStranici
+                .Where(vozila.ContainsKey)
+                .Select(id => vozila[id].Adapt<VoziloDto>())
+                .ToList(),
+            TotalCount = ukupno
+        };
+    }
+
+    private static bool JePoredakPoPreporuci(VoziloSearchObject search) =>
+        search.OrderBy is not null
+        && search.OrderBy.StartsWith(PoredakRelevantnost, StringComparison.OrdinalIgnoreCase);
 
     public override async Task<VoziloDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
@@ -160,6 +221,12 @@ public class VoziloService
 
     /// <summary>Vrijednost koju mobilna aplikacija salje kad korisnik sortira po ocjeni.</summary>
     public const string PoredakPoOcjeni = "ProsjecnaOcjena";
+
+    /// <summary>
+    /// Vrijednost za poredak po relevantnosti - podrazumijevani poredak pretrage u
+    /// mobilnoj aplikaciji.
+    /// </summary>
+    public const string PoredakRelevantnost = "Preporuka";
 
     protected override string NazivEntiteta => "Vozilo";
 

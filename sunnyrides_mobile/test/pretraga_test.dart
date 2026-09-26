@@ -59,6 +59,11 @@ void main() {
       },
     );
 
+    test('pretraga pocinje poretkom po preporuci, ne po cijeni', () {
+      expect(const Filteri().poredak, Poredak.preporuka);
+      expect(Poredak.preporuka.vrijednost, 'Preporuka');
+    });
+
     test('broj aktivnih filtera ne racuna nepotpun termin', () {
       const sa = Filteri(tipVozilaId: 1, cijenaDo: 50);
 

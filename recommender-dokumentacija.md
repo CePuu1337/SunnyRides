@@ -462,6 +462,22 @@ dvadeseta po redu više nije preporuka nego katalog.
 Svaka stavka nosi `metoda`, `skor`, i — zavisno od puta — `predvidjenaOcjena` ili
 `slicnost` i `popularnost`, pa se na odbrani može pokazati tačno odakle je broj došao.
 
+### Poredak „Preporučeno za vas" u pretrazi
+
+Pretraga vozila (`GET /api/vozila?orderBy=Preporuka`) koristi isti skor kao i preporuke,
+i to je njen podrazumijevani poredak u mobilnoj aplikaciji. Pretraga prvo suzi ponudu
+svim svojim uslovima na bazi (dozvola, dostupnost, grad, tip, cijena), pa
+`RecommenderService.RangirajAsync` za preostala vozila izračuna skor — modelom kad
+korisnika poznaje, rezervnim putem kad ne. Samo se poredak računa u memoriji, jer skor
+nije kolona; puni zapisi se učitavaju tek za traženu stranicu.
+
+Za razliku od preporuka na početnom ekranu, pretraga ne izbacuje ponovljene primjerke
+istog modela — korisnik bira i poslovnicu, pa mu treba svaki slobodan primjerak. Ali
+ih ne drži ni jedan do drugog: `PoredakPoPreporuci` ide u krugovima, prvo najbolji
+primjerak svakog modela po skoru, pa drugi primjerak svakog modela, i tako dalje. Bez
+toga bi model sa najvećim skorom zauzeo prva tri mjesta istim vozilom iz tri
+poslovnice. Pravilo pokrivaju testovi u `PoredakPoPreporuciTests`.
+
 ### Slična vozila
 
 Ovo se namjerno **ne** računa modelom. Matrična faktorizacija uči ukus korisnika, a

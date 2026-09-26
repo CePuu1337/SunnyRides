@@ -22,4 +22,16 @@ public interface IRecommenderService
     /// </summary>
     Task<List<PreporukaDto>> SlicnaVozilaAsync(
         int voziloId, int? broj = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Skor relevantnosti za vozila koja je pretraga vec suzila, za poredak
+    /// "Preporuceno za vas". Racuna se istim putem kao preporuke na pocetnom ekranu -
+    /// modelom kad korisnika poznaje, rezervnim putem kad ne - pa pretraga i pocetna ne
+    /// mogu redati istu ponudu po dva razlicita kriterija.
+    ///
+    /// Ovdje se ne filtrira nista: kategorije dozvole i dostupnost je vec provjerila
+    /// pretraga, koja je i dala ove identifikatore.
+    /// </summary>
+    Task<List<RangiranoVozilo>> RangirajAsync(
+        IReadOnlyCollection<int> voziloIds, CancellationToken ct = default);
 }

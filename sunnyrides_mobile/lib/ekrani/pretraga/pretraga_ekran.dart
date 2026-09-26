@@ -459,17 +459,8 @@ class _Poredak extends StatelessWidget {
     );
   }
 
+  /// "1 vozilo", "21 vozilo", ali "2 vozila", "5 vozila", "11 vozila".
   static String _oblik(int broj) {
-    if (broj % 10 == 1 && broj % 100 != 11) {
-      return 'vozilo';
-    }
-
-    if (broj % 10 >= 2 &&
-        broj % 10 <= 4 &&
-        (broj % 100 < 12 || broj % 100 > 14)) {
-      return 'vozila';
-    }
-
-    return 'vozila';
+    return broj % 10 == 1 && broj % 100 != 11 ? 'vozilo' : 'vozila';
   }
 }

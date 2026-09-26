@@ -60,7 +60,7 @@ ne ispadne:
 | Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ✅ |
 | Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ✅ |
 | Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
-| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | prosječna ocjena i poredak po cijeni i ocjeni su gotovi; ukupna cijena po vozilu u rezultatu i poredak po preporuci još nisu | 🟡 |
+| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | poredak po preporuci (podrazumijevani), cijeni i ocjeni je gotov; ukupna cijena po vozilu u rezultatu još nije | 🟡 |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
 | Detalji vozila: recenzije i slična vozila | `/api/preporuke/slicna/{id}` i `/api/recenzije?voziloId=` | ✅ |
 | Otkazivanje: „korisnik bira razlog iz padajuće liste" | šifrarnik `RazlogOtkazivanja`, padajuća lista se puni iz baze | ✅ |
@@ -3075,8 +3075,8 @@ praktično iste, što znači da model nije naučio podatke napamet.
 
 > 🟡 Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
 > pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije i profil. Iz prijave
-> još nedostaju ekran za reset zaboravljene lozinke, filteri po poslovnici i marki,
-> poredak „po preporuci" i ukupna cijena za period u rezultatima pretrage.
+> još nedostaju ekran za reset zaboravljene lozinke, filteri po poslovnici i marki i
+> ukupna cijena za period u rezultatima pretrage.
 
 Tri Flutter paketa, ne dva: `sunnyrides_core`, `sunnyrides_desktop` i
 `sunnyrides_mobile`. Desktop i mobilna dijele API klijent, čuvanje tokena, boje i
@@ -3156,6 +3156,14 @@ a prosjek nije kolona. `VoziloService` ga zato obrađuje sam, izrazom nad upitom
 međuprojekcijom: projekcija bi odbacila `Include`-ove postavljene prije sortiranja i
 vozilo bi ostalo bez marke, tipa i poslovnice. Vozila bez ijedne recenzije završavaju na
 kraju u oba smjera.
+
+### Pretraga počinje poretkom po preporuci
+
+Podrazumijevani poredak pretrage je „Preporučeno za vas" (`orderBy=Preporuka`), a ne
+cijena. Uslovi pretrage ostaju na bazi, a skor za preostala vozila daje isti sistem
+preporuke kao na početnom ekranu. Primjerci istog modela iz različitih poslovnica ne
+stoje jedan do drugog: prvo ide najbolji primjerak svakog modela, pa ponovljeni. Detalji
+su u `recommender-dokumentacija.md`, u dijelu o endpointima.
 
 ### Poredak mora biti potpun da bi stranice imale smisla
 
