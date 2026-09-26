@@ -72,10 +72,8 @@ public class RecommenderService : IRecommenderService
             return new PagedResult<PreporukaDto> { Items = new List<PreporukaDto>(), TotalCount = 0 };
         }
 
-        // Model se osvjezava ovdje, a ne u pozadini: treniranje traje sekundu-dvije nad
-        // ovolikim podacima, a poziv je bez posla kad je model svjez.
-        await _model.OsvjeziAkoTrebaAsync(ct);
-
+        // Zahtjev ne ceka na treniranje - model trenira pozadinski servis. Dok model nije
+        // spreman, ili ako korisnik nije bio u podacima za ucenje, ide rezervni put.
         var poredani = _model.ZnaKorisnika(korisnikId)
             ? PredvidiModelom(kandidati, korisnikId)
             : await RezervnimPutemAsync(kandidati, korisnikId, ct);

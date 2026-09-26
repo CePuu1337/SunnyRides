@@ -10,16 +10,17 @@ namespace SunnyRides.Services.Preporuke.Ml;
 /// i po njima predvidja ocjenu koju bi korisnik dao vozilu koje jos nije vozio.
 ///
 /// Servis je singleton: treniranje je skupo u odnosu na predikciju, pa se model drzi u
-/// memoriji i osvjezava periodicno.
+/// memoriji. Trenira ga pozadinski servis u API-ju, pri pokretanju i periodicno, tako da
+/// zahtjev za preporukama nikad ne ceka na ucenje.
 /// </summary>
 public interface IModelPreporuke
 {
     StanjeModelaDto Stanje { get; }
 
-    /// <summary>Trenira ako model jos ne postoji ili je zastario. Inace ne radi nista.</summary>
-    Task<StanjeModelaDto> OsvjeziAkoTrebaAsync(CancellationToken ct = default);
-
-    /// <summary>Treniranje na zahtjev, bez obzira na starost modela.</summary>
+    /// <summary>
+    /// Treniranje od pocetka nad trenutnim podacima. Dva istovremena poziva se ne
+    /// preklapaju - drugi ceka da prvi zavrsi.
+    /// </summary>
     Task<StanjeModelaDto> TrenirajAsync(CancellationToken ct = default);
 
     /// <summary>

@@ -13,6 +13,7 @@ using SunnyRides.API.Extensions;
 using SunnyRides.API.Hubs;
 using SunnyRides.API.Filters;
 using SunnyRides.API.Middleware;
+using SunnyRides.API.Preporuke;
 using SunnyRides.API.Realtime;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Seed;
@@ -140,6 +141,10 @@ builder.Services.AddSignalR();
 // Obavjestenja nastaju u workeru, a veze drzi API. Slusac preuzima poruke sa razmjene
 // i salje ih grupi korisnika kojem pripadaju.
 builder.Services.AddHostedService<SlusacNotifikacija>();
+
+// Model preporuke se trenira u pozadini, pri pokretanju i periodicno. Zahtjev za
+// preporukama tako nikad ne ceka na ucenje.
+builder.Services.AddHostedService<TreningModelaPreporuke>();
 
 builder.Services.AddControllers(options =>
 {

@@ -154,16 +154,15 @@ public class RezervacijaService
 
         if (search.SamoAktivne.HasValue)
         {
-            var sada = DateTime.UtcNow;
-
-            // Aktivna je ona koja jos nije zavrsila i nije otkazana. Zavrsene i
-            // otkazane idu u historiju, bez obzira na datume.
+            // Podjela ide po statusu, ne po datumu. Potvrdjena rezervacija ciji je
+            // termin prosao nije gotova dok se vozilo ne evidentira kao vraceno: vozilo
+            // je mozda jos kod klijenta, a depozit jos nije obracunat. Da ide po datumu,
+            // takav najam bi se u historiji vodio kao "Potvrdjena" i klijent ne bi
+            // vidio da je jos otvoren. U historiju idu samo zavrsene i otkazane.
             upit = search.SamoAktivne.Value
-                ? upit.Where(x => x.DatumDo > sada
-                                  && x.Status != StatusRezervacije.Cancelled
+                ? upit.Where(x => x.Status != StatusRezervacije.Cancelled
                                   && x.Status != StatusRezervacije.Completed)
-                : upit.Where(x => x.DatumDo <= sada
-                                  || x.Status == StatusRezervacije.Cancelled
+                : upit.Where(x => x.Status == StatusRezervacije.Cancelled
                                   || x.Status == StatusRezervacije.Completed);
         }
 

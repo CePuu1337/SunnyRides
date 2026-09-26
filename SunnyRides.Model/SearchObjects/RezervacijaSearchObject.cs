@@ -26,8 +26,8 @@ public class RezervacijaSearchObject : BaseSearchObject
     public bool? IsPaid { get; set; }
 
     /// <summary>
-    /// True vraca samo rezervacije koje jos traju ili tek dolaze - tab "Aktivne" u
-    /// mobilnoj aplikaciji. False vraca historiju.
+    /// True vraca rezervacije koje jos nisu zavrsene ni otkazane - tab "Aktivne" u
+    /// mobilnoj aplikaciji. False vraca historiju: zavrsene i otkazane.
     /// </summary>
     public bool? SamoAktivne { get; set; }
 }

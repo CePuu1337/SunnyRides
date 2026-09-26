@@ -61,7 +61,7 @@ Tu je razlika u odnosu na heuristiku: težine niko nije upisao, model ih je nau�
 **Parametri učenja se biraju mjerenjem, ne pogađanjem**
 
 Broj latentnih faktora i jačina regularizacije nisu upisani u kod kao odluka — traže se
-pretragom po mreži, a svaki kandidat se ocjenjuje **petostrukom unakrsnom provjerom** nad
+pretragom po mreži, a svaki kandidat se ocjenjuje **unakrsnom provjerom na tri dijela** nad
 podacima za učenje:
 
 | Parametar | Kandidati |
@@ -71,10 +71,14 @@ podacima za učenje:
 | broj iteracija | 100, fiksno |
 | sjeme generatora | 0, fiksno |
 
-Za svaki od 16 parova podaci se podijele na pet dijelova; model se pet puta nauči na
-četiri i izmjeri na petom, pa se uzme prosječna greška. Bira se par sa najmanjim
-prosjekom. To je 80 kratkih treniranja, što na ovoj količini podataka traje kraće od
-jednog upita prema bazi.
+Za svaki od 16 parova podaci se podijele na tri dijela; model se tri puta nauči na dva
+i izmjeri na trećem, pa se uzme prosječna greška. Bira se par sa najmanjim prosjekom.
+To je 48 kratkih učenja za jedan odabir.
+
+Cijelo treniranje ih ima oko tri stotine: odabir se ponavlja u svakom od pet prolaza
+ugniježdene provjere (sekcija 4), pa još jednom nad svim podacima za konačni model
+(5 × 49 + 49 = 294 učenja). Zato se trenira u pozadini, a ne dok korisnik čeka — vidi
+sekciju 5.
 
 **Zašto unakrsna provjera, a ne jedan izdvojeni skup.** Prva verzija je parametre birala
 po jednom skupu od desetak redova. Greška izmjerena na deset redova više je stvar slučaja
@@ -258,15 +262,32 @@ korisnici imaju ukus, pa ga demo podaci moraju imati — inače se ne testira mo
 
 ## 5. Kada se trenira
 
-Model je singleton u memoriji. Trenira se pri prvom pozivu preporuka i osvježava kad
-istekne **6 sati**, jer treniranje na ovoj količini podataka traje sekundu-dvije, a
-predikcija je hiljadu puta jeftinija. Nove ocjene do osvježavanja ne utiču na
-predikciju — to je cijena toga što se ne trenira pri svakom zahtjevu.
+Model je singleton u memoriji API-ja. Trenira ga pozadinski servis
+`TreningModelaPreporuke` (`SunnyRides.API/Preporuke/`): odmah po pokretanju API-ja, pa
+ponovo svakih **6 sati**. Nove ocjene do osvježavanja ne utiču na predikciju — to je
+cijena toga što se ne trenira pri svakom zahtjevu.
 
-`POST /api/preporuke/model/treniraj` (administrator) trenira odmah, bez čekanja.
+**Zahtjev za preporukama nikad ne čeka na učenje.** Prva verzija je trenirala pri prvom
+pozivu preporuka i taj poziv je čekao kraj treniranja. Oko tri stotine učenja (sekcija 2)
+je u Docker kontejneru trajalo i preko dvije minute, pa je početni ekran mobilne
+aplikacije poslije svakog restarta visio. Sada, dok model nije spreman, preporuke idu
+rezervnim putem (sekcija 7) i u odgovoru nose oznaku `RezervnaHeuristika`; čim se
+treniranje završi, isti zahtjev ide kroz model.
 
-Treniranje je zaštićeno semaforom, pa dva istovremena zahtjeva ne mogu pokrenuti dva
-učenja. Predikcija ide kroz `ITransformer.Transform` nad cijelim skupom kandidata
+Svako učenje radi na jednoj niti (`NumberOfThreads = 1`). Matrica ima sedamdesetak redova,
+pa više niti posao ne ubrzava nego ga uspori: izmjereno u kontejneru, cijelo treniranje je
+sa podrazumijevanim brojem niti trajalo oko 130 s, a sa jednom niti oko 2 s. Uz to je
+LIBMF sa jednom niti deterministički, pa isti podaci i isto sjeme daju isti model. Koliko je treniranje trajalo piše u logu API-ja, u redu
+„Model preporuke treniran za … ms".
+
+Ako treniranje pukne, greška se loguje, preporuke i dalje rade rezervnim putem, a novi
+pokušaj ide za pet minuta.
+
+`POST /api/preporuke/model/treniraj` (administrator) trenira odmah, bez čekanja na
+sljedeće redovno osvježavanje.
+
+Treniranje je zaštićeno semaforom, pa se dva treniranja (pozadinsko i ono koje pokrene
+administrator) nikad ne preklapaju — drugo čeka da prvo završi. Predikcija ide kroz `ITransformer.Transform` nad cijelim skupom kandidata
 odjednom, a ne kroz `PredictionEngine`, koji nije siguran za istovremeno korištenje iz
 više niti.
 

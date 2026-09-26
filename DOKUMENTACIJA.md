@@ -3023,9 +3023,14 @@ pa je matrica na nivou modela popunjena oko 30% umjesto 8%. U odgovoru se zato z
 jedan primjerak po modelu.
 
 Broj latentnih faktora i jačina regularizacije se ne upisuju u kod nego se biraju
-pretragom po mreži, a svaki kandidat se ocjenjuje petostrukom unakrsnom provjerom nad
-podacima za učenje. Skup za provjeru se izdvaja prvi i do kraja se ne dira, pa se model
-ne mjeri na podacima prema kojima je i podešen.
+pretragom po mreži, a svaki kandidat se ocjenjuje unakrsnom provjerom na tri dijela nad
+podacima za učenje. Greška se mjeri ugniježdenom provjerom na pet dijelova: dio koji se
+mjeri ne učestvuje u odabiru parametara, pa se model ne mjeri na podacima prema kojima
+je i podešen.
+
+Model trenira pozadinski servis u API-ju (`TreningModelaPreporuke`), pri pokretanju i
+svakih šest sati. Zahtjev za preporukama nikad ne čeka na učenje — dok model nije spreman,
+ide rezervni put. Detalji su u `recommender-dokumentacija.md`, sekcija 5.
 
 Seed ocjene su izmijenjene u istoj fazi: svaki demo klijent ima tip vozila koji mu leži i
 ocjene to prate. Dok su bile čisto nasumične, u podacima nije postojao obrazac koji bi

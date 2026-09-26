@@ -13,13 +13,6 @@ namespace SunnyRides.Services.Preporuke.Ml;
 public class ModelPreporukeMf : IModelPreporuke
 {
     /// <summary>
-    /// Koliko dugo istreniran model vazi prije nego se sam osvjezi. Nove ocjene i najmovi
-    /// do tada ne uticu na predikciju - to je cijena toga sto se model ne trenira pri
-    /// svakom zahtjevu.
-    /// </summary>
-    private static readonly TimeSpan TrajanjeModela = TimeSpan.FromHours(6);
-
-    /// <summary>
     /// Kandidati za broj latentnih faktora.
     ///
     /// Namjerno mali brojevi. Rang 8 nad dvanaest korisnika i deset modela vozila znaci
@@ -73,16 +66,6 @@ public class ModelPreporukeMf : IModelPreporuke
     public StanjeModelaDto Stanje { get; private set; }
 
     public bool ZnaKorisnika(int korisnikId) => _model is not null && _korisnici.Contains(korisnikId);
-
-    public async Task<StanjeModelaDto> OsvjeziAkoTrebaAsync(CancellationToken ct = default)
-    {
-        if (_treniran is not null && DateTime.UtcNow - _treniran.Value < TrajanjeModela)
-        {
-            return Stanje;
-        }
-
-        return await TrenirajAsync(ct);
-    }
 
     public async Task<StanjeModelaDto> TrenirajAsync(CancellationToken ct = default)
     {
@@ -343,7 +326,13 @@ public class ModelPreporukeMf : IModelPreporuke
             Lambda = lambda,
 
             // Bez ovoga trener ispisuje tok ucenja direktno na konzolu, mimo ILogger-a.
-            Quiet = true
+            Quiet = true,
+
+            // Jedna nit. Matrica ima sedamdesetak redova, pa vise niti ne ubrzava ucenje
+            // nego ga uspori - svako od nekoliko stotina ucenja pri odabiru parametara
+            // bi pokretalo i uskladjivalo niti za posao od par milisekundi. Uz to trening
+            // tako ne zauzme sva jezgra dok API odgovara na zahtjeve.
+            NumberOfThreads = 1
         };
 
         var postupak = _ml.Transforms.Conversion
