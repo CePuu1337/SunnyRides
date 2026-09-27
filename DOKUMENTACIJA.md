@@ -3074,8 +3074,8 @@ praktično iste, što znači da model nije naučio podatke napamet.
 ## Klijentske aplikacije
 
 > 🟡 Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
-> pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije i profil. Iz prijave
-> još nedostaju ekran za reset zaboravljene lozinke, filteri po poslovnici i marki i
+> pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije, profil i reset
+> zaboravljene lozinke. Iz prijave još nedostaju filteri po poslovnici i marki i
 > ukupna cijena za period u rezultatima pretrage.
 
 Tri Flutter paketa, ne dva: `sunnyrides_core`, `sunnyrides_desktop` i
@@ -3156,6 +3156,17 @@ a prosjek nije kolona. `VoziloService` ga zato obrađuje sam, izrazom nad upitom
 međuprojekcijom: projekcija bi odbacila `Include`-ove postavljene prije sortiranja i
 vozilo bi ostalo bez marke, tipa i poslovnice. Vozila bez ijedne recenzije završavaju na
 kraju u oba smjera.
+
+### Reset zaboravljene lozinke
+
+Na ekranu prijave je link „Zaboravili ste lozinku?". Ekran ima dva koraka: email, pa kod
+iz maila sa novom lozinkom i potvrdom. Poruka poslije prvog koraka je ista bez obzira
+postoji li nalog sa tom adresom — server tako odgovara, pa ni aplikacija ne smije
+razlikovati ta dva slučaja. Kod se prihvata sa malim slovima, razmacima i crticom, jer ga
+i server tako normalizuje; aplikacija unaprijed odbija samo ono što ni po obliku ne može
+biti kod (pogrešna dužina ili znakovi `I`, `O`, `0`, `1`, koje server nikad ne generiše).
+Minimum lozinke je 6 znakova, isto kao u `ResetLozinkeRequest` — na ekranu za promjenu
+lozinke je ranije stajalo 8, što se nije slagalo sa serverom, pa je i to ispravljeno.
 
 ### Pretraga počinje poretkom po preporuci
 

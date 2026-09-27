@@ -5,6 +5,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 import '../../stanje/sesija.dart';
 import '../../widgeti/obavjestenje.dart';
 import 'registracija_ekran.dart';
+import 'zaboravljena_lozinka_ekran.dart';
 
 class PrijavaEkran extends StatefulWidget {
   const PrijavaEkran({super.key});
@@ -141,7 +142,21 @@ class _PrijavaEkranStanje extends State<PrijavaEkran> {
                   validator: (vrijednost) =>
                       (vrijednost?.isEmpty ?? true) ? 'Unesite lozinku.' : null,
                 ),
-                const SizedBox(height: Razmaci.xl),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _uToku
+                        ? null
+                        : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  const ZaboravljenaLozinkaEkran(),
+                            ),
+                          ),
+                    child: const Text('Zaboravili ste lozinku?'),
+                  ),
+                ),
+                const SizedBox(height: Razmaci.s),
                 SizedBox(
                   height: 50,
                   child: ElevatedButton(

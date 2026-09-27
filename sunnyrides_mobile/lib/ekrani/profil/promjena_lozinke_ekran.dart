@@ -94,8 +94,8 @@ class _PromjenaLozinkeEkranStanje extends State<PromjenaLozinkeEkran> {
               controller: _nova,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Nova lozinka'),
-              validator: (vrijednost) => (vrijednost ?? '').length < 8
-                  ? 'Lozinka mora imati najmanje 8 znakova.'
+              validator: (vrijednost) => (vrijednost ?? '').length < 6
+                  ? 'Lozinka mora imati najmanje 6 znakova.'
                   : null,
             ),
             const SizedBox(height: Razmaci.m),
