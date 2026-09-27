@@ -181,15 +181,20 @@ class Obavijest {
 
 /// Stavka sifarnika sa nazivom - tip vozila, grad, poslovnica.
 class Stavka {
-  const Stavka({required this.id, required this.naziv});
+  const Stavka({required this.id, required this.naziv, this.gradId});
 
   final int id;
   final String naziv;
+
+  /// Samo kod poslovnice: grad u kojem je. Filter po poslovnici nudi samo
+  /// poslovnice odabranog grada.
+  final int? gradId;
 
   factory Stavka.izJsona(Map<String, dynamic> json) {
     return Stavka(
       id: citajInt(json['id']),
       naziv: json['naziv']?.toString() ?? '',
+      gradId: json['gradId'] == null ? null : citajInt(json['gradId']),
     );
   }
 }

@@ -3075,8 +3075,9 @@ praktično iste, što znači da model nije naučio podatke napamet.
 
 > 🟡 Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
 > pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije, profil i reset
-> zaboravljene lozinke. Iz prijave još nedostaju filteri po poslovnici i marki i
-> ukupna cijena za period u rezultatima pretrage.
+> zaboravljene lozinke. Pretraga filtrira po tipu, marki, gradu, poslovnici, cjenovnom
+> rasponu i terminu. Iz prijave još nedostaje ukupna cijena za period u rezultatima
+> pretrage.
 
 Tri Flutter paketa, ne dva: `sunnyrides_core`, `sunnyrides_desktop` i
 `sunnyrides_mobile`. Desktop i mobilna dijele API klijent, čuvanje tokena, boje i
@@ -3167,6 +3168,19 @@ i server tako normalizuje; aplikacija unaprijed odbija samo ono što ni po oblik
 biti kod (pogrešna dužina ili znakovi `I`, `O`, `0`, `1`, koje server nikad ne generiše).
 Minimum lozinke je 6 znakova, isto kao u `ResetLozinkeRequest` — na ekranu za promjenu
 lozinke je ranije stajalo 8, što se nije slagalo sa serverom, pa je i to ispravljeno.
+
+### Filteri pretrage
+
+Filteri prate prijavu: tip vozila, marka, grad, poslovnica, cijena po danu od–do i
+termin. Polje za tekst traži i po marki i po modelu: tekst se dijeli na riječi i svaka
+mora postojati u nazivu marke ili modela, pa „Honda", „PCX" i „Honda PCX" nađu isto
+vozilo. Svaka riječ je jedan `LIKE` uslov na bazi, najviše pet riječi. Padajuće liste se pune iz šifrarnika, a poslovnica nudi samo poslovnice
+odabranog grada; kad se grad promijeni, poslovnica iz drugog grada se poništi, da ne
+ostane skriven uslov koji vraća praznu listu. Cjenovni raspon se provjerava ispod polja
+(iznos u eurima, gornja granica nije manja od donje) umjesto da se pogrešan unos tiho
+zanemari. Svi filteri idu serveru kao parametri `VoziloSearchObject` i izvršavaju se na
+bazi. Marka se upisuje i u `HistorijaPretrage`, a poslovnica kroz svoj grad, pa oboje
+ulazi u profil za preporuke.
 
 ### Pretraga počinje poretkom po preporuci
 

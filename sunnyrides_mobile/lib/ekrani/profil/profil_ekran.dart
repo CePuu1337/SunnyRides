@@ -380,11 +380,13 @@ class _Grupa extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Boje.povrsina,
+    // Material a ne Container sa bojom: ListTile crta pozadinu i trag dodira na
+    // najblizem Material-u, pa bi ih obojen Container prekrio.
+    return Material(
+      color: Boje.povrsina,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Zaobljenja.kartica),
-        border: Border.all(color: Boje.ivica),
+        side: const BorderSide(color: Boje.ivica),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(children: stavke),

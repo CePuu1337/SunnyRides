@@ -1,3 +1,4 @@
+using System.Globalization;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model;
@@ -10,6 +11,7 @@ using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Flota;
 using SunnyRides.Services.Preporuke.Ml;
 
 namespace SunnyRides.Services.Preporuke;
@@ -74,9 +76,14 @@ public class RecommenderService : IRecommenderService
 
         // Zahtjev ne ceka na treniranje - model trenira pozadinski servis. Dok model nije
         // spreman, ili ako korisnik nije bio u podacima za ucenje, ide rezervni put.
-        var poredani = _model.ZnaKorisnika(korisnikId)
+        var krozModel = _model.ZnaKorisnika(korisnikId);
+
+        var poredani = krozModel
             ? PredvidiModelom(kandidati, korisnikId)
             : await RezervnimPutemAsync(kandidati, korisnikId, ct);
+
+        // Obrazlozenje predikcije navodi i na cemu je model ucio za ovog korisnika.
+        var historija = krozModel ? await HistorijaAsync(korisnikId, ct) : null;
 
         // Jedan primjerak po modelu vozila. Flota ima po nekoliko vozila istog modela, a
         // predikcija se i racuna na nivou modela - bez ovoga bi prve tri preporuke lako
@@ -93,7 +100,7 @@ public class RecommenderService : IRecommenderService
 
         return new PagedResult<PreporukaDto>
         {
-            Items = await SastaviAsync(zaPrikaz, ct),
+            Items = await SastaviAsync(zaPrikaz, historija, ct),
             TotalCount = search.IncludeTotalCount ? poredani.Count : null
         };
     }
@@ -152,7 +159,7 @@ public class RecommenderService : IRecommenderService
 
         var koliko = Math.Clamp(broj ?? PodrazumijevanoSlicnih, 1, MaksimalnoSlicnih);
 
-        return await SastaviAsync(poredani.Take(koliko).ToList(), ct);
+        return await SastaviAsync(poredani.Take(koliko).ToList(), null, ct);
     }
 
     public async Task<List<RangiranoVozilo>> RangirajAsync(
@@ -448,7 +455,7 @@ public class RecommenderService : IRecommenderService
     /// poznaje.
     /// </summary>
     private async Task<List<PreporukaDto>> SastaviAsync(
-        IReadOnlyList<Bodovano> odabrani, CancellationToken ct)
+        IReadOnlyList<Bodovano> odabrani, HistorijaKorisnika? historija, CancellationToken ct)
     {
         if (odabrani.Count == 0)
         {
@@ -468,17 +475,19 @@ public class RecommenderService : IRecommenderService
             .Include(x => x.Slike.Where(s => s.JeGlavna))
             .ToDictionaryAsync(x => x.Id, ct);
 
-        var preporuke = new List<PreporukaDto>(odabrani.Count);
+        var parovi = odabrani
+            .Where(x => vozila.ContainsKey(x.Vozilo.VoziloId))
+            .Select(x => (Bodovano: x, Dto: vozila[x.Vozilo.VoziloId].Adapt<VoziloDto>()))
+            .ToList();
 
-        foreach (var bodovano in odabrani)
+        // Prosjecna ocjena ide uz vozilo kao i u pretrazi, da kartica prikaze stvarni
+        // prosjek recenzija - a ne procjenu modela, koja je nesto drugo.
+        await OcjeneVozila.DopuniAsync(_context, parovi.Select(x => x.Dto).ToList(), ct);
+
+        var preporuke = new List<PreporukaDto>(parovi.Count);
+
+        foreach (var (bodovano, dto) in parovi)
         {
-            if (!vozila.TryGetValue(bodovano.Vozilo.VoziloId, out var vozilo))
-            {
-                continue;
-            }
-
-            var dto = vozilo.Adapt<VoziloDto>();
-
             preporuke.Add(new PreporukaDto
             {
                 Vozilo = dto,
@@ -494,7 +503,7 @@ public class RecommenderService : IRecommenderService
                 Slicnost = bodovano.Heuristika is null ? 0 : Math.Round(bodovano.Heuristika.Slicnost, 4),
                 Popularnost = bodovano.Heuristika is null ? 0 : Math.Round(bodovano.Heuristika.Popularnost, 4),
 
-                Obrazlozenje = Obrazlozi(bodovano, dto)
+                Obrazlozenje = Obrazlozi(bodovano, dto, historija)
             });
         }
 
@@ -506,17 +515,77 @@ public class RecommenderService : IRecommenderService
     /// ili signala koji je najvise doprinio skoru na rezervnom putu. Zato uz vozilo
     /// nikad ne moze stajati razlog koji u racunu nije ucestvovao.
     /// </summary>
-    private static string Obrazlozi(Bodovano bodovano, VoziloDto vozilo)
+    private static string Obrazlozi(Bodovano bodovano, VoziloDto vozilo, HistorijaKorisnika? historija)
     {
         if (bodovano.Heuristika is null)
         {
             var ocjena = bodovano.PredvidjenaOcjena ?? BodovanjePreporuke.NeutralnaOcjena;
 
-            return $"Model procjenjuje da biste ovo vozilo ocijenili sa {ocjena:0.0} od 5, " +
-                   "prema ocjenama korisnika slicnog ukusa.";
+            return ObrazloziPredikciju(ocjena, vozilo.ProsjecnaOcjena, historija);
         }
 
         return ObrazloziHeuristiku(bodovano.Heuristika, vozilo);
+    }
+
+    /// <summary>
+    /// Predikcija se uvijek prikazuje uz prosjek vozila, jer su to dvije razlicite
+    /// stvari: prosjek je sta su o vozilu rekli svi, a predikcija je procjena za ovog
+    /// korisnika. Uz to se navodi na cemu je model za njega ucio - njegovi zavrseni
+    /// najmovi i ocjene - pa korisnik vidi da procjena dolazi iz njegove historije, a
+    /// ne samo iz tudjih ocjena.
+    /// </summary>
+    public static string ObrazloziPredikciju(
+        double predikcija, double? prosjekVozila, HistorijaKorisnika? historija)
+    {
+        // Tekst stoji na uskoj kartici, pa je namjerno kratak: tri reda na telefonu.
+        var prosjek = prosjekVozila is null
+            ? "vozilo jos nema recenzija"
+            : $"prosjek vozila {Decimalno(prosjekVozila.Value)}";
+
+        var osnova = historija is null
+            ? "Model uci iz ocjena slicnih korisnika."
+            : $"Model uci iz vasih {historija.Najmova} {Oblik(historija.Najmova, "najma", "najma", "najmova")} " +
+              $"i {historija.Ocjena} {Oblik(historija.Ocjena, "ocjene", "ocjene", "ocjena")}, " +
+              "te iz ocjena slicnih korisnika.";
+
+        return $"Za vas {Decimalno(predikcija)} od 5 ({prosjek}). {osnova}";
+    }
+
+    /// <summary>
+    /// Jedna decimala sa zarezom, kako se broj pise u recenici na bosanskom - i isto na
+    /// svakoj masini, bez obzira na jezicke postavke servera.
+    /// </summary>
+    private static string Decimalno(double broj) =>
+        broj.ToString("0.0", CultureInfo.InvariantCulture).Replace('.', ',');
+
+    /// <summary>1 ocjena, 2-4 ocjene, 5 i vise ocjena - uz izuzetak 11-14.</summary>
+    private static string Oblik(int broj, string jedan, string dvaDoCetiri, string pet)
+    {
+        var desetica = broj % 100;
+
+        if (desetica is >= 11 and <= 14)
+        {
+            return pet;
+        }
+
+        return (broj % 10) switch
+        {
+            1 => jedan,
+            >= 2 and <= 4 => dvaDoCetiri,
+            _ => pet
+        };
+    }
+
+    /// <summary>Koliko korisnik ima zavrsenih najmova i neskrivenih recenzija.</summary>
+    private async Task<HistorijaKorisnika> HistorijaAsync(int korisnikId, CancellationToken ct)
+    {
+        var najmova = await _context.Rezervacije
+            .CountAsync(x => x.KorisnikId == korisnikId && x.Status == StatusRezervacije.Completed, ct);
+
+        var ocjena = await _context.Recenzije
+            .CountAsync(x => x.KorisnikId == korisnikId && !x.Skrivena, ct);
+
+        return new HistorijaKorisnika(najmova, ocjena);
     }
 
     private static string ObrazloziHeuristiku(RezultatBodovanja rezultat, VoziloDto vozilo) =>
@@ -562,6 +631,9 @@ public class RecommenderService : IRecommenderService
         MetodaPreporuke Metoda,
         double? PredvidjenaOcjena,
         RezultatBodovanja? Heuristika);
+
+    /// <summary>Ono iz cega je model ucio za ovog korisnika, za obrazlozenje predikcije.</summary>
+    public record HistorijaKorisnika(int Najmova, int Ocjena);
 
     private int? KorisnikIliNull() => _trenutniKorisnik.KorisnikId;
 

@@ -305,10 +305,20 @@ više niti.
 Model vozila o kojem u podacima za učenje nema traga dobija prosjek flote: trener za
 nepoznat ključ vraća `NaN`, a neutralna vrijednost je poštenija od nasumične.
 
-Obrazloženje uz stavku je ono što model zaista tvrdi:
+Obrazloženje uz stavku je ono što model zaista tvrdi, uvijek uz prosjek vozila i uz ono
+iz čega je model za tog korisnika učio:
 
-> „Model procjenjuje da biste ovo vozilo ocijenili sa 4,3 od 5, prema ocjenama korisnika
-> sličnog ukusa."
+> „Za vas 4,8 od 5 (prosjek vozila 4,3). Model uči iz vaših 4 najma i 3 ocjene, te iz
+> ocjena sličnih korisnika."
+
+Procjena i prosjek su dvije različite stvari: prosjek je šta su o vozilu rekli svi, a
+procjena je šta model misli da bi rekao baš ovaj korisnik. Prva verzija aplikacije je
+na kartici, na mjestu zvjezdice, prikazivala procjenu, pa su broj uz zvjezdicu i broj u
+rečenici uvijek bili isti i izgledalo je kao da model samo prepisuje prosjek. Sada
+zvjezdica svuda (pretraga, detalji, početna) prikazuje prosjek recenzija, a procjena
+stoji samo u obrazloženju, jasno odvojena od njega. Brojevi najmova i ocjena se čitaju
+iz baze pri zahtjevu (`Rezervacija` u statusu `Completed`, neskrivene `Recenzija`) —
+to su isti izvori iz kojih se puni matrica za učenje.
 
 ---
 

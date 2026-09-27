@@ -2,7 +2,10 @@ namespace SunnyRides.Model.SearchObjects;
 
 public class VoziloSearchObject : BaseSearchObject
 {
-    /// <summary>Dio naziva modela, npr. "CB125".</summary>
+    /// <summary>
+    /// Tekst pretrage po marki i modelu, npr. "Honda", "PCX" ili "Honda PCX". Svaka
+    /// rijec mora postojati u nazivu marke ili modela.
+    /// </summary>
     public string? ModelNaziv { get; set; }
 
     public string? RegistarskaOznaka { get; set; }

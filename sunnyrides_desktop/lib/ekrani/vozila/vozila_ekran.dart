@@ -247,7 +247,7 @@ class _Filteri extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           PoljePretrage(
-            natpis: 'Pretraga po modelu',
+            natpis: 'Pretraga po marki ili modelu',
             naPromjenu: (tekst) =>
                 naPromjenu(upit.kopija(pretraga: tekst, stranica: 0)),
           ),

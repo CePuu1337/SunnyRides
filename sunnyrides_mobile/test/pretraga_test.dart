@@ -64,11 +64,50 @@ void main() {
       expect(Poredak.preporuka.vrijednost, 'Preporuka');
     });
 
+    test('marka, poslovnica i cjenovni raspon se broje kao filteri', () {
+      const sa = Filteri(
+        markaId: 3,
+        poslovnicaId: 7,
+        cijenaOd: 20,
+        cijenaDo: 60,
+      );
+
+      // Raspon je jedan filter, bez obzira koliko granica ima.
+      expect(sa.brojAktivnih, 3);
+      expect(sa.kopija(cijenaDo: null).brojAktivnih, 3);
+      expect(sa.kopija(cijenaOd: null, cijenaDo: null).brojAktivnih, 2);
+      expect(sa.kopija(poslovnicaId: null).markaId, 3);
+    });
+
     test('broj aktivnih filtera ne racuna nepotpun termin', () {
       const sa = Filteri(tipVozilaId: 1, cijenaDo: 50);
 
       expect(sa.brojAktivnih, 2);
       expect(sa.kopija(datumOd: DateTime(2026, 7, 1)).brojAktivnih, 2);
+    });
+  });
+
+  group('Cijena u filterima', () {
+    test('prazno polje znaci bez granice', () {
+      expect(ValidacijaCijene.procitaj(''), isNull);
+      expect(ValidacijaCijene.iznos('  '), isNull);
+    });
+
+    test('zarez i tacka se prihvataju kao decimalni znak', () {
+      expect(ValidacijaCijene.procitaj('42,5'), 42.5);
+      expect(ValidacijaCijene.procitaj('42.5'), 42.5);
+    });
+
+    test('tekst i negativan iznos se odbijaju porukom', () {
+      expect(ValidacijaCijene.iznos('abc'), isNotNull);
+      expect(ValidacijaCijene.iznos('-5'), isNotNull);
+      expect(ValidacijaCijene.iznos('40'), isNull);
+    });
+
+    test('gornja granica ne smije biti manja od donje', () {
+      expect(ValidacijaCijene.raspon('50', '30'), isNotNull);
+      expect(ValidacijaCijene.raspon('30', '50'), isNull);
+      expect(ValidacijaCijene.raspon('', '30'), isNull);
     });
   });
 }

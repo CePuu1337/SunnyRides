@@ -33,7 +33,9 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
 
   Filteri _filteri = const Filteri();
   List<Stavka> _tipovi = const [];
+  List<Stavka> _marke = const [];
   List<Stavka> _gradovi = const [];
+  List<Stavka> _poslovnice = const [];
   DozvoljeneKategorije? _kategorije;
 
   final List<Vozilo> _rezultati = [];
@@ -89,7 +91,9 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
     try {
       final rezultati = await Future.wait([
         _katalog.tipoviVozila(),
+        _katalog.marke(),
         _katalog.gradovi(),
+        _katalog.poslovnice(),
         _katalog.mojeKategorije(),
       ]);
 
@@ -99,8 +103,10 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
 
       setState(() {
         _tipovi = rezultati[0] as List<Stavka>;
-        _gradovi = rezultati[1] as List<Stavka>;
-        _kategorije = rezultati[2] as DozvoljeneKategorije;
+        _marke = rezultati[1] as List<Stavka>;
+        _gradovi = rezultati[2] as List<Stavka>;
+        _poslovnice = rezultati[3] as List<Stavka>;
+        _kategorije = rezultati[4] as DozvoljeneKategorije;
       });
     } on ApiGreska {
       // Sifarnici su pomoc pri filtriranju. Ako ne stignu, pretraga radi i bez njih.
@@ -151,7 +157,10 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
       ),
       modelNaziv: _filteri.tekst,
       tipVozilaId: _filteri.tipVozilaId,
+      markaId: _filteri.markaId,
       gradId: _filteri.gradId,
+      poslovnicaId: _filteri.poslovnicaId,
+      cijenaOd: _filteri.cijenaOd,
       cijenaDo: _filteri.cijenaDo,
       slobodnoOd: _filteri.imaTermin ? _filteri.datumOd : null,
       slobodnoDo: _filteri.imaTermin ? _filteri.datumDo : null,
@@ -220,8 +229,13 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) =>
-          ListFiltera(pocetni: _filteri, tipovi: _tipovi, gradovi: _gradovi),
+      builder: (_) => ListFiltera(
+        pocetni: _filteri,
+        tipovi: _tipovi,
+        marke: _marke,
+        gradovi: _gradovi,
+        poslovnice: _poslovnice,
+      ),
     );
 
     if (novi == null || !mounted) {
@@ -294,7 +308,7 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
               onChanged: _naTekst,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Naziv modela, npr. Vespa',
+                hintText: 'Marka ili model, npr. Honda PCX',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _polje.text.isEmpty
                     ? null

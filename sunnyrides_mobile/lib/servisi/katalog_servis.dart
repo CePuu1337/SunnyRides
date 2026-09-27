@@ -45,6 +45,7 @@ class KatalogServis {
     required OsnovniUpit upit,
     String? modelNaziv,
     int? tipVozilaId,
+    int? markaId,
     int? gradId,
     int? poslovnicaId,
     double? cijenaOd,
@@ -59,6 +60,7 @@ class KatalogServis {
         ...upit.uMapu(),
         'modelNaziv': modelNaziv,
         'tipVozilaId': tipVozilaId,
+        'markaId': markaId,
         'gradId': gradId,
         'poslovnicaId': poslovnicaId,
         'cijenaOd': cijenaOd,
@@ -102,6 +104,10 @@ class KatalogServis {
   Future<List<Stavka>> tipoviVozila() => _sifarnik('/api/tipovi-vozila');
 
   Future<List<Stavka>> gradovi() => _sifarnik('/api/gradovi');
+
+  Future<List<Stavka>> marke() => _sifarnik('/api/marke');
+
+  Future<List<Stavka>> poslovnice() => _sifarnik('/api/poslovnice');
 
   /// Sta prijavljeni korisnik smije voziti. Stoji iznad rezultata pretrage, da mu
   /// bude jasno zasto pojedina vozila nisu ponudjena.

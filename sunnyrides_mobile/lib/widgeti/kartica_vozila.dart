@@ -160,8 +160,12 @@ class KarticaVozila extends StatelessWidget {
                             ),
                             const SizedBox(width: Razmaci.xs),
                             Expanded(
+                              // Vodoravni niz preporuka ima stalnu visinu, pa tekst
+                              // ne smije rasti preko nje.
                               child: Text(
                                 obrazlozenje!,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 11,
                                   height: 1.35,

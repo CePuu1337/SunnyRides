@@ -368,7 +368,7 @@ class _Preporuke extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 320,
+      height: 340,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: Razmaci.l),
@@ -381,7 +381,9 @@ class _Preporuke extends StatelessWidget {
             vozilo: preporuka.vozilo,
             sirina: 244,
             obrazlozenje: preporuka.obrazlozenje,
-            ocjena: preporuka.predvidjenaOcjena,
+            // Zvjezdica je prosjek recenzija vozila, kao i u pretrazi. Procjena modela
+            // za korisnika stoji u obrazlozenju, uz taj prosjek.
+            ocjena: preporuka.vozilo.prosjecnaOcjena,
             naDodir: () => naOdabir(preporuka.vozilo.id),
           );
         },

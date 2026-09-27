@@ -35,6 +35,12 @@ public class VoziloService
     private const int MaksimalnoZaRangiranje = 500;
 
     /// <summary>
+    /// Koliko rijeci teksta pretrage ulazi u upit. Marka i model zajedno rijetko imaju
+    /// vise od tri; granica stoji da dug tekst ne napravi upit sa desetinama uslova.
+    /// </summary>
+    private const int NajviseRijeciPretrage = 5;
+
+    /// <summary>
     /// Kategorije koje prijavljeni korisnik smije voziti, razrijesene na pocetku
     /// pretrage.
     ///
@@ -153,43 +159,8 @@ public class VoziloService
         return vozilo;
     }
 
-    /// <summary>
-    /// Prosjecna ocjena se dopisuje posebnim upitom, nakon sto je stranica vec
-    /// suzena. Include nad recenzijama bi povukao svaki komentar svakog vozila samo
-    /// da bi se izracunao prosjek; ovako se po stranici racuna jedan grupisani upit
-    /// nad ocjenama, bez teksta.
-    /// </summary>
-    private async Task DodajOcjeneAsync(IReadOnlyCollection<VoziloDto> vozila, CancellationToken ct)
-    {
-        if (vozila.Count == 0)
-        {
-            return;
-        }
-
-        var ids = vozila.Select(x => x.Id).ToList();
-
-        var ocjene = await Context.Recenzije
-            .Where(x => ids.Contains(x.VoziloId) && !x.Skrivena)
-            .GroupBy(x => x.VoziloId)
-            .Select(g => new
-            {
-                VoziloId = g.Key,
-                Prosjek = g.Average(x => (double)x.Ocjena),
-                Broj = g.Count(),
-            })
-            .ToDictionaryAsync(x => x.VoziloId, ct);
-
-        foreach (var vozilo in vozila)
-        {
-            if (!ocjene.TryGetValue(vozilo.Id, out var stavka))
-            {
-                continue;
-            }
-
-            vozilo.ProsjecnaOcjena = Math.Round(stavka.Prosjek, 1);
-            vozilo.BrojRecenzija = stavka.Broj;
-        }
-    }
+    private Task DodajOcjeneAsync(IReadOnlyCollection<VoziloDto> vozila, CancellationToken ct) =>
+        OcjeneVozila.DopuniAsync(Context, vozila, ct);
 
     /// <summary>
     /// Poredak po ocjeni ne moze kroz osnovnu implementaciju - ona sortira po
@@ -236,7 +207,17 @@ public class VoziloService
     {
         if (!string.IsNullOrWhiteSpace(search.ModelNaziv))
         {
-            upit = upit.Where(x => x.ModelVozila.Naziv.Contains(search.ModelNaziv));
+            // Svaka rijec mora postojati u marki ili u modelu, pa "Honda", "PCX" i
+            // "Honda PCX" nadju isto vozilo. Svaka rijec je jedan LIKE uslov na bazi.
+            var rijeci = search.ModelNaziv
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Take(NajviseRijeciPretrage);
+
+            foreach (var rijec in rijeci)
+            {
+                upit = upit.Where(x => x.ModelVozila.Naziv.Contains(rijec)
+                                       || x.ModelVozila.Marka.Naziv.Contains(rijec));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(search.RegistarskaOznaka))
