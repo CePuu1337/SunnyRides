@@ -60,7 +60,7 @@ ne ispadne:
 | Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ✅ |
 | Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ✅ |
 | Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
-| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | poredak po preporuci (podrazumijevani), cijeni i ocjeni je gotov; ukupna cijena po vozilu u rezultatu još nije | 🟡 |
+| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | grupni obračun cijene za stranicu rezultata (`IPricingService.IzracunajZaVozilaAsync`), poredak po preporuci, cijeni i ocjeni | ✅ |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
 | Detalji vozila: recenzije i slična vozila | `/api/preporuke/slicna/{id}` i `/api/recenzije?voziloId=` | ✅ |
 | Otkazivanje: „korisnik bira razlog iz padajuće liste" | šifrarnik `RazlogOtkazivanja`, padajuća lista se puni iz baze | ✅ |
@@ -3076,8 +3076,7 @@ praktično iste, što znači da model nije naučio podatke napamet.
 > 🟡 Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
 > pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije, profil i reset
 > zaboravljene lozinke. Pretraga filtrira po tipu, marki, gradu, poslovnici, cjenovnom
-> rasponu i terminu. Iz prijave još nedostaje ukupna cijena za period u rezultatima
-> pretrage.
+> rasponu i terminu, a uz termin prikazuje ukupnu cijenu za cijeli period.
 
 Tri Flutter paketa, ne dva: `sunnyrides_core`, `sunnyrides_desktop` i
 `sunnyrides_mobile`. Desktop i mobilna dijele API klijent, čuvanje tokena, boje i
@@ -3168,6 +3167,25 @@ i server tako normalizuje; aplikacija unaprijed odbija samo ono što ni po oblik
 biti kod (pogrešna dužina ili znakovi `I`, `O`, `0`, `1`, koje server nikad ne generiše).
 Minimum lozinke je 6 znakova, isto kao u `ResetLozinkeRequest` — na ekranu za promjenu
 lozinke je ranije stajalo 8, što se nije slagalo sa serverom, pa je i to ispravljeno.
+
+### Ukupna cijena za period u rezultatima pretrage
+
+Kad pretraga ima termin, svaka kartica umjesto dnevne tarife prikazuje ukupnu cijenu
+najma za cijeli period, npr. „114,00 € za 3 dana". Računa je `PricingService`, isti
+obračun kao i rezervaciju (trajanje sa tolerancijom od 59 minuta, sezonski množilac,
+popust za duže najmove), samo bez opreme i osiguranja, koje klijent bira tek u
+rezervaciji; depozit stoji odvojeno jer se vraća. Zato se iznos u pretrazi ne može
+razlikovati od onoga što rezervacija za isti period pokaže.
+
+Obračun je grupni: `IzracunajZaVozilaAsync` čita sva vozila sa stranice jednim upitom,
+a sezonu po modelu vozila iz keša cjenovnika, pa stranica od deset vozila ne pravi
+deset zasebnih obračuna. Pojedinačni i grupni obračun grade ulaz kroz istu metodu
+(`NapraviUlaz`) i računaju kroz isti `ObracunCijene`. Bez termina nema perioda, pa
+kartica prikazuje dnevnu tarifu.
+
+Poredak „po cijeni" i dalje ide po dnevnoj tarifi, jer je to kolona na bazi; za isti
+termin je ukupna cijena srazmjerna tarifi, osim kad se modelima razlikuje sezonski
+množilac.
 
 ### Filteri pretrage
 

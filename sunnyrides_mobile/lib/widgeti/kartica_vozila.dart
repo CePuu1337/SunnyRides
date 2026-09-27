@@ -81,17 +81,25 @@ class KarticaVozila extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             text: TextSpan(
                               style: const TextStyle(color: Boje.tekst),
+                              // Kad pretraga ima termin, prikazuje se ukupna cijena
+                              // za taj period, kako je izracuna server. Bez termina
+                              // nema perioda, pa ostaje dnevna tarifa.
                               children: [
                                 TextSpan(
-                                  text: Formati.novac(vozilo.dnevnaTarifa),
+                                  text: Formati.novac(
+                                    vozilo.cijenaZaPeriod?.iznosNajma ??
+                                        vozilo.dnevnaTarifa,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                const TextSpan(
-                                  text: ' / dan',
-                                  style: TextStyle(
+                                TextSpan(
+                                  text: vozilo.cijenaZaPeriod == null
+                                      ? ' / dan'
+                                      : ' ${vozilo.cijenaZaPeriod!.opis}',
+                                  style: const TextStyle(
                                     fontSize: 11.5,
                                     color: Boje.tekstPrigusen,
                                   ),

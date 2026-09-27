@@ -60,14 +60,74 @@ public class PricingService : IPricingService
         var stavke = await UcitajOpremuAsync(oprema, ct);
         var osiguranje = await UcitajOsiguranjeAsync(paketOsiguranjaId, ct);
 
-        var ulaz = new UlazObracuna(
+        return ObracunCijene.Izracunaj(NapraviUlaz(
+            datumOd, datumDo, vozilo.SatnaTarifa, vozilo.DnevnaTarifa, vozilo.IznosDepozita,
+            sezona, stavke, osiguranje));
+    }
+
+    public async Task<Dictionary<int, CijenaRezervacijeDto>> IzracunajZaVozilaAsync(
+        IReadOnlyCollection<int> voziloIds,
+        DateTime datumOd,
+        DateTime datumDo,
+        CancellationToken ct = default)
+    {
+        var rezultat = new Dictionary<int, CijenaRezervacijeDto>();
+
+        if (voziloIds.Count == 0 || datumDo <= datumOd)
+        {
+            return rezultat;
+        }
+
+        var ids = voziloIds.Distinct().ToList();
+
+        // Jedan upit za sva vozila, samo kolone koje obracun cita.
+        var vozila = await _context.Vozila
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.ModelVozilaId, x.SatnaTarifa, x.DnevnaTarifa, x.IznosDepozita })
+            .ToListAsync(ct);
+
+        // Sezona po modelu, ne po vozilu - primjerci istog modela dijele cjenovnik, a
+        // tarife modela dolaze iz kesa cjenovnika.
+        var sezone = new Dictionary<int, CjenovnikDto?>();
+
+        foreach (var modelId in vozila.Select(x => x.ModelVozilaId).Distinct())
+        {
+            sezone[modelId] = await _cjenovnikService.VazeciAsync(modelId, datumOd, ct);
+        }
+
+        var bezOpreme = new List<StavkaOpremeUlaz>();
+
+        foreach (var vozilo in vozila)
+        {
+            rezultat[vozilo.Id] = ObracunCijene.Izracunaj(NapraviUlaz(
+                datumOd, datumDo, vozilo.SatnaTarifa, vozilo.DnevnaTarifa, vozilo.IznosDepozita,
+                sezone[vozilo.ModelVozilaId], bezOpreme, null));
+        }
+
+        return rezultat;
+    }
+
+    /// <summary>
+    /// Ulaz obracuna iz tarife vozila i vazece sezone. Jedno mjesto za oba obracuna -
+    /// pojedinacni i grupni - da pretraga i rezervacija ne mogu dati razlicitu cijenu.
+    /// </summary>
+    private static UlazObracuna NapraviUlaz(
+        DateTime datumOd,
+        DateTime datumDo,
+        decimal satnaTarifaVozila,
+        decimal dnevnaTarifaVozila,
+        decimal iznosDepozita,
+        CjenovnikDto? sezona,
+        IReadOnlyList<StavkaOpremeUlaz> oprema,
+        Database.Entities.PaketOsiguranja? osiguranje) => new(
             DatumOd: datumOd,
             DatumDo: datumDo,
 
             // Cjenovnik smije nadjacati tarifu vozila; kad je ne navede, vazi tarifa
             // upisana na samom primjerku.
-            SatnaTarifa: sezona?.SatnaTarifa ?? vozilo.SatnaTarifa,
-            DnevnaTarifa: sezona?.DnevnaTarifa ?? vozilo.DnevnaTarifa,
+            SatnaTarifa: sezona?.SatnaTarifa ?? satnaTarifaVozila,
+            DnevnaTarifa: sezona?.DnevnaTarifa ?? dnevnaTarifaVozila,
 
             Mnozilac: sezona?.Mnozilac ?? 1m,
             NazivSezone: sezona?.Naziv,
@@ -77,15 +137,12 @@ public class PricingService : IPricingService
             PopustPrag2: sezona?.PopustPrag2 ?? PodrazumijevaniPrag2,
             PopustProcenat2: sezona?.PopustProcenat2 ?? PodrazumijevaniProcenat2,
 
-            IznosDepozita: vozilo.IznosDepozita,
+            IznosDepozita: iznosDepozita,
 
-            Oprema: stavke,
+            Oprema: oprema,
             PaketOsiguranjaId: osiguranje?.Id,
             PaketOsiguranjaNaziv: osiguranje?.Naziv,
             OsiguranjeCijenaPoDanu: osiguranje?.CijenaPoDanu ?? 0m);
-
-        return ObracunCijene.Izracunaj(ulaz);
-    }
 
     public async Task<decimal> DnevnaCijenaAsync(int voziloId, DateTime datum, CancellationToken ct = default)
     {

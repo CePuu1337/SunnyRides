@@ -21,6 +21,19 @@ public interface IPricingService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Cijena najma za isti termin za vise vozila odjednom - za rezultate pretrage.
+    ///
+    /// Isti obracun kao <see cref="IzracunajAsync"/>, bez opreme i osiguranja. Vozila
+    /// se citaju jednim upitom, a sezonske tarife iz kesa, pa stranica od deset vozila
+    /// ne pravi deset obracuna sa po nekoliko upita.
+    /// </summary>
+    Task<Dictionary<int, CijenaRezervacijeDto>> IzracunajZaVozilaAsync(
+        IReadOnlyCollection<int> voziloIds,
+        DateTime datumOd,
+        DateTime datumDo,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Cijena jednog dana najma za dati datum, sa sezonskim mnoziocem. Koristi se za
     /// doplatu kad je vozilo vraceno kasnije od ugovorenog.
     /// </summary>

@@ -74,15 +74,16 @@ class Formati {
     if (razlika.inHours < 24) {
       final sati = razlika.inHours;
 
-      return '$sati ${_oblik(sati, 'sat', 'sata', 'sati')}';
+      return '$sati ${oblik(sati, 'sat', 'sata', 'sati')}';
     }
 
     final dana = razlika.inDays;
 
-    return '$dana ${_oblik(dana, 'dan', 'dana', 'dana')}';
+    return '$dana ${oblik(dana, 'dan', 'dana', 'dana')}';
   }
 
-  static String _oblik(int broj, String jednina, String malo, String mnozina) {
+  /// Oblik rijeci uz broj: 1 dan, 2 dana, 5 dana, 11 dana, 21 dan.
+  static String oblik(int broj, String jednina, String malo, String mnozina) {
     final zadnja = broj % 10;
     final zadnjeDvije = broj % 100;
 

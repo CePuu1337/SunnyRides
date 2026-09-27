@@ -6,6 +6,7 @@ using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Base;
+using SunnyRides.Services.Cijene;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
@@ -26,6 +27,7 @@ public class VoziloService
     private readonly ICurrentUserService _trenutniKorisnik;
     private readonly IHistorijaPretrageService _historijaPretrage;
     private readonly IRecommenderService _recommender;
+    private readonly IPricingService _pricing;
 
     /// <summary>
     /// Gornja granica vozila koja ulaze u rangiranje po preporuci. Flota je desetak puta
@@ -57,7 +59,8 @@ public class VoziloService
         IDozvolaService dozvolaService,
         ICurrentUserService trenutniKorisnik,
         IHistorijaPretrageService historijaPretrage,
-        IRecommenderService recommender)
+        IRecommenderService recommender,
+        IPricingService pricing)
         : base(context)
     {
         _pohrana = pohrana;
@@ -66,6 +69,7 @@ public class VoziloService
         _trenutniKorisnik = trenutniKorisnik;
         _historijaPretrage = historijaPretrage;
         _recommender = recommender;
+        _pricing = pricing;
     }
 
     /// <summary>
@@ -98,8 +102,49 @@ public class VoziloService
             : await base.GetAsync(search, ct);
 
         await DodajOcjeneAsync(rezultat.Items, ct);
+        await DodajCijeneZaPeriodAsync(rezultat.Items, search, ct);
 
         return rezultat;
+    }
+
+    /// <summary>
+    /// Ukupna cijena za termin iz pretrage, samo za vozila na trazenoj stranici.
+    ///
+    /// Racuna je <see cref="IPricingService"/>, isti obracun koji racuna i rezervaciju,
+    /// pa se iznos u rezultatima ne moze razlikovati od onoga sto rezervacija kasnije
+    /// pokaze za isti period. Bez termina nema perioda, pa ostaje samo dnevna tarifa.
+    /// </summary>
+    private async Task DodajCijeneZaPeriodAsync(
+        IReadOnlyCollection<VoziloDto> vozila, VoziloSearchObject search, CancellationToken ct)
+    {
+        if (vozila.Count == 0
+            || search.SlobodnoOd is not { } od
+            || search.SlobodnoDo is not { } doDatuma
+            || doDatuma <= od)
+        {
+            return;
+        }
+
+        var cijene = await _pricing.IzracunajZaVozilaAsync(
+            vozila.Select(x => x.Id).ToList(), od, doDatuma, ct);
+
+        foreach (var vozilo in vozila)
+        {
+            if (!cijene.TryGetValue(vozilo.Id, out var cijena))
+            {
+                continue;
+            }
+
+            vozilo.CijenaZaPeriod = new CijenaPeriodaDto
+            {
+                IznosNajma = cijena.IznosNajma,
+                NaplataPoSatu = cijena.NaplataPoSatu,
+                BrojSati = cijena.BrojSati,
+                BrojDana = cijena.BrojDana,
+                ProcenatPopusta = cijena.ProcenatPopusta,
+                IznosDepozita = cijena.IznosDepozita
+            };
+        }
     }
 
     /// <summary>

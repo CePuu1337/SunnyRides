@@ -110,4 +110,42 @@ void main() {
       expect(ValidacijaCijene.raspon('', '30'), isNull);
     });
   });
+
+  group('Cijena za period', () {
+    CijenaPerioda cijena({bool poSatu = false, int sati = 0, int dana = 0}) {
+      return CijenaPerioda.izJsona({
+        'iznosNajma': 123.5,
+        'naplataPoSatu': poSatu,
+        'brojSati': sati,
+        'brojDana': dana,
+        'procenatPopusta': 5,
+        'iznosDepozita': 200,
+      });
+    }
+
+    test('opis prati broj dana koji se stvarno naplacuje', () {
+      expect(cijena(dana: 1).opis, 'za 1 dan');
+      expect(cijena(dana: 3).opis, 'za 3 dana');
+      expect(cijena(dana: 7).opis, 'za 7 dana');
+      expect(cijena(poSatu: true, sati: 5).opis, 'za 5 sati');
+      expect(cijena(poSatu: true, sati: 2).opis, 'za 2 sata');
+    });
+
+    test('vozilo bez termina nema cijenu za period', () {
+      final vozilo = Vozilo.izJsona({'id': 1, 'dnevnaTarifa': 40});
+
+      expect(vozilo.cijenaZaPeriod, isNull);
+    });
+
+    test('vozilo sa terminom cita cijenu za period', () {
+      final vozilo = Vozilo.izJsona({
+        'id': 1,
+        'dnevnaTarifa': 40,
+        'cijenaZaPeriod': {'iznosNajma': 114, 'brojDana': 3},
+      });
+
+      expect(vozilo.cijenaZaPeriod?.iznosNajma, 114);
+      expect(vozilo.cijenaZaPeriod?.opis, 'za 3 dana');
+    });
+  });
 }

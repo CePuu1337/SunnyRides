@@ -19,6 +19,7 @@ class Vozilo {
     required this.kategorijaDozvoleId,
     this.prosjecnaOcjena,
     this.brojRecenzija = 0,
+    this.cijenaZaPeriod,
     this.modelNaziv,
     this.markaNaziv,
     this.tipVozilaNaziv,
@@ -50,6 +51,10 @@ class Vozilo {
 
   /// Broj recenzija iza prosjeka, da se zna koliko tezine ocjena ima.
   final int brojRecenzija;
+
+  /// Cijena za termin iz pretrage, izracunata na serveru. Prazna kad pretraga
+  /// nema termin.
+  final CijenaPerioda? cijenaZaPeriod;
 
   final String? modelNaziv;
   final String? markaNaziv;
@@ -101,6 +106,11 @@ class Vozilo {
       kategorijaDozvoleId: citajInt(json['kategorijaDozvoleId']),
       prosjecnaOcjena: citajDoubleIliNista(json['prosjecnaOcjena']),
       brojRecenzija: citajInt(json['brojRecenzija']),
+      cijenaZaPeriod: json['cijenaZaPeriod'] is Map<String, dynamic>
+          ? CijenaPerioda.izJsona(
+              json['cijenaZaPeriod'] as Map<String, dynamic>,
+            )
+          : null,
       modelNaziv: json['modelNaziv']?.toString(),
       markaNaziv: json['markaNaziv']?.toString(),
       tipVozilaNaziv: json['tipVozilaNaziv']?.toString(),
@@ -109,6 +119,43 @@ class Vozilo {
       poslovnicaNaziv: json['poslovnicaNaziv']?.toString(),
       gradNaziv: json['gradNaziv']?.toString(),
       thumbnailUrl: json['thumbnailUrl']?.toString(),
+    );
+  }
+}
+
+/// Najam za cijeli trazeni period, onako kako ga je izracunao server - sa sezonom
+/// i popustom za duze najmove, bez opreme, osiguranja i depozita.
+class CijenaPerioda {
+  const CijenaPerioda({
+    required this.iznosNajma,
+    required this.naplataPoSatu,
+    required this.brojSati,
+    required this.brojDana,
+    required this.procenatPopusta,
+    required this.iznosDepozita,
+  });
+
+  final double iznosNajma;
+  final bool naplataPoSatu;
+  final int brojSati;
+  final int brojDana;
+  final double procenatPopusta;
+  final double iznosDepozita;
+
+  /// Za koliko se naplacuje: "za 3 dana", "za 5 sati". Broj dana je onaj koji se
+  /// stvarno naplacuje, sa tolerancijom od 59 minuta, a ne razlika datuma.
+  String get opis => naplataPoSatu
+      ? 'za $brojSati ${Formati.oblik(brojSati, 'sat', 'sata', 'sati')}'
+      : 'za $brojDana ${Formati.oblik(brojDana, 'dan', 'dana', 'dana')}';
+
+  factory CijenaPerioda.izJsona(Map<String, dynamic> json) {
+    return CijenaPerioda(
+      iznosNajma: citajDouble(json['iznosNajma']),
+      naplataPoSatu: citajBool(json['naplataPoSatu']),
+      brojSati: citajInt(json['brojSati']),
+      brojDana: citajInt(json['brojDana']),
+      procenatPopusta: citajDouble(json['procenatPopusta']),
+      iznosDepozita: citajDouble(json['iznosDepozita']),
     );
   }
 }

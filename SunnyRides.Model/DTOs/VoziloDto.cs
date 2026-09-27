@@ -47,6 +47,12 @@ public class VoziloDto
     /// </summary>
     public double? ProsjecnaOcjena { get; set; }
 
+    /// <summary>
+    /// Cijena za termin iz pretrage. Popunjena samo kad pretraga ima termin - bez
+    /// njega nema perioda za koji bi se cijena racunala, pa vazi dnevna tarifa.
+    /// </summary>
+    public CijenaPeriodaDto? CijenaZaPeriod { get; set; }
+
     /// <summary>Broj recenzija iza prosjeka. Bez njega ocjena 5,0 iz jedne recenzije izgleda isto kao iz pedeset.</summary>
     public int BrojRecenzija { get; set; }
 }
