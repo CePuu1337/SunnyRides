@@ -23,6 +23,12 @@ public record PrimopredajaPoruka(int RezervacijaId, int PrimopredajaId);
 /// hash, kao i kod lozinke. Kod u citljivom obliku postoji jedino u ovoj poruci i u
 /// emailu koji klijent dobije.
 /// </summary>
+/// <summary>
+/// Vozilo na rezervaciji je zamijenjeno. Staro vozilo putuje u poruci, jer ga
+/// rezervacija vise ne nosi, a klijentu treba reci sta je bilo umjesto cega.
+/// </summary>
+public record ZamjenaVozilaPoruka(int RezervacijaId, int StaroVoziloId);
+
 public record ResetLozinkePoruka(int KorisnikId, string Kod, DateTime IsticeUtc);
 
 /// <summary>

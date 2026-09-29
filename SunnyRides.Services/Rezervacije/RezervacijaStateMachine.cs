@@ -42,6 +42,13 @@ public class RezervacijaStateMachine : IRezervacijaStateMachine
         DodajZapis(rezervacija, statusIz: null, rezervacija.Status, opis, razlog: null);
     }
 
+    public void ZabiljeziIzmjenu(Rezervacija rezervacija, string opis, string? razlog = null)
+    {
+        DodajZapis(rezervacija, rezervacija.Status, rezervacija.Status, opis, razlog);
+
+        _logger.LogInformation("Rezervacija {Broj}: {Opis}", rezervacija.Broj, opis);
+    }
+
     /// <summary>
     /// Audit zapis nosi cetiri stvari koje uputstvo trazi: ko, kada, razlog i opis.
     ///

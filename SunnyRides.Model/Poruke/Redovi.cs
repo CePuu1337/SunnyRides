@@ -15,6 +15,7 @@ public static class Redovi
     public const string PodsjetnikPreuzimanje = "podsjetnik.preuzimanje";
     public const string VoziloVraceno = "vozilo.vraceno";
     public const string ResetLozinke = "reset.lozinke";
+    public const string VoziloZamijenjeno = "vozilo.zamijenjeno";
 
     /// <summary>Worker po ovoj listi pravi redove i pretplacuje se na njih.</summary>
     public static readonly IReadOnlyList<string> Sve = new[]
@@ -26,7 +27,8 @@ public static class Redovi
         DozvolaVerifikovana,
         PodsjetnikPreuzimanje,
         VoziloVraceno,
-        ResetLozinke
+        ResetLozinke,
+        VoziloZamijenjeno
     };
 
     /// <summary>

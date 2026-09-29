@@ -267,6 +267,8 @@ class _Red extends StatelessWidget {
         return (Icons.task_alt, Boje.uspjeh);
       case TipNotifikacije.resetLozinke:
         return (Icons.lock_reset, Boje.upozorenje);
+      case TipNotifikacije.voziloZamijenjeno:
+        return (Icons.swap_horiz, Boje.info);
       case null:
         return (Icons.notifications_none, Boje.tekstPrigusen);
     }

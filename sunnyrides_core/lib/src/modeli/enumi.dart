@@ -162,7 +162,8 @@ enum TipNotifikacije {
   dozvolaOdbijena(7),
   podsjetnikPreuzimanje(8),
   voziloVraceno(9),
-  resetLozinke(10);
+  resetLozinke(10),
+  voziloZamijenjeno(11);
 
   const TipNotifikacije(this.vrijednost);
 

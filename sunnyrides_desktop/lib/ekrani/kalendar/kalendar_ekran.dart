@@ -161,13 +161,11 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
       ),
     );
 
-    if (ishod == null) {
-      return;
-    }
-
+    // Kalendar se osvjezava i kad je dijalog zatvoren bez snimanja: iz njega je
+    // pogodjena rezervacija mozda prebacena na drugo vozilo ili otkazana.
     _ucitaj();
 
-    if (!mounted) {
+    if (ishod == null || !mounted) {
       return;
     }
 

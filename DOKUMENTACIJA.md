@@ -29,7 +29,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 5 | Bazni servisi, paginacija, `ExceptionFilter`, Mapster, Swagger | ✅ |
 | 6 | Prijava, JWT, uloge, opoziv tokena | ✅ |
 | 7 | CRUD referentnih podataka | ✅ |
-| 8 | Vozila, slike, blokade, cjenovnik | 🟡 |
+| 8 | Vozila, slike, blokade, cjenovnik | ✅ |
 | 9 | Obračun cijene i provjera dostupnosti | ✅ |
 | 10 | Vozačke dozvole i filtriranje po kategoriji | ✅ |
 | 11 | Rezervacije, state machine, otkazivanje | ✅ |
@@ -59,7 +59,7 @@ ne ispadne:
 | Obavijesti agencije na početnom ekranu | CRUD obavijesti sa slikom | ✅ |
 | Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ✅ |
 | Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ✅ |
-| Blokada: zamjena vozila za pogođenu rezervaciju | prebacivanje rezervacije na vozilo istog ili boljeg ranga, uz ponovnu provjeru dostupnosti | ⬜ |
+| Blokada: zamjena vozila za pogođenu rezervaciju | `ZamjenaVozilaService`: lista zamjenskih vozila i prebacivanje rezervacije, uz zaključavanje i ponovnu provjeru dostupnosti i dozvole | ✅ |
 | Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | grupni obračun cijene za stranicu rezultata (`IPricingService.IzracunajZaVozilaAsync`), poredak po preporuci, cijeni i ocjeni | ✅ |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
 | Detalji vozila: recenzije i slična vozila | `/api/preporuke/slicna/{id}` i `/api/recenzije?voziloId=` | ✅ |
@@ -817,13 +817,10 @@ servisa koji se preklapa sa već upisanim terminom.
 Provjerava se ono što jeste greška: kraj prije početka i trajanje duže od godinu
 dana, jer je to gotovo sigurno promašen datum pri unosu.
 
-> ⬜ **Šta nedostaje.** Plan izrade traži da unos blokade prikaže sve `Confirmed`
-> rezervacije koje se s njom preklapaju, da uposlenik odluči hoće li ponuditi
-> zamjensko vozilo ili otkazati uz puni povrat. Taj uslov preklapanja pripada
-> `AvailabilityService`-u, a specifikacija izričito traži da za njega postoji **samo
-> jedna** implementacija. Da je napišem ovdje, dobio bih drugu kopiju istog pravila —
-> tačno grešku pred kojom uputstvo upozorava. Dolazi u fazi 9, uz endpoint koji vraća
-> pogođene rezervacije.
+> ✅ Unos blokade prikazuje rezervacije koje se s njom preklapaju, a za svaku
+> uposlenik bira zamjensko vozilo ili otkazivanje uz puni povrat. Uslov preklapanja
+> ostaje u `AvailabilityService`-u, jer specifikacija traži da za njega postoji **samo
+> jedna** implementacija — vidi „Pogođene rezervacije" i „Zamjena vozila".
 
 ### Zašto se dvije tarife ne smiju preklapati
 
@@ -1128,6 +1125,39 @@ ostala nenapravljena, upravo zato što uslov preklapanja pripada ovdje.
 
 Endpoint je isključivo za osoblje. Klijent nema razloga znati ko još ima rezervaciju
 na tom vozilu, a obična provjera dostupnosti mu je otvorena.
+
+### Zamjena vozila
+
+Za svaku pogođenu rezervaciju uposlenik u dijalogu blokade bira jedno od dva:
+zamjensko vozilo ili otkazivanje uz puni povrat (isti dijalog kao sa ekrana
+rezervacija, sa obračunom povrata prije potvrde).
+
+| Metoda | Ruta | Šta radi |
+|---|---|---|
+| GET | `/api/rezervacije/{id}/zamjenska-vozila` | vozila koja mogu preuzeti rezervaciju, najviše 20 |
+| POST | `/api/rezervacije/{id}/zamjena-vozila` | prebacuje rezervaciju na odabrano vozilo |
+
+Oba su samo za osoblje. **Zamjensko vozilo mora biti iste ili bolje klase**: isti tip
+vozila, iste ili više dnevne tarife, u istom gradu, aktivno, slobodno u terminu
+rezervacije (ista provjera kao pri rezervaciji, `DodajUslovSlobodno`) i dozvoljeno
+klijentu po dozvoli na datum preuzimanja. Lista to postavlja kao upit na bazi, a pri
+samoj zamjeni se pravila provjeravaju ponovo (`PravilaZamjeneVozila`, pokriveno unit
+testovima), jer zahtjev može stići i sa vozilom koje lista nije ponudila. Prvo se nude
+vozila iz iste poslovnice, pa najbliža po cijeni.
+
+Zamjena ide u jednoj transakciji, istim redom kao kreiranje rezervacije: zaključa se
+red rezervacije i red novog vozila (`UPDLOCK, HOLDLOCK`), pa se tek onda provjeravaju
+dostupnost i dozvola. Bez toga bi dvije zamjene, ili zamjena i nova rezervacija, mogle
+istovremeno uzeti isto vozilo za isti termin.
+
+Mijenja se samo rezervacija koja čeka plaćanje ili je potvrđena, čiji termin nije
+prošao i čije vozilo još nije izdato — izdato vozilo je fizički kod klijenta. **Cijena
+se ne mijenja**: klijent plaća ono što je rezervisao, a skuplje zamjensko vozilo je
+trošak agencije. Status se ne mijenja; zamjena ide u historiju rezervacije kao audit
+zapis (`RezervacijaStateMachine.ZabiljeziIzmjenu`: ko, kada, opis „staro → novo" i
+napomena). Poslovnica rezervacije prati novo vozilo, jer se vozilo preuzima tamo gdje
+stoji. Poslije upisa ide poruka `vozilo.zamijenjeno`, iz koje worker pravi
+obavještenje (`VoziloZamijenjeno`) i email klijentu.
 
 ---
 

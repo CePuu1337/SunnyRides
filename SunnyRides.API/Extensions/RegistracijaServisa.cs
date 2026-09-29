@@ -76,6 +76,7 @@ public static class RegistracijaServisa
         // prijavljenog korisnika iz trenutnog zahtjeva.
         services.AddScoped<IRezervacijaStateMachine, RezervacijaStateMachine>();
         services.AddScoped<IRezervacijaService, RezervacijaService>();
+        services.AddScoped<IZamjenaVozilaService, ZamjenaVozilaService>();
 
         DodajPlacanja(services, stripePostavke);
 

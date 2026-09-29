@@ -24,11 +24,16 @@ public class RezervacijaController : ControllerBase
 {
     private readonly IRezervacijaService _rezervacijaService;
     private readonly IPlacanjeService _placanjeService;
+    private readonly IZamjenaVozilaService _zamjenaVozila;
 
-    public RezervacijaController(IRezervacijaService rezervacijaService, IPlacanjeService placanjeService)
+    public RezervacijaController(
+        IRezervacijaService rezervacijaService,
+        IPlacanjeService placanjeService,
+        IZamjenaVozilaService zamjenaVozila)
     {
         _rezervacijaService = rezervacijaService;
         _placanjeService = placanjeService;
+        _zamjenaVozila = zamjenaVozila;
     }
 
     [HttpGet]
@@ -100,6 +105,30 @@ public class RezervacijaController : ControllerBase
         int id, [FromBody] OtkazivanjeRequest request, CancellationToken ct)
     {
         return await _rezervacijaService.OtkaziAsync(id, request, ct);
+    }
+
+    /// <summary>
+    /// Vozila koja mogu preuzeti rezervaciju kad dogovoreno vozilo ode u kvar: slobodna
+    /// u njenom terminu, istog tipa, iste ili vise klase, u istom gradu, i dozvoljena
+    /// klijentu. Samo za osoblje - vozilo mijenja agencija, ne klijent.
+    /// </summary>
+    [HttpGet("{id:int}/zamjenska-vozila")]
+    [Authorize(Roles = Uloge.AdministratorIliUposlenik)]
+    public async Task<List<VoziloDto>> ZamjenskaVozilaAsync(int id, CancellationToken ct)
+    {
+        return await _zamjenaVozila.ZamjenskaVozilaAsync(id, ct);
+    }
+
+    /// <summary>
+    /// Prebacuje rezervaciju na zamjensko vozilo. Cijena i status se ne mijenjaju;
+    /// zamjena ide u historiju rezervacije, a klijent dobija obavjestenje i email.
+    /// </summary>
+    [HttpPost("{id:int}/zamjena-vozila")]
+    [Authorize(Roles = Uloge.AdministratorIliUposlenik)]
+    public async Task<RezervacijaDto> ZamijeniVoziloAsync(
+        int id, [FromBody] ZamjenaVozilaRequest request, CancellationToken ct)
+    {
+        return await _zamjenaVozila.ZamijeniAsync(id, request, ct);
     }
 
     /// <summary>

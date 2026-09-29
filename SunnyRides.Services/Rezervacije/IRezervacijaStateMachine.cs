@@ -29,4 +29,10 @@ public interface IRezervacijaStateMachine
     /// statusa, pa nema ni prelaza koji bi se provjeravao.
     /// </summary>
     void ZabiljeziKreiranje(Rezervacija rezervacija, string opis);
+
+    /// <summary>
+    /// Audit zapis za izmjenu koja ne mijenja status, npr. zamjenu vozila. Historija
+    /// tako nosi i ko je vozilo zamijenio, kada i zasto, a ne samo prelaze statusa.
+    /// </summary>
+    void ZabiljeziIzmjenu(Rezervacija rezervacija, string opis, string? razlog = null);
 }

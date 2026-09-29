@@ -4,8 +4,11 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../modeli/kalendar.dart';
 import '../../servisi/kalendar_servis.dart';
+import '../../servisi/rezervacija_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../../widgeti/obavjestenje.dart';
+import '../rezervacije/otkazivanje_dijalog.dart';
+import 'zamjena_vozila_dijalog.dart';
 
 /// Sta je dijalog na kraju uradio. Kalendar po ovome zna sta da javi korisniku.
 enum IshodUnosa { rezervacija, blokada }
@@ -152,6 +155,65 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
   }
 
   bool get _blokadaImaSmisla => _stvarniKrajBlokade.isAfter(_blokadaOd);
+
+  /// Pogodjena rezervacija prelazi na drugo vozilo. Poslije zamjene vise ne stoji na
+  /// ovom vozilu, pa se lista pogodjenih ucitava iznova.
+  Future<void> _zamijeniVozilo(PogodjenaRezervacija rezervacija) async {
+    final zamijenjeno = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => ZamjenaVozilaDijalog(rezervacija: rezervacija),
+    );
+
+    if (zamijenjeno != true || !mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Rezervacija ${rezervacija.broj} je prebačena na zamjensko vozilo.',
+        ),
+      ),
+    );
+
+    await _provjeriPogodjene();
+  }
+
+  /// Otkazivanje od strane agencije, uz puni povrat. Ide kroz isti dijalog kao sa
+  /// ekrana rezervacija, pa uposlenik prije potvrde vidi tacan iznos povrata.
+  Future<void> _otkaziRezervaciju(PogodjenaRezervacija pogodjena) async {
+    try {
+      final rezervacija = await RezervacijaServis(context.read<ApiKlijent>())
+          .detalji(pogodjena.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      final otkazano = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => OtkazivanjeDijalog(rezervacija: rezervacija),
+      );
+
+      if (otkazano != true || !mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rezervacija ${pogodjena.broj} je otkazana.')),
+      );
+
+      await _provjeriPogodjene();
+    } on ApiGreska catch (greska) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() => _greska = greska.poruka);
+    }
+  }
 
   Future<void> _provjeriPogodjene() async {
     final redniBroj = ++_zadnjaProvjera;
@@ -561,7 +623,9 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
         else ...[
           Obavjestenje.upozorenje(
             'U tom periodu ${_pogodjene.length == 1 ? 'postoji rezervacija' : 'postoje ${_pogodjene.length} rezervacije'} '
-            'na ovom vozilu. Blokada ih ne otkazuje — klijente treba nazvati.',
+            'na ovom vozilu. Blokada ih ne otkazuje sama: svaku možete prebaciti na '
+            'zamjensko vozilo iste ili više klase, ili otkazati uz puni povrat. '
+            'Klijent o oba dobija obavještenje i email.',
           ),
           const SizedBox(height: Razmaci.m),
           CheckboxListTile(
@@ -581,7 +645,11 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
           ),
           const SizedBox(height: Razmaci.m),
           for (final rezervacija in _pogodjene)
-            _PogodjenaKartica(rezervacija: rezervacija),
+            _PogodjenaKartica(
+              rezervacija: rezervacija,
+              naZamjenu: () => _zamijeniVozilo(rezervacija),
+              naOtkazivanje: () => _otkaziRezervaciju(rezervacija),
+            ),
         ],
         const SizedBox(height: Razmaci.l),
         const Divider(),
@@ -1038,9 +1106,15 @@ class _RedIznosa extends StatelessWidget {
 /// vozilo skida iz ponude mora imati koga nazvati, odmah, bez trazenja po drugim
 /// ekranima.
 class _PogodjenaKartica extends StatelessWidget {
-  const _PogodjenaKartica({required this.rezervacija});
+  const _PogodjenaKartica({
+    required this.rezervacija,
+    required this.naZamjenu,
+    required this.naOtkazivanje,
+  });
 
   final PogodjenaRezervacija rezervacija;
+  final VoidCallback naZamjenu;
+  final VoidCallback naOtkazivanje;
 
   @override
   Widget build(BuildContext context) {
@@ -1051,48 +1125,75 @@ class _PogodjenaKartica extends StatelessWidget {
         color: Boje.platno,
         borderRadius: BorderRadius.circular(Zaobljenja.dugme),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Text(
+                          rezervacija.broj,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: Razmaci.s),
+                        StatusnaPilula.rezervacija(rezervacija.status),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
                     Text(
-                      rezervacija.broj,
+                      '${Formati.datumIVrijeme(rezervacija.datumOd)} – '
+                      '${Formati.datumIVrijeme(rezervacija.datumDo)}',
                       style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        color: Boje.tekstPrigusen,
+                        fontSize: 12,
                       ),
                     ),
-                    const SizedBox(width: Razmaci.s),
-                    StatusnaPilula.rezervacija(rezervacija.status),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${Formati.datumIVrijeme(rezervacija.datumOd)} – '
-                  '${Formati.datumIVrijeme(rezervacija.datumDo)}',
-                  style: const TextStyle(
-                    color: Boje.tekstPrigusen,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: Razmaci.m),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                rezervacija.klijentImePrezime ?? '',
-                style: const TextStyle(fontSize: 12.5),
               ),
-              Text(
-                rezervacija.klijentTelefon ?? rezervacija.klijentEmail ?? '',
-                style: const TextStyle(color: Boje.tekstPrigusen, fontSize: 12),
+              const SizedBox(width: Razmaci.m),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    rezervacija.klijentImePrezime ?? '',
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                  Text(
+                    rezervacija.klijentTelefon ??
+                        rezervacija.klijentEmail ??
+                        '',
+                    style: const TextStyle(
+                      color: Boje.tekstPrigusen,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: Razmaci.s),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: naOtkazivanje,
+                icon: const Icon(Icons.cancel_outlined, size: 17),
+                label: const Text('Otkaži uz puni povrat'),
+              ),
+              const SizedBox(width: Razmaci.s),
+              OutlinedButton.icon(
+                onPressed: naZamjenu,
+                icon: const Icon(Icons.swap_horiz, size: 17),
+                label: const Text('Zamijeni vozilo'),
               ),
             ],
           ),

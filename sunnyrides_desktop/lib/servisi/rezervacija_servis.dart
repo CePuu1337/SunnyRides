@@ -1,6 +1,7 @@
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../modeli/rezervacija.dart';
+import '../modeli/vozilo.dart';
 
 class RezervacijaServis {
   const RezervacijaServis(this._klijent);
@@ -35,6 +36,27 @@ class RezervacijaServis {
     await _klijent.post(
       '/api/rezervacije/$id/otkazi',
       tijelo: {'razlogOtkazivanjaId': razlogId, 'napomena': napomena},
+    );
+  }
+
+  /// Vozila koja mogu preuzeti rezervaciju kad je dogovoreno u kvaru. Sta je
+  /// prihvatljiva zamjena - tip, klasa, grad, dozvola klijenta - odlucuje server.
+  Future<List<Vozilo>> zamjenskaVozila(int rezervacijaId) async {
+    final odgovor = await _klijent.get(
+      '/api/rezervacije/$rezervacijaId/zamjenska-vozila',
+    );
+
+    return citajListu(odgovor, Vozilo.izJsona);
+  }
+
+  Future<void> zamijeniVozilo(
+    int rezervacijaId, {
+    required int novoVoziloId,
+    String? napomena,
+  }) async {
+    await _klijent.post(
+      '/api/rezervacije/$rezervacijaId/zamjena-vozila',
+      tijelo: {'novoVoziloId': novoVoziloId, 'napomena': napomena},
     );
   }
 

@@ -467,12 +467,7 @@ public class RecommenderService : IRecommenderService
         var vozila = await _context.Vozila
             .AsNoTracking()
             .Where(x => ids.Contains(x.Id))
-            .Include(x => x.ModelVozila).ThenInclude(m => m.Marka)
-            .Include(x => x.ModelVozila).ThenInclude(m => m.TipVozila)
-            .Include(x => x.ModelVozila).ThenInclude(m => m.TipGoriva)
-            .Include(x => x.ModelVozila).ThenInclude(m => m.KategorijaDozvole)
-            .Include(x => x.Poslovnica).ThenInclude(p => p.Grad)
-            .Include(x => x.Slike.Where(s => s.JeGlavna))
+            .SaPovezanim()
             .ToDictionaryAsync(x => x.Id, ct);
 
         var parovi = odabrani

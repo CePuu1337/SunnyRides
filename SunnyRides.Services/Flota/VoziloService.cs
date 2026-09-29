@@ -346,18 +346,10 @@ public class VoziloService
     // Lista vuce samo glavnu sliku, i to filtriranim Include-om - ostale fotografije
     // ostaju na serveru dok ih neko stvarno ne zatrazi kroz /api/vozila/{id}/slike.
     protected override IQueryable<Vozilo> AddInclude(VoziloSearchObject search, IQueryable<Vozilo> upit) =>
-        SaPovezanim(upit);
+        upit.SaPovezanim();
 
     protected override IQueryable<Vozilo> AddIncludeDetalji(IQueryable<Vozilo> upit) =>
-        SaPovezanim(upit);
-
-    private static IQueryable<Vozilo> SaPovezanim(IQueryable<Vozilo> upit) =>
-        upit.Include(x => x.ModelVozila).ThenInclude(m => m.Marka)
-            .Include(x => x.ModelVozila).ThenInclude(m => m.TipVozila)
-            .Include(x => x.ModelVozila).ThenInclude(m => m.TipGoriva)
-            .Include(x => x.ModelVozila).ThenInclude(m => m.KategorijaDozvole)
-            .Include(x => x.Poslovnica).ThenInclude(p => p.Grad)
-            .Include(x => x.Slike.Where(s => s.JeGlavna));
+        upit.SaPovezanim();
 
     protected override string PorukaZaDuplikat() =>
         "Vozilo sa tom registarskom oznakom vec postoji.";

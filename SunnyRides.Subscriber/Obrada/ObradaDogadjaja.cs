@@ -73,6 +73,10 @@ public class ObradaDogadjaja
                 await ResetLozinkeAsync(Procitaj<ResetLozinkePoruka>(tijelo), ct);
                 break;
 
+            case Redovi.VoziloZamijenjeno:
+                await VoziloZamijenjenoAsync(Procitaj<ZamjenaVozilaPoruka>(tijelo), ct);
+                break;
+
             default:
                 _logger.LogWarning("Red {Red} nema obradu, poruka se preskace.", red);
                 break;
@@ -154,6 +158,35 @@ public class ObradaDogadjaja
 
         await JaviAsync(rezervacija.Korisnik, rezervacija.Id, TipNotifikacije.RezervacijaOtkazana,
             $"Rezervacija {rezervacija.Broj} je otkazana", $"Razlog: {razlog}", tekst, ct);
+    }
+
+    private async Task VoziloZamijenjenoAsync(ZamjenaVozilaPoruka poruka, CancellationToken ct)
+    {
+        var rezervacija = await UcitajRezervacijuAsync(poruka.RezervacijaId, ct);
+        if (rezervacija is null)
+        {
+            return;
+        }
+
+        var staro = await _context.Vozila
+            .AsNoTracking()
+            .Where(x => x.Id == poruka.StaroVoziloId)
+            .Select(x => x.ModelVozila.Marka.Naziv + " " + x.ModelVozila.Naziv)
+            .FirstOrDefaultAsync(ct) ?? "rezervisano vozilo";
+
+        var novo = $"{rezervacija.Vozilo.ModelVozila.Marka.Naziv} {rezervacija.Vozilo.ModelVozila.Naziv}";
+
+        var tekst =
+            $"Postovani/a {rezervacija.Korisnik.Ime},\n\n" +
+            $"vozilo na rezervaciji {rezervacija.Broj} ({staro}) nije ispravno za vas termin, " +
+            $"pa smo ga zamijenili vozilom {novo}, iste ili bolje klase. Cijena rezervacije se ne mijenja.\n\n" +
+            OpisRezervacije(rezervacija) +
+            "\nAko vam zamjena ne odgovara, javite se poslovnici - rezervaciju mozemo otkazati uz puni povrat.\n\n" +
+            "SunnyRides";
+
+        await JaviAsync(rezervacija.Korisnik, rezervacija.Id, TipNotifikacije.VoziloZamijenjeno,
+            $"Novo vozilo za rezervaciju {rezervacija.Broj}",
+            $"Umjesto {staro} dobijate {novo}, po istoj cijeni.", tekst, ct);
     }
 
     private async Task PodsjetnikAsync(int rezervacijaId, CancellationToken ct)
