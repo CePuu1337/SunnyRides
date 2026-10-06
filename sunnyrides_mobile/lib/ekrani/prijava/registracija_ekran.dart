@@ -76,6 +76,11 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
       _greska = null;
     });
 
+    // Uzima se prije cekanja: po uspjehu se ovaj ekran zatvara, a poruka treba
+    // ostati na glavnom ekranu.
+    final poruke = ScaffoldMessenger.of(context);
+    final ime = _ime.text.trim();
+
     try {
       await context.read<Sesija>().registracija(
         korisnickoIme: _korisnickoIme.text.trim(),
@@ -88,7 +93,17 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
         potvrdaLozinke: _potvrda.text,
       );
 
-      // Uspjesna registracija odmah prijavljuje, pa ekran prijave nestaje sam.
+      // Uspjesna registracija odmah prijavljuje. Korijen aplikacije tada zatvara
+      // ovaj ekran i prikazuje pocetnu stranu.
+      poruke.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Dobro došli, $ime! Nalog je otvoren. Dodajte vozačku dozvolu u '
+            'profilu da biste mogli rezervisati.',
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
     } on ApiGreska catch (greska) {
       if (!mounted) {
         return;
@@ -97,6 +112,17 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
       setState(() {
         _uToku = false;
         _greska = greska.poruka;
+      });
+    } catch (_) {
+      // Neocekivan odgovor ne smije ostaviti dugme da se vrti zauvijek.
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _uToku = false;
+        _greska = 'Nešto nije u redu. Pokušajte ponovo ili se prijavite ako je '
+            'nalog već otvoren.';
       });
     }
   }

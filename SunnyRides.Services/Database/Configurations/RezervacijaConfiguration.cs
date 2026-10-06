@@ -51,8 +51,12 @@ public class RezervacijaConfiguration : IEntityTypeConfiguration<Rezervacija>
 
         builder.HasIndex(x => x.Broj).IsUnique();
 
-        // Zastita od dvostrukog slanja iste forme
-        builder.HasIndex(x => new { x.KorisnikId, x.VoziloId, x.DatumOd }).IsUnique();
+        // Zastita od dvostrukog slanja iste forme. Otkazane se ne broje: klijent koji
+        // otkaze pa ponovo rezervise isto vozilo za isti termin pravi novu rezervaciju,
+        // a stara ostaje u historiji (rezervacije se nikad ne brisu). 3 = Cancelled.
+        builder.HasIndex(x => new { x.KorisnikId, x.VoziloId, x.DatumOd })
+               .IsUnique()
+               .HasFilter("[Status] <> 3");
 
         // Provjera preklapanja termina ide kroz ovaj indeks
         builder.HasIndex(x => new { x.VoziloId, x.Status, x.DatumOd, x.DatumDo });

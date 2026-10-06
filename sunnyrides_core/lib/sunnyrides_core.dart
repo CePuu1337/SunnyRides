@@ -27,6 +27,8 @@ export 'src/modeli/korisnik.dart';
 export 'src/modeli/pretvaranje.dart';
 export 'src/modeli/rezervacija.dart';
 
+export 'src/navigacija/zatvori_ekrane_na_promjenu.dart';
+
 export 'src/realtime/veza_notifikacija.dart';
 
 export 'src/stanje/notifikacije_stanje.dart';

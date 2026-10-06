@@ -1112,6 +1112,12 @@ Zaštita radi pod uslovom da **svi** koji upisuju rezervacije uzmu isti lock. Po
 na `(KorisnikId, VoziloId, DatumOd)`, ali on hvata samo dvostruko slanje iste forme
 od istog korisnika.
 
+Indeks je filtriran (`[Status] <> 3`), pa otkazane rezervacije ne učestvuju. Bez
+filtera klijent koji otkaže rezervaciju prije plaćanja ne bi mogao ponovo rezervisati
+isto vozilo za isti termin: otkazana ostaje u bazi (rezervacije se ne brišu), a baza bi
+novu odbila kao duplikat. Ako se kršenje ipak desi, servis vraća poruku da klijent već
+ima aktivnu rezervaciju za to vozilo i taj početak.
+
 > ✅ **Test konkurentnosti je proveden u fazi 11**, kad je nastao endpoint za
 > kreiranje rezervacije. Dva istovremena zahtjeva za isto vozilo i isti termin: jedan
 > prolazi, drugi dobija 400, a u bazi ostaje tačno jedna rezervacija. Detalji su u
@@ -2860,7 +2866,7 @@ token, zaključavanje reda ili uslovni upis. Gdje mehanizma nema, to i piše.
 | Scenarij | Čime je riješeno | |
 |---|---|---|
 | Dva zahtjeva za isto vozilo i preklapajući termin | transakcija i `UPDLOCK, HOLDLOCK` na redu vozila prije provjere dostupnosti | ✅ testirano u fazi 11 |
-| Dvostruko slanje iste forme | jedinstveni indeks `(KorisnikId, VoziloId, DatumOd)`; `SacuvajAsync` kršenje pretvara u 400 | ✅ |
+| Dvostruko slanje iste forme | jedinstveni indeks `(KorisnikId, VoziloId, DatumOd)` bez otkazanih; `SacuvajAsync` kršenje pretvara u 400 | ✅ |
 | Dva zahtjeva za payment intent iste rezervacije | zaključavanje reda rezervacije; drugi zahtjev čeka i dobija isti intent | ✅ |
 | Dva uspješna plaćanja iste rezervacije | zaključavanje, provjera prije upisa, i filtrirani jedinstveni indeks gdje `Status = 3`; drugi novac se vraća | ✅ |
 | Otkazivanje i potvrda plaćanja istovremeno | oba puta zaključavaju red rezervacije; ko dođe drugi vidi novo stanje, a novac za otkazanu rezervaciju se vraća | ✅ |
@@ -3252,6 +3258,24 @@ potpun i svaka stranica je uvijek ista.
 Uz svaku preporučenu karticu stoji žuti okvir sa rečenicom iz `Obrazlozenje`. Tu rečenicu
 sastavlja server, od signala koji su preporuci stvarno najviše doprinijeli. Da je sastavlja
 aplikacija, pisala bi objašnjenje za račun koji nije vidjela.
+
+### Promjena sesije zatvara otvorene ekrane
+
+Korijen obje aplikacije bira početni ekran prema stanju sesije (prijava ili glavni dio).
+To mijenja samo ekran na dnu steka — ono što je otvoreno preko njega ostaje. Zato je
+nakon registracije korisnik i dalje gledao formu sa kružićem, iako je nalog bio otvoren
+i on već prijavljen. Isto bi se desilo i sa dijalogom otvorenim u trenutku isteka
+sesije: ostao bi preko ekrana za prijavu. `ZatvoriEkraneNaPromjenu` iz `sunnyrides_core`
+pri svakoj promjeni stanja sesije skida sve sa steka do početnog ekrana. Poslije
+registracije se uz to prikazuje dobrodošlica sa podsjetnikom da se doda vozačka dozvola.
+
+Drugi dio iste greške bio je u samom pozivu: `POST /api/auth/register` vraća podatke o
+novom korisniku, a ne token, dok je aplikacija očekivala odgovor prijave. Čitanje je
+puklo, a ekran je hvatao samo greške API-ja, pa se kružić vrtio zauvijek. Sada
+`AuthServis.registracija` poslije uspješne registracije radi običnu prijavu istim
+podacima — token nastaje na jednom mjestu i server ga evidentira kao i svaki drugi, pa
+ga odjava poništava. Ekran registracije uz to hvata i neočekivane greške, da dugme
+nikad ne ostane zaključano.
 
 ### Šta mobilna aplikacija ne radi
 

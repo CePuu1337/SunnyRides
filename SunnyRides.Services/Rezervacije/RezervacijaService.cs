@@ -69,6 +69,9 @@ public class RezervacijaService
 
     protected override string PodrazumijevaniPoredak => "DatumOd desc";
 
+    protected override string PorukaZaDuplikat() =>
+        "Vec imate aktivnu rezervaciju za ovo vozilo sa istim pocetkom. Pogledajte svoje rezervacije.";
+
     // --- citanje -----------------------------------------------------------
 
     public override async Task<PagedResult<RezervacijaDto>> GetAsync(

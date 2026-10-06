@@ -1,3 +1,4 @@
+import '../api/api_greska.dart';
 import '../api/api_klijent.dart';
 import '../modeli/korisnik.dart';
 import 'pohrana_tokena.dart';
@@ -22,6 +23,11 @@ class AuthServis {
     return prijava.korisnik;
   }
 
+  /// Otvara klijentski nalog i odmah prijavljuje.
+  ///
+  /// Registracija na serveru vraca samo podatke o novom korisniku, ne token. Token
+  /// se dobija prijavom, isto kao svaki drugi - tako server i za njega vodi zapis
+  /// koji odjava ponistava.
   Future<Korisnik> registracija({
     required String korisnickoIme,
     required String ime,
@@ -32,7 +38,7 @@ class AuthServis {
     required String lozinka,
     required String potvrdaLozinke,
   }) async {
-    final odgovor = await _klijent.post('/api/auth/register', tijelo: {
+    await _klijent.post('/api/auth/register', tijelo: {
       'korisnickoIme': korisnickoIme,
       'ime': ime,
       'prezime': prezime,
@@ -43,11 +49,17 @@ class AuthServis {
       'potvrdaLozinke': potvrdaLozinke,
     });
 
-    final prijava = PrijavaOdgovor.izJsona(odgovor as Map<String, dynamic>);
-
-    await _pohrana.sacuvaj(prijava.token, prijava.isticeUtc);
-
-    return prijava.korisnik;
+    try {
+      return await prijava(korisnickoIme, lozinka);
+    } on ApiGreska catch (greska) {
+      // Nalog postoji - ponovna registracija bi samo javila da je ime zauzeto.
+      throw ApiGreska(
+        status: greska.status,
+        naslov: 'Nalog je otvoren',
+        poruka: 'Nalog je otvoren, ali automatska prijava nije uspjela. '
+            'Vratite se nazad i prijavite se.',
+      );
+    }
   }
 
   /// Ko je vlasnik tokena. Koristi se pri pokretanju, da se sacuvani token provjeri

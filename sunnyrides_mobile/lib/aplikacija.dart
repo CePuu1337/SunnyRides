@@ -27,13 +27,17 @@ class _Korijen extends StatelessWidget {
   Widget build(BuildContext context) {
     final stanje = context.watch<Sesija>().stanje;
 
-    switch (stanje) {
-      case StanjeSesije.provjera:
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      case StanjeSesije.neprijavljen:
-        return const PrijavaEkran();
-      case StanjeSesije.prijavljen:
-        return const Ljuska();
-    }
+    // Promjena sesije zatvara i sve otvoreno preko pocetnog ekrana: registraciju,
+    // dijaloge, detalje.
+    return ZatvoriEkraneNaPromjenu(
+      kljuc: stanje,
+      child: switch (stanje) {
+        StanjeSesije.provjera => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        StanjeSesije.neprijavljen => const PrijavaEkran(),
+        StanjeSesije.prijavljen => const Ljuska(),
+      },
+    );
   }
 }

@@ -24,7 +24,7 @@ class DesktopAplikacija extends StatelessWidget {
 ///
 /// Ovdje nema Navigatora sa rutama prijava/pocetna: odjava bi tada morala pamtiti
 /// koliko ekrana da skine sa steka. Ovako se prikaz mijenja sam kad se promijeni
-/// stanje, i nema nacina da se ostane na ekranu nakon odjave.
+/// stanje, a dijalozi otvoreni u tom trenutku se zatvaraju.
 class _Korijen extends StatelessWidget {
   const _Korijen();
 
@@ -32,13 +32,17 @@ class _Korijen extends StatelessWidget {
   Widget build(BuildContext context) {
     final stanje = context.watch<Sesija>().stanje;
 
-    switch (stanje) {
-      case StanjeSesije.provjera:
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      case StanjeSesije.neprijavljen:
-        return const PrijavaEkran();
-      case StanjeSesije.prijavljen:
-        return const Ljuska();
-    }
+    // Promjena sesije zatvara i sve otvoreno preko pocetnog ekrana: registraciju,
+    // dijaloge, detalje.
+    return ZatvoriEkraneNaPromjenu(
+      kljuc: stanje,
+      child: switch (stanje) {
+        StanjeSesije.provjera => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        StanjeSesije.neprijavljen => const PrijavaEkran(),
+        StanjeSesije.prijavljen => const Ljuska(),
+      },
+    );
   }
 }
