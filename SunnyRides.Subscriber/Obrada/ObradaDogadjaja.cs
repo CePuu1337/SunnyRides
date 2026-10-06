@@ -7,6 +7,7 @@ using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Notifikacije;
 using SunnyRides.Subscriber.Email;
+using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Subscriber.Obrada;
 
@@ -206,7 +207,7 @@ public class ObradaDogadjaja
 
         await JaviAsync(rezervacija.Korisnik, rezervacija.Id, TipNotifikacije.PodsjetnikPreuzimanje,
             "Podsjetnik za preuzimanje vozila",
-            $"Preuzimanje je {rezervacija.DatumOd:dd.MM.yyyy. u HH:mm} (UTC), poslovnica {rezervacija.Poslovnica.Naziv}.",
+            $"Preuzimanje je {LokalnoVrijeme.DatumUVrijeme(rezervacija.DatumOd)}, poslovnica {rezervacija.Poslovnica.Naziv}.",
             tekst, ct);
     }
 
@@ -260,7 +261,7 @@ public class ObradaDogadjaja
             $"Postovani/a {rezervacija.Korisnik.Ime},\n\n" +
             $"vozilo po rezervaciji {rezervacija.Broj} je vraceno i najam je zatvoren.\n\n" +
             OpisRezervacije(rezervacija) +
-            $"Vraceno: {povrat.DatumVrijeme:dd.MM.yyyy. HH:mm} (UTC), kilometraza {povrat.Kilometraza} km\n\n" +
+            $"Vraceno: {LokalnoVrijeme.DatumIVrijeme(povrat.DatumVrijeme)}, kilometraza {povrat.Kilometraza} km\n\n" +
             obracun +
             (vraceno > 0
                 ? "\nSredstva se vracaju na karticu kojom je placeno, obicno u roku od 5 do 10 radnih dana.\n"
@@ -416,8 +417,8 @@ public class ObradaDogadjaja
     private static string OpisRezervacije(Rezervacija rezervacija) =>
         $"Vozilo: {rezervacija.Vozilo.ModelVozila.Marka.Naziv} {rezervacija.Vozilo.ModelVozila.Naziv} " +
         $"({rezervacija.Vozilo.RegistarskaOznaka})\n" +
-        $"Preuzimanje: {rezervacija.DatumOd:dd.MM.yyyy. HH:mm} (UTC), poslovnica {rezervacija.Poslovnica.Naziv}\n" +
-        $"Vracanje: {rezervacija.DatumDo:dd.MM.yyyy. HH:mm} (UTC)\n";
+        $"Preuzimanje: {LokalnoVrijeme.DatumIVrijeme(rezervacija.DatumOd)}, poslovnica {rezervacija.Poslovnica.Naziv}\n" +
+        $"Vracanje: {LokalnoVrijeme.DatumIVrijeme(rezervacija.DatumDo)}\n";
 
     private static T Procitaj<T>(string tijelo) =>
         JsonSerializer.Deserialize<T>(tijelo)

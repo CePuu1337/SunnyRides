@@ -40,7 +40,7 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 15 | Notifikacije i SignalR | ✅ |
 | 16 | Sistem preporuke | ✅ |
 | 17 | Desktop aplikacija | ✅ |
-| 18 | Mobilna aplikacija | 🟡 |
+| 18 | Mobilna aplikacija | ✅ |
 | 19 | PDF izvještaji | ✅ |
 
 ### Šta prijava obećava, a plan izrade nema kao zasebnu fazu
@@ -1005,10 +1005,11 @@ Obračun pokriva pragove popusta, redoslijed množioca i popusta, opremu po danu
 naspram fiksne cijene, opremu na satnom najmu, osiguranje, depozit, zbir razrade i
 zaokruživanje na iznosu koji pada tačno na polovinu (5,265 → 5,27).
 
-> ⬜ **Šta ovi testovi ne pokrivaju.** `PricingService` sam po sebi nema testove —
-> njegov posao je učitavanje iz baze, a to bi tražilo test bazu ili mokove.
-> Provjereno je kroz API: ista rezervacija u julu i u novembru daje različit iznos,
-> jer se povlači različita sezona.
+> **Šta ovi testovi ne pokrivaju.** `PricingService` sam po sebi nema unit testova —
+> njegov posao je učitavanje iz baze, a to bi tražilo test bazu ili mokove. Sva
+> aritmetika je u `ObracunCijene`, koji je pokriven. Učitavanje je provjereno kroz API:
+> ista rezervacija u julu i u novembru daje različit iznos, jer se povlači različita
+> sezona.
 
 ---
 
@@ -1694,9 +1695,10 @@ Stripe povrat ide prema konkretnom `PaymentIntent`-u, pa se iznos raspoređuje p
 plaćanjima umjesto da bude jedan slobodan zapis uz rezervaciju. Zapis nastaje sa
 statusom `Created`: postoji, ali prema provajderu još nije poslan.
 
-> ⬜ **Slanje povrata prema Stripe-u dolazi u fazi 12.** Do tada zapis stoji kao
-> evidentirana obaveza, a ne kao izvršena isplata. Tek potvrda sa servera Stripe-a
-> prevodi ga u `Succeeded`.
+> Zapis povrata nastaje u transakciji otkazivanja sa statusom `Created`, kao
+> evidentirana obaveza, a ne izvršena isplata. Stripe-u se šalje tek poslije commita,
+> i tek potvrda sa Stripe-a ga prevodi u `Succeeded` — vidi sekciju o plaćanju i
+> povratu novca.
 
 ### Šta je testiranje otkrilo u seedu
 
@@ -2121,7 +2123,7 @@ Stripe sandboxa (192,90 EUR, depozit 150 EUR):
 
 ## Poruke, worker i email
 
-> 🟢 Faza 14 je gotova: poruke i emailovi (14a), periodični poslovi i reset lozinke (14b).
+> ✅ Faza 14 je gotova: poruke i emailovi (14a), periodični poslovi i reset lozinke (14b).
 
 Uputstvo (sekcija 3.2) traži najmanje dva servisa i izričito kaže da `BackgroundService`
 unutar API projekta ne zadovoljava taj zahtjev, jer radi u istom procesu. Zato je
@@ -2311,7 +2313,7 @@ ograničenje.
 
 ## Notifikacije i SignalR
 
-> 🟢 Faza 15 je gotova: endpointi za obavještenja, hub i isporuka u realnom vremenu.
+> ✅ Faza 15 je gotova: endpointi za obavještenja, hub i isporuka u realnom vremenu.
 
 Uputstvo traži da se lista obavještenja osvježava sama i izričito kaže da ručni refresh
 nije prihvatljiv. To znači da server mora moći progovoriti prvi, a HTTP to ne može —
@@ -2432,7 +2434,7 @@ plaćanje su isti trenutak, pa bi klijent na jedan događaj dobio dva obavješte
 
 ## Recenzije i obavijesti
 
-> 🟢 Urađeno nakon faze 16, kao priprema za desktop i mobilnu aplikaciju.
+> ✅ Urađeno nakon faze 16, kao priprema za desktop i mobilnu aplikaciju.
 
 ### Recenzije
 
@@ -2484,7 +2486,7 @@ fajl, da na disku ne ostane slika na koju ništa ne pokazuje.
 
 ## Nalozi, uloge i profil
 
-> 🟢 Urađeno nakon faze 16, kao priprema za desktop i mobilnu aplikaciju.
+> ✅ Urađeno nakon faze 16, kao priprema za desktop i mobilnu aplikaciju.
 
 Dva odvojena puta do istog entiteta, sa različitim pravilima:
 
@@ -2543,7 +2545,7 @@ administratorskom unosu, gdje ih bira administrator, a ne onaj ko nalog dobija.
 
 ## Pregled poslovanja i kalendar flote
 
-> 🟢 Urađeno nakon faze 16, kao priprema za desktop aplikaciju.
+> ✅ Urađeno nakon faze 16, kao priprema za desktop aplikaciju.
 
 ### Pregled poslovanja
 
@@ -2657,7 +2659,7 @@ nego se popuni cijela forma.
 
 ## PDF izvještaji
 
-> 🟢 Faza 19 je gotova: iskorištenost flote i finansijski pregled.
+> ✅ Faza 19 je gotova: iskorištenost flote i finansijski pregled.
 
 Oba izvještaja imaju **dva oblika**: podatak i PDF. Podatak (`GET .../iskoristenost-flote`)
 služi za pregled prije generisanja — uputstvo traži da korisnik provjeri parametre prije
@@ -2851,8 +2853,6 @@ Planirani redoslijed, sve unutar jedne transakcije:
 
 ## Šta se dešava kad dva zahtjeva stignu istovremeno
 
-> ⬜ Popunjava se u fazama 9, 11 i 12.
-
 Ovdje se za svaki scenarij mora znati **koji konkretno mehanizam** ga štiti: provjera
 prije upisa, jedinstveno ograničenje u bazi, eksplicitna transakcija, concurrency
 token, zaključavanje reda ili uslovni upis. Gdje mehanizma nema, to i piše.
@@ -2925,7 +2925,8 @@ Nedozvoljen prelaz baca `BusinessException` sa objašnjenjem.
 
 ## Cijena
 
-> ⬜ Faza 9. Jedino mjesto u sistemu gdje se računa cijena je `PricingService`.
+> Jedino mjesto u sistemu gdje se računa cijena je `PricingService` (aritmetika u
+> `ObracunCijene`).
 
 ```
 trajanje = DatumDo - DatumOd
@@ -2965,8 +2966,8 @@ Kontrolni primjeri koje pokrivaju unit testovi:
 
 ## Dostupnost
 
-> ⬜ Faza 9. Jedino mjesto gdje se odlučuje je li vozilo slobodno je
-> `AvailabilityService`, i poziva se i iz pretrage i iz kreiranja rezervacije.
+> Jedino mjesto gdje se odlučuje je li vozilo slobodno je `AvailabilityService`, i
+> poziva se iz pretrage, preporuka, kreiranja rezervacije i zamjene vozila.
 
 ```
 BUFFER = 2 sata
@@ -2988,8 +2989,6 @@ rezervacija u memoriju pa filtriranje LINQ-om uputstvo izričito navodi kao gre�
 ---
 
 ## Kategorije vozačkih dozvola
-
-> ⬜ Faza 10.
 
 | Kategorija | Šta pokriva |
 |---|---|
@@ -3036,7 +3035,7 @@ Detaljno obrazloženje je u sekciji o otkazivanju, uz fazu 11.
 
 ## Sistem preporuke
 
-> 🟢 Faza 16 je gotova. Potpun opis je u `recommender-dokumentacija.md`; ovdje stoji
+> ✅ Faza 16 je gotova. Potpun opis je u `recommender-dokumentacija.md`; ovdje stoji
 > samo sažetak i razlog zašto sistem ima dva puta.
 
 Sistem ima **ML model** i **rezervni put**, i to nisu iste vrste stvari.
@@ -3103,7 +3102,7 @@ praktično iste, što znači da model nije naučio podatke napamet.
 
 ## Klijentske aplikacije
 
-> 🟡 Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
+> ✅ Desktop urađen. Mobilna aplikacija ima ljusku, SignalR na zvonu i ekrane za
 > pretragu, rezervaciju, plaćanje, otkazivanje, dozvolu, recenzije, profil i reset
 > zaboravljene lozinke. Pretraga filtrira po tipu, marki, gradu, poslovnici, cjenovnom
 > rasponu i terminu, a uz termin prikazuje ukupnu cijenu za cijeli period.
@@ -3259,6 +3258,25 @@ aplikacija, pisala bi objašnjenje za račun koji nije vidjela.
 Prijava nalogom osoblja se odbija sa objašnjenjem, a ne tiho — server bi mu većinu poziva
 ionako odbio, pa je bolje reći zašto. Klijent ne vidi tuđe rezervacije ni kontakte: to
 sužava servis po korisniku iz tokena, ne filter koji bi aplikacija trebala poslati.
+
+---
+
+## Vrijeme u porukama
+
+Sva vremena u bazi su UTC (`DateTime.UtcNow` svuda, kako uputstvo traži), i tako i
+ostaju. Pretvaranje u lokalno vrijeme radi se tek pri ispisu teksta koji čita čovjek —
+obavještenja, emailovi, poruke o grešci pri primopredaji, datum generisanja PDF-a — kroz
+jedno mjesto, `LokalnoVrijeme`. Klijentu koji preuzima vozilo u 16:00 ne pomaže rečenica
+„u 14:00 (UTC)".
+
+Zona se čita iz `VREMENSKA_ZONA` u `.env` (podrazumijevano `Europe/Sarajevo`), jednom,
+pri prvom korištenju. Ljetno i zimsko računanje vremena dolazi iz baze vremenskih zona
+sistema, pa Dockerfile-ovi API-ja i workera instaliraju `tzdata`. Ako sistem zonu ipak ne
+poznaje, ispis ostaje u UTC-u i uz vrijeme piše „(UTC)", da se pogrešno vrijeme ne bi
+predstavilo kao lokalno. Pokrivaju ga testovi u `LokalnoVrijemeTests`.
+
+Aplikacije same pretvaraju vremena koja dobiju iz API-ja u vrijeme uređaja, pa ovo važi
+samo za tekst koji sastavlja server.
 
 ---
 

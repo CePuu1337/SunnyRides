@@ -1,17 +1,39 @@
-# sunnyrides_mobile
+# SunnyRides — mobilna aplikacija
 
-A new Flutter project.
+Android aplikacija za klijente: preporuke, pretraga slobodnih vozila sa filterima i
+ukupnom cijenom za termin, rezervacija sa opremom i osiguranjem, plaćanje kroz Stripe
+PaymentSheet, otkazivanje sa obračunom povrata, vozačka dozvola, recenzije, profil,
+reset zaboravljene lozinke i obavještenja u realnom vremenu.
 
-## Getting Started
+Zajednički dio (API klijent, modeli, tema, SignalR veza) je u paketu
+`../sunnyrides_core`.
 
-This project is a starting point for a Flutter application.
+## Pokretanje
 
-A few resources to get you started if this is your first Flutter project:
+API mora raditi (vidi `README.md` u korijenu repozitorija), a Android emulator biti
+upaljen.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Podrazumijevana adresa API-ja je `http://10.0.2.2:5000` — tako emulator vidi
+`localhost` računara. Druga se zadaje pri pokretanju i čita kroz
+`String.fromEnvironment('API_BASE_URL')`:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000
+```
+
+Prijava: `mobile` / `test`. Testna kartica: `4242 4242 4242 4242`, bilo koji budući
+datum, CVC `123`.
+
+## Build za predaju
+
+```bash
+flutter clean
+flutter build apk --release
+```
+
+Rezultat je `build/app/outputs/flutter-apk/app-release.apk`.

@@ -17,6 +17,7 @@ using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Placanja;
 using SunnyRides.Services.Poruke;
 using SunnyRides.Services.Rezervacije;
+using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Services.Primopredaje;
 
@@ -340,14 +341,14 @@ public class PrimopredajaService
         {
             throw new BusinessException(
                 $"Vozilo se moze izdati najranije {RanoIzdavanje.TotalHours:0} sata prije termina " +
-                $"({rezervacija.DatumOd:dd.MM.yyyy. HH:mm} UTC).");
+                $"({LokalnoVrijeme.DatumIVrijeme(rezervacija.DatumOd)}).");
         }
 
         if (izdatoU >= rezervacija.DatumDo)
         {
             throw new BusinessException(
                 "Vrijeme izdavanja mora biti prije ugovorenog vracanja " +
-                $"({rezervacija.DatumDo:dd.MM.yyyy. HH:mm} UTC).");
+                $"({LokalnoVrijeme.DatumIVrijeme(rezervacija.DatumDo)}).");
         }
 
         if (request.Kilometraza < rezervacija.Vozilo.Kilometraza)
@@ -429,7 +430,7 @@ public class PrimopredajaService
         {
             throw new BusinessException(
                 "Vrijeme povrata ne moze biti prije izdavanja " +
-                $"({izdavanje.DatumVrijeme:dd.MM.yyyy. HH:mm} UTC).");
+                $"({LokalnoVrijeme.DatumIVrijeme(izdavanje.DatumVrijeme)}).");
         }
 
         // Obracun ide po trenutku kad je vozilo stvarno vraceno. Da ide po trenutku

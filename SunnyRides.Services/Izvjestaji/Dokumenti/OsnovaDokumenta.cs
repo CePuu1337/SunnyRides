@@ -1,6 +1,7 @@
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Services.Izvjestaji.Dokumenti;
 
@@ -84,7 +85,7 @@ public abstract class OsnovaDokumenta : IDocument
             kolona.Item().Row(red =>
             {
                 red.RelativeItem()
-                    .Text($"Generisano {GenerisanoUtc:dd.MM.yyyy. HH:mm} (UTC)")
+                    .Text($"Generisano {LokalnoVrijeme.DatumIVrijeme(GenerisanoUtc)}")
                     .FontSize(8).FontColor(Colors.Grey.Darken1);
 
                 red.RelativeItem().AlignRight().Text(tekst =>

@@ -12,8 +12,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 # Model preporuke koristi ML.NET, cija je nativna biblioteka za matricnu faktorizaciju
 # (LIBMF) gradjena sa OpenMP-om. Runtime image ga nema, pa bi se bez ovoga treniranje
 # srusilo tek u kontejneru - lokalno na Windowsu radi i bez toga.
+# tzdata nosi vremenske zone, da se vremena u porukama ispisuju po lokalnom vremenu.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends libgomp1 tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model.Enums;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Services.Database.Seed;
 
@@ -166,14 +167,14 @@ public partial class DatabaseSeeder
                 case StatusRezervacije.Confirmed:
                     Notifikacija(TipNotifikacije.RezervacijaPotvrdjena,
                         "Rezervacija je potvrdjena",
-                        $"Vase vozilo ceka vas {rezervacija.DatumOd:dd.MM.yyyy.} u {rezervacija.DatumOd:HH:mm} u poslovnici {rezervacija.Poslovnica.Naziv}.",
+                        $"Vase vozilo ceka vas {LokalnoVrijeme.DatumUVrijeme(rezervacija.DatumOd)} u poslovnici {rezervacija.Poslovnica.Naziv}.",
                         rezervacija.DatumKreiranja.AddMinutes(Broj(4, 18)));
 
                     if (rezervacija.DatumOd > _danas && rezervacija.DatumOd < _danas.AddDays(1))
                     {
                         Notifikacija(TipNotifikacije.PodsjetnikPreuzimanje,
                             "Podsjetnik za preuzimanje",
-                            $"Preuzimanje vozila je sutra u {rezervacija.DatumOd:HH:mm}. Ponesite vozacku dozvolu i licnu kartu.",
+                            $"Preuzimanje vozila je sutra u {LokalnoVrijeme.Vrijeme(rezervacija.DatumOd)}. Ponesite vozacku dozvolu i licnu kartu.",
                             rezervacija.DatumOd.AddDays(-1));
                     }
                     break;
