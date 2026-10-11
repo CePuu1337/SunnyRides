@@ -406,6 +406,7 @@ i njemu se prijava odbija.
 | `name` | korisničko ime | prikaz i logovanje |
 | `ime`, `prezime` | — | da klijentska aplikacija ne mora odmah zvati `/api/auth/ja` |
 | `role` | naziv uloge, može ih biti više | ulazi u `[Authorize(Roles = ...)]` |
+| `ver` | `Korisnik.VerzijaTokena` u trenutku prijave | poništavanje svih tokena korisnika odjednom (vidi niže) |
 | `exp` | `UtcNow + 120 min` | rok trajanja |
 
 Nema `refresh` tokena. Dodatak A.2 uputstva to dozvoljava, a za sistem u kojem sesija
@@ -447,6 +448,45 @@ prazan, `jti` `null`, i opozvan token bi prošao.
 
 Ponovna odjava istim tokenom ne baca grešku nego tiho izlazi. Operacija je time
 idempotentna: dva klika na „Odjavi se" daju isti rezultat kao jedan.
+
+### Kad token prestaje važiti prije roka
+
+Odjava poništava jedan token. Ima, međutim, situacija u kojima moraju pasti **svi**
+tokeni jednog korisnika, na svim uređajima:
+
+| Događaj | Zašto stari token ne smije raditi |
+|---|---|
+| promjena lozinke (vlastita, administratorski reset ili reset kodom sa emaila) | lozinka se najčešće mijenja baš zato što ju je neko saznao — njegova sesija se mora zatvoriti |
+| deaktivacija naloga | deaktiviran nalog se ne može prijaviti; ne smije ni nastaviti raditi sa ranije dobijenim tokenom |
+| promjena uloga | uloge putuju u tokenu; bez ovoga bi korisnik kojem je uloga oduzeta do isteka tokena radio sa starim pravima |
+
+Za to `Korisnik` ima cijeli broj `VerzijaTokena`. Upisuje se u svaki token kao claim
+`ver`, a svaki od događaja iznad ga poveća za jedan. Isti middleware koji provjerava
+opoziv sad jednim upitom čita tri stvari — je li `jti` opozvan, je li nalog aktivan i
+koja je trenutna verzija — i odbija token ako bilo šta ne odgovara:
+
+```csharp
+var stanje = await dbContext.Korisnici
+    .Where(x => x.Id == korisnikId)
+    .Select(x => new
+    {
+        x.Aktivan,
+        x.VerzijaTokena,
+        Opozvan = dbContext.OpozvaniTokeni.Any(o => o.Jti == jti)
+    })
+    .FirstOrDefaultAsync(context.RequestAborted);
+```
+
+Zašto broj, a ne vrijeme („tokeni izdati prije X ne važe")? Claim `iat` ima preciznost
+od sekunde, pa token izdat u istoj sekundi kao promjena lozinke ne bi se mogao pouzdano
+svrstati ni prije ni poslije. Broj se poredi tačno.
+
+Kad korisnik sam promijeni lozinku, `POST /api/auth/promjena-lozinke` u odgovoru vraća
+**novi token**, isti oblik kao prijava. Uređaj sa kojeg je promjena napravljena tako
+ostaje prijavljen, a svi ostali dobijaju 401 na sljedećem zahtjevu. Kod administratorskog
+reseta i promjene uloga novog tokena nema — korisnik se prijavi ponovo. Isto važi i kad
+administrator to uradi nad vlastitim nalogom: desktop ga vrati na prijavu, a nova prijava
+donosi nove uloge.
 
 ### Gdje stoji `[Authorize]`
 
@@ -744,6 +784,13 @@ prvom otvaranju galerije. Od dva loša ishoda bira se manji.
 Isto vrijedi i za brisanje vozila: putanje se pročitaju u `BeforeDelete`, dok se još
 zna gdje su, a fajlovi se uklanjaju nakon što je zapis nestao iz baze. Slike se u
 bazi brišu kaskadno, ali kaskada ne zna za disk.
+
+**Seed slike se nikad ne brišu sa diska.** Sva vozila istog modela u seedu, i seed
+obavijesti, pokazuju na isti fajl u `uploads/seeds/`, a taj folder je dio repozitorija.
+Brisanje fotografije jednog vozila zato briše samo njegov zapis: `ObrisiJavno` putanje
+ispod `PohranaOpcije.SeedPrefiks` preskače. Bez toga bi uklanjanje slike sa jednog
+vozila ostavilo bez slike i sva ostala vozila tog modela, a iz radnog foldera bi nestao
+fajl koji git prati.
 
 ### Glavna slika je uvijek tačno jedna
 
@@ -1890,7 +1937,7 @@ Stripe klijent dobija `HttpClient` iz `IHttpClientFactory`, ne kroz `new HttpCli
 (uputstvo 3.4). Javni ključ klijent dobija od servera, uz intent, pa ga mobilna
 aplikacija ne mora imati upisanog.
 
-### Šta još nije povezano
+### Šta je povezano poslije ove faze
 
 - ✅ Poruka `placanje.uspjesno` i email potvrde su tu od faze 14a. Objavljuje se samo
   za ishod „potvrđeno", pa ponovljena potvrda ne šalje drugi email.
@@ -2304,16 +2351,25 @@ tokena:
   tajni (`Redovi.SadrziTajnu`) i za njega se logira samo naziv reda. Log čita više ljudi
   nego bazu i najčešće se čuva duže nego što kod važi.
 
-**Otvoreno pitanje za mentora.** Uputstvo kaže da `[AllowAnonymous]` smije stajati samo
-na prijavi i registraciji. Reset zaboravljene lozinke po prirodi stvari ne može tražiti
-token — korisnik do njega ne može doći. Implementiran je sa mjerama iznad; ako se traži
-doslovno poštovanje pravila, funkcionalnost se uklanja iz mobilne aplikacije i lozinku
-resetuje administrator kroz upravljanje korisnicima.
+**Zašto ovdje stoji `[AllowAnonymous]`.** Uputstvo (5) kaže da je `[AllowAnonymous]`
+dozvoljen samo na prijavi i registraciji. Ista ta pravila, međutim, traže reset lozinke
+u mobilnoj aplikaciji (2.3), a prijava teme ga obećava kao „reset lozinke putem koda
+poslanog na email adresu". Korisnik koji je zaboravio lozinku ne može doći do tokena, pa
+ovaj tok ne može biti iza `[Authorize]` — on je, kao i prijava, dio samog ulaska u
+sistem. Svrha pravila je da write operacije i korisnički podaci ne budu otvoreni, i to
+je ovdje poštovano:
 
-**Šta ovaj korak namjerno ne radi.** Postojeći tokeni se poslije promjene lozinke ne
-poništavaju — za to bi u `Korisnik` trebalo polje „tokeni izdati prije ovog trenutka ne
-važe", a odjava trenutno radi po `jti`-ju pojedinačnog tokena. Zapisano kao poznato
-ograničenje.
+- oba endpointa su u `AuthController`-u, zajedno sa prijavom i registracijom, i nigdje
+  drugo u projektu `[AllowAnonymous]` ne postoji (test `PravilaAutorizacijeTests` to
+  provjerava za sve kontrolere);
+- nijedan od njih ne vraća nikakav podatak o nalogu, a prvi uvijek vraća isti odgovor;
+- drugi mijenja lozinku samo uz kod koji je stigao na email vlasnika naloga.
+
+Stripe webhook je drugačiji slučaj i zato nema `[AllowAnonymous]`: tamo pozivalac ima
+čime da se dokaže (potpis), pa je dobio vlastitu shemu autentifikacije.
+
+**Šta se dešava sa starim sesijama.** Novom lozinkom svi raniji tokeni korisnika
+prestaju važiti — vidi „Kad token prestaje važiti prije roka" u sekciji o prijavi.
 
 ---
 
@@ -2481,6 +2537,14 @@ Piše ih administrator, čitaju svi klijenti. Klijentu se prikazuju **samo aktiv
 obavijesti čiji je datum objave prošao** — datum u budućnosti je zakazana objava. Obje
 provjere su na serveru, i u listi i na detalju; neobjavljena obavijest klijentu vraća 404,
 namjerno, da odgovor ne oda da nešto postoji i čeka objavu.
+
+**Aktivna obavijest uvijek ima sliku.** Uputstvo (7.2) traži da obavijest ima naslov,
+tekst, sliku i datum. Slika se prilaže uz postojeći zapis, pa server pravi ovaj red:
+nova obavijest se snima kao neaktivna, dobije sliku, i tek onda se može aktivirati.
+Izmjena koja bi aktivirala obavijest bez slike, i uklanjanje slike sa aktivne obavijesti,
+vraćaju 400 sa objašnjenjem. Desktop forma to radi sama: sliku je moguće odabrati i na
+novoj obavijesti, a pri snimanju forma zapis napravi, priloži sliku i aktivira ga — tim
+redom. Seed obavijesti koriste fotografije vozila koje već dolaze sa repozitorijem.
 
 Slika se snima na disk kroz istu pohranu kao i fotografije vozila, sa validacijom po
 magic bytes. U bazu ide samo putanja, a odgovor nosi URL slike i URL thumbnaila. Stara
@@ -2872,17 +2936,14 @@ token, zaključavanje reda ili uslovni upis. Gdje mehanizma nema, to i piše.
 | Otkazivanje i potvrda plaćanja istovremeno | oba puta zaključavaju red rezervacije; ko dođe drugi vidi novo stanje, a novac za otkazanu rezervaciju se vraća | ✅ |
 | Potvrda iz aplikacije i webhook istovremeno | isto zaključavanje, pa ponovna provjera `Succeeded` poslije njega | ✅ |
 | Isti Stripe događaj dvaput | provjera prije obrade i jedinstveni indeks na `ProviderEventId` | ✅ |
-| Dvije recenzije istog najma | jedinstveni indeks `(KorisnikId, RezervacijaId)` | 🟡 indeks postoji |
+| Dvije recenzije istog najma | provjera prije upisa i jedinstveni indeks `(KorisnikId, RezervacijaId)`; `SacuvajAsync` kršenje indeksa pretvara u 400 „Za ovu rezervaciju ste već ostavili recenziju" | ✅ |
 | Dvije primopredaje istog tipa | zaključavanje reda rezervacije, provjera prije upisa i jedinstveni indeks `(RezervacijaId, Tip)` | ✅ |
 | Automatsko otkazivanje i plaćanje istovremeno | posao u workeru zaključava red rezervacije i **poslije toga ponovo pročita** status i `DrziDo`; ako je plaćeno, odustaje | ✅ |
 
-Razlog za 🟡 umjesto ✅ vrijedi razumjeti. Jedinstveni indeks stvarno **sprječava**
-duplikat i onda kad provjera u kodu ne uhvati trku — baza jednostavno odbije drugi
-upis. Ali odbije ga kroz `DbUpdateException`, koji, ako ga servis ne uhvati, do
-klijenta stigne kao 500 sa nerazumljivom porukom.
-
-Dakle: podatak je zaštićen, korisničko iskustvo nije. Dok servis to ne obradi i ne
-vrati razumnu poruku, pošteno je reći da stvar nije završena.
+Kod recenzija su dva sloja namjerno. Provjera u servisu daje jasnu poruku u običnom
+slučaju, a jedinstveni indeks hvata trku u kojoj dva zahtjeva prođu provjeru u istom
+trenutku. Drugi upis tada pada na bazi, a `SacuvajAsync` taj `DbUpdateException`
+pretvara u istu razumljivu poruku umjesto u 500.
 
 ---
 
@@ -3277,6 +3338,16 @@ podacima — token nastaje na jednom mjestu i server ga evidentira kao i svaki d
 ga odjava poništava. Ekran registracije uz to hvata i neočekivane greške, da dugme
 nikad ne ostane zaključano.
 
+### Provjere unosa su na jednom mjestu
+
+Email, telefon i korisničko ime se unose na četiri forme: registracija i izmjena profila
+na mobilnoj, zaboravljena lozinka, i forma korisnika na desktopu. Svaka je imala svoju
+kopiju provjere, i nisu bile iste — izmjena profila je propuštala „a@b." jer je gledala
+samo ima li `@` i tačke. Sada sve četiri koriste `Validatori` iz `sunnyrides_core`, sa
+istim izrazima kao `RegisterRequest` i `KorisnikInsertRequest` na serveru. Svaka poruka
+kaže i kakav se unos očekuje („Unesite broj u obliku +387 6X XXX XXX, npr.
++387 61 234 567."), kako uputstvo (4) traži. Pokriveno testom `validacija_test.dart`.
+
 ### Šta mobilna aplikacija ne radi
 
 Prijava nalogom osoblja se odbija sa objašnjenjem, a ne tiho — server bi mu većinu poziva
@@ -3308,7 +3379,8 @@ samo za tekst koji sastavlja server.
 
 | Pravilo | |
 |---|---|
-| `[Authorize]` na svim kontrolerima, `[AllowAnonymous]` samo u `AuthController`-u (`login`, `register` i reset zaboravljene lozinke) | 🟡 vidi sekciju o resetu |
+| `[Authorize]` na svim kontrolerima, `[AllowAnonymous]` samo u `AuthController`-u (`login`, `register` i reset zaboravljene lozinke) | ✅ razlog za reset je u sekciji „Reset zaboravljene lozinke" |
+| Promjena lozinke, deaktivacija i promjena uloga poništavaju sve ranije tokene korisnika | ✅ |
 | Kod za reset i lozinke hashirani BCrypt-om; kod se generiše `RandomNumberGenerator`-om | ✅ |
 | `userId` uvijek iz JWT tokena kroz `IHttpContextAccessor` | ✅ |
 | `RegisterRequest` bez polja `Role` i `IsAdmin` | ✅ |

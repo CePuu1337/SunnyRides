@@ -141,19 +141,7 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
               controller: _email,
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(labelText: 'Email'),
-              validator: (vrijednost) {
-                final tekst = vrijednost?.trim() ?? '';
-
-                if (tekst.isEmpty) {
-                  return 'Email je obavezan.';
-                }
-
-                if (!tekst.contains('@') || !tekst.contains('.')) {
-                  return 'Unesite ispravnu email adresu.';
-                }
-
-                return null;
-              },
+              validator: Validatori.email,
             ),
             const SizedBox(height: Razmaci.m),
             TextFormField(
@@ -163,20 +151,8 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
                 labelText: 'Telefon',
                 hintText: '+387 6X XXX XXX',
               ),
-              validator: (vrijednost) {
-                final tekst = vrijednost?.trim() ?? '';
-
-                if (tekst.isEmpty) {
-                  return null;
-                }
-
-                // Isti oblik koji trazi i server, da se greska vidi prije slanja.
-                final oblik = RegExp(r'^\+387 6\d{1} \d{3} \d{3}$');
-
-                return oblik.hasMatch(tekst)
-                    ? null
-                    : 'Unesite broj u formatu +387 6X XXX XXX.';
-              },
+              validator: (vrijednost) =>
+                  Validatori.telefon(vrijednost, obavezan: false),
             ),
             const SizedBox(height: Razmaci.m),
             InkWell(

@@ -3,13 +3,6 @@ import 'package:sunnyrides_mobile/ekrani/prijava/zaboravljena_lozinka_ekran.dart
 
 void main() {
   group('Reset lozinke', () {
-    test('email mora imati oblik adrese', () {
-      expect(ValidacijaResetaLozinke.email(''), isNotNull);
-      expect(ValidacijaResetaLozinke.email('ammar'), isNotNull);
-      expect(ValidacijaResetaLozinke.email('ammar@primjer'), isNotNull);
-      expect(ValidacijaResetaLozinke.email(' ammar@primjer.com '), isNull);
-    });
-
     test('kod se prihvata sa malim slovima, razmacima i crticom', () {
       expect(ValidacijaResetaLozinke.kod('K7M2Q9XA'), isNull);
       expect(ValidacijaResetaLozinke.kod('k7m2 q9xa'), isNull);

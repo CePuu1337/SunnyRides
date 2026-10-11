@@ -74,15 +74,15 @@ class _ObavijestiEkranStanje extends State<ObavijestiEkran> {
   }
 
   Future<void> _otvoriFormu({Obavijest? obavijest}) async {
-    final sacuvano = await showDialog<bool>(
+    await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => ObavijestForma(obavijest: obavijest),
     );
 
-    if (sacuvano == true) {
-      _ucitaj();
-    }
+    // Lista se ucitava i kad je forma zatvorena bez potvrde: nova obavijest se
+    // snima u vise koraka, pa zapis moze postojati i ako je zadnji korak pukao.
+    _ucitaj();
   }
 
   Future<void> _obrisi(Obavijest obavijest) async {

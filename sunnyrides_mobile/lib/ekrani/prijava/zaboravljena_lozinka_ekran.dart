@@ -177,7 +177,7 @@ class _ZaboravljenaLozinkaEkranStanje extends State<ZaboravljenaLozinkaEkran> {
               labelText: 'Email',
               prefixIcon: Icon(Icons.mail_outline),
             ),
-            validator: ValidacijaResetaLozinke.email,
+            validator: Validatori.email,
           ),
           const SizedBox(height: Razmaci.xl),
           SizedBox(
@@ -256,27 +256,13 @@ class _ZaboravljenaLozinkaEkranStanje extends State<ZaboravljenaLozinkaEkran> {
   }
 }
 
-/// Provjere za reset lozinke, iste kao na serveru, da korisnik gresku vidi ispod
-/// polja prije nego zahtjev ode.
+/// Provjera koda za reset lozinke, ista kao na serveru, da korisnik gresku vidi ispod
+/// polja prije nego zahtjev ode. Email se provjerava kroz zajednicke [Validatori].
 class ValidacijaResetaLozinke {
   const ValidacijaResetaLozinke._();
 
-  static final _oblikEmaila = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
   /// Znakovi koje server koristi za kod: bez I, O, 0 i 1, koji se lako zamijene.
   static final _oblikKoda = RegExp(r'^[A-HJ-NP-Z2-9]{8}$');
-
-  static String? email(String? vrijednost) {
-    final tekst = vrijednost?.trim() ?? '';
-
-    if (tekst.isEmpty) {
-      return 'Unesite email adresu.';
-    }
-
-    return _oblikEmaila.hasMatch(tekst)
-        ? null
-        : 'Unesite email u obliku ime@primjer.com.';
-  }
 
   /// Razmaci i crtica se zanemaruju, a mala slova prihvataju - kod se prepisuje
   /// rukom, a server ga svodi na isti oblik.

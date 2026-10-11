@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model.Enums;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Fajlovi;
 using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Services.Database.Seed;
@@ -105,27 +106,34 @@ public partial class DatabaseSeeder
     private async Task SeedObavijestiINotifikacijeAsync(List<Rezervacija> rezervacije, CancellationToken ct)
     {
         // --- javne obavijesti agencije ---
-        var obavijesti = new (string naslov, string tekst, int prijeDana)[]
+        // Slike su fotografije vozila koje vec dolaze sa seedom. Obavijest bez slike
+        // klijent ne bi ni vidio - aktivna obavijest mora imati sliku.
+        var obavijesti = new (string naslov, string tekst, int prijeDana, string slika)[]
         {
             ("Ljetna sezona je pocela",
-             "Od 1. juna nasa flota radi punim kapacitetom u sve cetiri poslovnice. Preporucujemo rezervaciju nekoliko dana unaprijed jer su termini vikendom brzo popunjeni.", 45),
+             "Od 1. juna nasa flota radi punim kapacitetom u sve cetiri poslovnice. Preporucujemo rezervaciju nekoliko dana unaprijed jer su termini vikendom brzo popunjeni.", 45,
+             "vespa-primavera-125"),
             ("Nova vozila u floti",
-             "U Split i Dubrovnik stigli su novi Yamaha NMAX 125 skuteri. Idealni su za obilazak uzeg gradskog jezgra i obalne ceste.", 30),
+             "U Split i Dubrovnik stigli su novi Yamaha NMAX 125 skuteri. Idealni su za obilazak uzeg gradskog jezgra i obalne ceste.", 30,
+             "yamaha-nmax-125"),
             ("Elektricni skuteri sada dostupni",
-             "NIU NQi GT je od ove sezone dostupan u Neumu i Mostaru. Domet je oko 70 km po punjenju, a punjac je ukljucen u cijenu najma.", 21),
+             "NIU NQi GT je od ove sezone dostupan u Neumu i Mostaru. Domet je oko 70 km po punjenju, a punjac je ukljucen u cijenu najma.", 21,
+             "niu-nqi-gt"),
             ("Radno vrijeme tokom praznika",
-             "Tokom drzavnih praznika poslovnice rade skraceno, od 09:00 do 15:00. Preuzimanja izvan tog termina dogovaraju se unaprijed telefonom.", 10),
+             "Tokom drzavnih praznika poslovnice rade skraceno, od 09:00 do 15:00. Preuzimanja izvan tog termina dogovaraju se unaprijed telefonom.", 10,
+             "honda-pcx-125"),
             ("Popust za duze najmove",
-             "Za najam od sedam i vise dana automatski se primjenjuje popust od 10 posto. Popust se obracunava pri kreiranju rezervacije i vidljiv je u razradi cijene.", 4)
+             "Za najam od sedam i vise dana automatski se primjenjuje popust od 10 posto. Popust se obracunava pri kreiranju rezervacije i vidljiv je u razradi cijene.", 4,
+             "cfmoto-cforce-520")
         };
 
-        foreach (var (naslov, tekst, prijeDana) in obavijesti)
+        foreach (var (naslov, tekst, prijeDana, slika) in obavijesti)
         {
             _context.Obavijesti.Add(new Obavijest
             {
                 Naslov = naslov,
                 Tekst = tekst,
-                PutanjaSlike = null,
+                PutanjaSlike = $"{PohranaOpcije.SeedPrefiks}{slika}.jpg",
                 DatumObjave = _danas.AddDays(-prijeDana).AddHours(9),
                 Aktivna = true
             });

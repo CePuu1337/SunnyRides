@@ -15,6 +15,13 @@ public class Korisnik
     public bool Blokiran { get; set; }
     public DateTime DatumRegistracije { get; set; }
 
+    /// <summary>
+    /// Upisuje se u svaki token pri prijavi. Kad se promijeni lozinka, nalog deaktivira
+    /// ili mu se promijene uloge, broj se poveca - i svaki ranije izdat token tog
+    /// korisnika prestaje vaziti, na svim uredjajima, bez cekanja da istekne.
+    /// </summary>
+    public int VerzijaTokena { get; set; }
+
     public ICollection<KorisnikRole> KorisnikRole { get; set; } = new List<KorisnikRole>();
     public VozackaDozvola? VozackaDozvola { get; set; }
     public ICollection<Rezervacija> Rezervacije { get; set; } = new List<Rezervacija>();

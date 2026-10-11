@@ -121,7 +121,8 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
 
       setState(() {
         _uToku = false;
-        _greska = 'Nešto nije u redu. Pokušajte ponovo ili se prijavite ako je '
+        _greska =
+            'Nešto nije u redu. Pokušajte ponovo ili se prijavite ako je '
             'nalog već otvoren.';
       });
     }
@@ -148,19 +149,7 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
                   decoration: const InputDecoration(
                     labelText: 'Korisničko ime',
                   ),
-                  validator: (vrijednost) {
-                    final tekst = vrijednost?.trim() ?? '';
-
-                    if (tekst.length < 3 || tekst.length > 50) {
-                      return 'Između 3 i 50 znakova.';
-                    }
-
-                    if (!RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(tekst)) {
-                      return 'Slova, brojevi, tačka, donja crta i crtica.';
-                    }
-
-                    return null;
-                  },
+                  validator: Validatori.korisnickoIme,
                 ),
                 const SizedBox(height: Razmaci.l),
                 TextFormField(
@@ -179,16 +168,7 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  validator: (vrijednost) {
-                    final tekst = vrijednost?.trim() ?? '';
-
-                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                        .hasMatch(tekst)) {
-                      return 'Unesite ispravnu email adresu.';
-                    }
-
-                    return null;
-                  },
+                  validator: Validatori.email,
                 ),
                 const SizedBox(height: Razmaci.l),
                 TextFormField(
@@ -198,16 +178,7 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
                     labelText: 'Telefon',
                     hintText: '+387 61 234 567',
                   ),
-                  validator: (vrijednost) {
-                    final tekst = vrijednost?.trim() ?? '';
-
-                    if (!RegExp(r'^\+387 6\d{1} \d{3} \d{3}$')
-                        .hasMatch(tekst)) {
-                      return 'Oblik: +387 61 234 567';
-                    }
-
-                    return null;
-                  },
+                  validator: Validatori.telefon,
                 ),
                 const SizedBox(height: Razmaci.l),
                 InkWell(

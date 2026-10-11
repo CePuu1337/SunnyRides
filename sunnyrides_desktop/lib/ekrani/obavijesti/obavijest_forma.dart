@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +10,10 @@ import '../../servisi/moderacija_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
 
 /// Unos i izmjena obavijesti, sa slikom i datumom objave.
+///
+/// Klijenti vide samo obavijest koja ima sliku, pa server aktivnu obavijest bez slike
+/// odbija. Slika se zato bira na formi, prije snimanja, i kod nove obavijesti: forma
+/// zapis prvo snimi kao neaktivan, prilozi sliku, pa ga tek onda aktivira.
 class ObavijestForma extends StatefulWidget {
   const ObavijestForma({super.key, this.obavijest});
 
@@ -28,11 +34,28 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
   late DateTime _datumObjave;
   late bool _aktivna;
 
+  /// Zapis na serveru. Kod nove obavijesti nastaje pri prvom snimanju, pa ako neki
+  /// od sljedecih koraka pukne, ponovno snimanje mijenja isti zapis umjesto da
+  /// pravi novi.
+  Obavijest? _zapis;
+
+  /// Slika koja je vec na serveru.
   String? _slikaUrl;
+
+  /// Slika odabrana na formi, a jos neposlana. Bajtovi se citaju jednom, pri odabiru.
+  _OdabranaSlika? _novaSlika;
+
+  /// Postojeca slika je oznacena za uklanjanje.
+  bool _ukloniPostojecu = false;
+
   bool _snimanje = false;
   String? _greska;
+  String? _greskaSlike;
 
   bool get _jeIzmjena => widget.obavijest != null;
+
+  bool get _imaSliku =>
+      _novaSlika != null || (_slikaUrl != null && !_ukloniPostojecu);
 
   @override
   void initState() {
@@ -47,6 +70,7 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
     _tekst = TextEditingController(text: obavijest?.tekst ?? '');
     _datumObjave = obavijest?.datumObjave.toLocal() ?? DateTime.now();
     _aktivna = obavijest?.aktivna ?? true;
+    _zapis = obavijest;
     _slikaUrl = obavijest?.slikaUrl;
   }
 
@@ -95,7 +119,16 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
   }
 
   Future<void> _sacuvaj() async {
-    if (!_forma.currentState!.validate()) {
+    final formaIspravna = _forma.currentState!.validate();
+
+    setState(() {
+      _greskaSlike = _aktivna && !_imaSliku
+          ? 'Aktivna obavijest mora imati sliku. Dodajte sliku (JPG, PNG ili '
+                'WEBP, do 5 MB) ili isključite „Aktivna".'
+          : null;
+    });
+
+    if (!formaIspravna || _greskaSlike != null) {
       return;
     }
 
@@ -112,10 +145,33 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
     };
 
     try {
-      if (_jeIzmjena) {
-        await _servis.izmijeni(widget.obavijest!.id, zahtjev);
-      } else {
-        await _servis.dodaj(zahtjev);
+      // Redoslijed je bitan: slika mora biti na serveru prije aktiviranja, a
+      // uklanja se tek kad je obavijest vec neaktivna.
+      final zapis =
+          _zapis ?? await _servis.dodaj({...zahtjev, 'aktivna': false});
+      _zapis = zapis;
+
+      final nova = _novaSlika;
+
+      if (nova != null) {
+        final saSlikom = await _servis.postaviSliku(
+          zapis.id,
+          imeFajla: nova.naziv,
+          sadrzaj: nova.bajtovi,
+        );
+
+        _novaSlika = null;
+        _slikaUrl = saSlikom.slikaUrl;
+        _ukloniPostojecu = false;
+      }
+
+      await _servis.izmijeni(zapis.id, zahtjev);
+
+      if (_ukloniPostojecu && _slikaUrl != null) {
+        await _servis.ukloniSliku(zapis.id);
+
+        _slikaUrl = null;
+        _ukloniPostojecu = false;
       }
 
       if (!mounted) {
@@ -135,7 +191,7 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
     }
   }
 
-  Future<void> _dodajSliku() async {
+  Future<void> _odaberiSliku() async {
     const vrste = XTypeGroup(
       label: 'Slike',
       extensions: ['jpg', 'jpeg', 'png', 'webp'],
@@ -147,56 +203,26 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
       return;
     }
 
-    setState(() {
-      _snimanje = true;
-      _greska = null;
-    });
+    final bajtovi = await fajl.readAsBytes();
 
-    try {
-      final sadrzaj = await fajl.readAsBytes();
-
-      final obavijest = await _servis.postaviSliku(
-        widget.obavijest!.id,
-        imeFajla: fajl.name,
-        sadrzaj: sadrzaj,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() => _slikaUrl = obavijest.slikaUrl);
-    } on ApiGreska catch (greska) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() => _greska = greska.poruka);
-    } finally {
-      if (mounted) {
-        setState(() => _snimanje = false);
-      }
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      _novaSlika = _OdabranaSlika(fajl.name, bajtovi);
+      _greskaSlike = null;
+    });
   }
 
-  Future<void> _ukloniSliku() async {
-    setState(() => _snimanje = true);
-
-    try {
-      await _servis.ukloniSliku(widget.obavijest!.id);
-
-      if (mounted) {
-        setState(() => _slikaUrl = null);
+  void _ukloniSliku() {
+    setState(() {
+      if (_novaSlika != null) {
+        _novaSlika = null;
+      } else {
+        _ukloniPostojecu = true;
       }
-    } on ApiGreska catch (greska) {
-      if (mounted) {
-        setState(() => _greska = greska.poruka);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _snimanje = false);
-      }
-    }
+    });
   }
 
   @override
@@ -286,12 +312,13 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
             const Divider(),
             const SizedBox(height: Razmaci.m),
             _Slika(
-              // Slika se veze za postojeci zapis, pa se kod nove obavijesti dodaje
-              // tek nakon prvog snimanja. Bez zapisa nema ni cemu da se prilozi.
-              dostupno: _jeIzmjena,
-              url: _okruzenje.apsolutnaSlika(_slikaUrl),
+              bajtovi: _novaSlika?.bajtovi,
+              url: _ukloniPostojecu
+                  ? null
+                  : _okruzenje.apsolutnaSlika(_slikaUrl),
+              greska: _greskaSlike,
               uToku: _snimanje,
-              naDodavanje: _dodajSliku,
+              naDodavanje: _odaberiSliku,
               naUklanjanje: _ukloniSliku,
             ),
           ],
@@ -301,23 +328,38 @@ class _ObavijestFormaStanje extends State<ObavijestForma> {
   }
 }
 
+class _OdabranaSlika {
+  const _OdabranaSlika(this.naziv, this.bajtovi);
+
+  final String naziv;
+  final Uint8List bajtovi;
+}
+
 class _Slika extends StatelessWidget {
   const _Slika({
-    required this.dostupno,
+    required this.bajtovi,
     required this.url,
+    required this.greska,
     required this.uToku,
     required this.naDodavanje,
     required this.naUklanjanje,
   });
 
-  final bool dostupno;
+  /// Novoodabrana slika, jos neposlana.
+  final Uint8List? bajtovi;
+
+  /// Slika koja je vec na serveru.
   final String? url;
+
+  final String? greska;
   final bool uToku;
   final VoidCallback naDodavanje;
   final VoidCallback naUklanjanje;
 
   @override
   Widget build(BuildContext context) {
+    final imaSliku = bajtovi != null || url != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -329,38 +371,43 @@ class _Slika extends StatelessWidget {
                 style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
               ),
             ),
-            if (dostupno) ...[
-              if (url != null)
-                TextButton.icon(
-                  onPressed: uToku ? null : naUklanjanje,
-                  icon: const Icon(Icons.delete_outline, size: 17),
-                  label: const Text('Ukloni'),
-                ),
-              const SizedBox(width: Razmaci.s),
-              OutlinedButton.icon(
-                onPressed: uToku ? null : naDodavanje,
-                icon: const Icon(Icons.add_photo_alternate_outlined, size: 17),
-                label: Text(url == null ? 'Dodaj sliku' : 'Zamijeni'),
+            if (imaSliku)
+              TextButton.icon(
+                onPressed: uToku ? null : naUklanjanje,
+                icon: const Icon(Icons.delete_outline, size: 17),
+                label: const Text('Ukloni'),
               ),
-            ],
+            const SizedBox(width: Razmaci.s),
+            OutlinedButton.icon(
+              onPressed: uToku ? null : naDodavanje,
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 17),
+              label: Text(imaSliku ? 'Zamijeni' : 'Dodaj sliku'),
+            ),
           ],
         ),
         const SizedBox(height: Razmaci.m),
-        if (!dostupno)
-          const Text(
-            'Sliku možete dodati nakon što obavijest sačuvate.',
-            style: TextStyle(color: Boje.tekstPrigusen, fontSize: 12.5),
+        if (bajtovi != null)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(Zaobljenja.dugme),
+            child: Image.memory(bajtovi!, height: 150, fit: BoxFit.cover),
           )
-        else if (url == null)
-          const Text(
-            'Obavijest nema sliku.',
-            style: TextStyle(color: Boje.tekstPrigusen, fontSize: 12.5),
-          )
-        else
+        else if (url != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(Zaobljenja.dugme),
             child: Image.network(url!, height: 150, fit: BoxFit.cover),
+          )
+        else
+          const Text(
+            'Obavijest nema sliku. Bez slike se može sačuvati samo kao neaktivna.',
+            style: TextStyle(color: Boje.tekstPrigusen, fontSize: 12.5),
           ),
+        if (greska != null) ...[
+          const SizedBox(height: Razmaci.s),
+          Text(
+            greska!,
+            style: const TextStyle(color: Boje.greskaTekst, fontSize: 12),
+          ),
+        ],
       ],
     );
   }

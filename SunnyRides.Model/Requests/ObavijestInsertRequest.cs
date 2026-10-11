@@ -18,5 +18,9 @@ public class ObavijestInsertRequest
     /// </summary>
     public DateTime? DatumObjave { get; set; }
 
-    public bool Aktivna { get; set; } = true;
+    /// <summary>
+    /// Nova obavijest jos nema sliku, pa se snima kao neaktivna. Objavljuje se izmjenom,
+    /// kad joj je slika dodana.
+    /// </summary>
+    public bool Aktivna { get; set; }
 }

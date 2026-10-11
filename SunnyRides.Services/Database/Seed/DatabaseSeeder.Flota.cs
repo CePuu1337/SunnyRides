@@ -1,4 +1,5 @@
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Fajlovi;
 
 namespace SunnyRides.Services.Database.Seed;
 
@@ -84,8 +85,8 @@ public partial class DatabaseSeeder
                 // Lista vozila cita samo PutanjaThumbnail.
                 vozilo.Slike.Add(new SlikaVozila
                 {
-                    Putanja = $"/uploads/seeds/{slika}.jpg",
-                    PutanjaThumbnail = $"/uploads/seeds/thumbs/{slika}.jpg",
+                    Putanja = $"{PohranaOpcije.SeedPrefiks}{slika}.jpg",
+                    PutanjaThumbnail = $"{PohranaOpcije.SeedPrefiks}{PutanjeSlika.FolderThumbova}/{slika}.jpg",
                     Redoslijed = 0,
                     JeGlavna = true
                 });

@@ -20,6 +20,12 @@ public class ObavijestService
 {
     private const string Podfolder = "obavijesti";
 
+    // Uputstvo trazi da obavijest ima naslov, tekst, sliku i datum. Zato klijenti
+    // nikad ne vide obavijest bez slike: aktivna moze biti samo ona koja je ima.
+    private const string PorukaBezSlike =
+        "Obavijest se moze objaviti tek kad ima sliku. Sacuvajte je kao neaktivnu, " +
+        "dodajte sliku, pa je aktivirajte.";
+
     private readonly ICurrentUserService _trenutniKorisnik;
     private readonly IPohranaSlika _pohrana;
 
@@ -96,9 +102,18 @@ public class ObavijestService
 
     // --- upis --------------------------------------------------------------
 
+    /// <summary>
+    /// Nova obavijest jos nema sliku - slika se prilaze uz postojeci zapis - pa se ne
+    /// moze odmah objaviti. Snima se kao neaktivna, dobije sliku, pa se aktivira.
+    /// </summary>
     protected override Task BeforeInsertAsync(
         ObavijestInsertRequest request, Obavijest entitet, CancellationToken ct)
     {
+        if (request.Aktivna)
+        {
+            throw new BusinessException(PorukaBezSlike);
+        }
+
         entitet.Naslov = request.Naslov.Trim();
         entitet.Tekst = request.Tekst.Trim();
 
@@ -118,6 +133,11 @@ public class ObavijestService
         if (request.DatumObjave.HasValue)
         {
             entitet.DatumObjave = request.DatumObjave.Value;
+        }
+
+        if (entitet.Aktivna && entitet.PutanjaSlike is null)
+        {
+            throw new BusinessException(PorukaBezSlike);
         }
 
         return Task.CompletedTask;
@@ -165,6 +185,13 @@ public class ObavijestService
         if (obavijest.PutanjaSlike is null)
         {
             throw new BusinessException("Ova obavijest nema sliku.");
+        }
+
+        if (obavijest.Aktivna)
+        {
+            throw new BusinessException(
+                "Objavljena obavijest mora imati sliku. Zamijenite sliku drugom, " +
+                "ili obavijest prvo oznacite kao neaktivnu.");
         }
 
         var stara = obavijest.PutanjaSlike;

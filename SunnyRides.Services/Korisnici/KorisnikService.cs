@@ -181,6 +181,14 @@ public class KorisnikService
         {
             throw new BusinessException("Ne mozete deaktivirati vlastiti nalog.");
         }
+
+        // Deaktiviran nalog ne smije raditi ni sa tokenom koji je dobio ranije.
+        var biloAktivan = Context.Entry(entitet).Property(x => x.Aktivan).OriginalValue;
+
+        if (biloAktivan && !entitet.Aktivan)
+        {
+            entitet.VerzijaTokena++;
+        }
     }
 
     /// <summary>
@@ -206,6 +214,7 @@ public class KorisnikService
         }
 
         korisnik.Aktivan = false;
+        korisnik.VerzijaTokena++;
         await Context.SaveChangesAsync(ct);
     }
 
@@ -242,13 +251,23 @@ public class KorisnikService
             Context.Remove(veza);
         }
 
-        foreach (var uloga in nove.Where(x => postojece.All(v => v.RoleId != x.Id)))
+        var dodane = nove.Where(x => postojece.All(v => v.RoleId != x.Id)).ToList();
+        var uklonjenih = postojece.Count(x => !noveIds.Contains(x.RoleId));
+
+        foreach (var uloga in dodane)
         {
             korisnik.KorisnikRole.Add(new KorisnikRole
             {
                 Role = uloga,
                 DatumDodjele = DateTime.UtcNow
             });
+        }
+
+        // Uloge putuju u tokenu. Bez ovoga bi korisnik kojem je uloga oduzeta jos do
+        // isteka tokena radio sa starim pravima.
+        if (dodane.Count > 0 || uklonjenih > 0)
+        {
+            korisnik.VerzijaTokena++;
         }
 
         await Context.SaveChangesAsync(ct);
@@ -267,6 +286,9 @@ public class KorisnikService
         // Stara lozinka se namjerno ne trazi - administrator je ne zna. Zato ovu radnju
         // smije pozvati iskljucivo administrator, sto stoji na kontroleru.
         korisnik.LozinkaHash = BCrypt.Net.BCrypt.HashPassword(request.NovaLozinka);
+
+        // Sesije otvorene starom lozinkom se zatvaraju - to je obicno i razlog reseta.
+        korisnik.VerzijaTokena++;
 
         await Context.SaveChangesAsync(ct);
     }

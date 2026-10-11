@@ -11,5 +11,5 @@ public record GenerisaniToken(string Token, DateTime IsticeUtc, string Jti);
 public interface ITokenService
 {
     GenerisaniToken Generisi(int korisnikId, string korisnickoIme, string ime, string prezime,
-        IEnumerable<string> uloge);
+        IEnumerable<string> uloge, int verzijaTokena);
 }

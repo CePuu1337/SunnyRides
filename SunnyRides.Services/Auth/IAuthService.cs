@@ -9,7 +9,12 @@ public interface IAuthService
 
     Task<KorisnikDto> RegistrujAsync(RegisterRequest request, CancellationToken ct = default);
 
-    Task PromijeniLozinkuAsync(PromjenaLozinkeRequest request, CancellationToken ct = default);
+    /// <summary>
+    /// Mijenja vlastitu lozinku uz staru. Svi raniji tokeni korisnika prestaju vaziti, a
+    /// odgovor nosi novi token za uredjaj sa kojeg je promjena napravljena.
+    /// </summary>
+    Task<PrijavaOdgovorDto> PromijeniLozinkuAsync(
+        PromjenaLozinkeRequest request, CancellationToken ct = default);
 
     /// <summary>
     /// Trazi kod za reset lozinke. Odgovor je isti bez obzira na to postoji li nalog

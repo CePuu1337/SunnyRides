@@ -14,6 +14,7 @@ export 'src/auth/auth_servis.dart';
 export 'src/auth/pohrana_tokena.dart';
 
 export 'src/format.dart';
+export 'src/validacija.dart';
 
 export 'src/dizajn/boje.dart';
 export 'src/dizajn/razmaci.dart';

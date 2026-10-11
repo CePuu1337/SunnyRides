@@ -80,16 +80,22 @@ class AuthServis {
     }
   }
 
+  /// Nova lozinka na serveru ponistava sve dosadasnje tokene korisnika, i na drugim
+  /// uredjajima. Ovaj uredjaj u odgovoru dobija novi token i nastavlja s njim.
   Future<void> promjenaLozinke({
     required String stara,
     required String nova,
     required String potvrda,
   }) async {
-    await _klijent.post('/api/auth/promjena-lozinke', tijelo: {
+    final odgovor = await _klijent.post('/api/auth/promjena-lozinke', tijelo: {
       'staraLozinka': stara,
       'novaLozinka': nova,
       'potvrdaNoveLozinke': potvrda,
     });
+
+    final prijava = PrijavaOdgovor.izJsona(odgovor as Map<String, dynamic>);
+
+    await _pohrana.sacuvaj(prijava.token, prijava.isticeUtc);
   }
 
   Future<void> zaboravljenaLozinka(String email) async {

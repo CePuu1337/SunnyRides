@@ -28,6 +28,13 @@ public class PohranaOpcije
     /// <summary>URL prefiks pod kojim klijent vidi javne fajlove.</summary>
     public const string JavniPrefiks = "/uploads";
 
+    /// <summary>
+    /// Slike koje dolaze sa repozitorijem i koje seed dijeli izmedju vise zapisa - sva
+    /// vozila istog modela, i obavijesti, pokazuju na isti fajl. Ovaj folder aplikacija
+    /// samo cita: brisanje jednog zapisa ne smije odnijeti sliku svima ostalima.
+    /// </summary>
+    public const string SeedPrefiks = JavniPrefiks + "/seeds/";
+
     /// <summary>Najveca dozvoljena velicina otpremljenog fajla.</summary>
     public const long MaksimalnaVelicinaBajta = 5 * 1024 * 1024;
 

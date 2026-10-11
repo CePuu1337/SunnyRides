@@ -15,6 +15,12 @@ public class TokenService : ITokenService
         JwtSecurityTokenHandler.DefaultOutboundClaimTypeMap.Clear();
     }
 
+    /// <summary>
+    /// Claim sa <c>Korisnik.VerzijaTokena</c> u trenutku prijave. Middleware ga poredi
+    /// sa trenutnom vrijednoscu u bazi.
+    /// </summary>
+    public const string ClaimVerzije = "ver";
+
     private readonly JwtPostavke _postavke;
 
     public TokenService(JwtPostavke postavke)
@@ -23,7 +29,7 @@ public class TokenService : ITokenService
     }
 
     public GenerisaniToken Generisi(int korisnikId, string korisnickoIme, string ime, string prezime,
-        IEnumerable<string> uloge)
+        IEnumerable<string> uloge, int verzijaTokena)
     {
         var jti = Guid.NewGuid().ToString("N");
         var izdat = DateTime.UtcNow;
@@ -35,7 +41,8 @@ public class TokenService : ITokenService
             new(JwtRegisteredClaimNames.Jti, jti),
             new(JwtRegisteredClaimNames.Name, korisnickoIme),
             new("ime", ime),
-            new("prezime", prezime)
+            new("prezime", prezime),
+            new(ClaimVerzije, verzijaTokena.ToString(), ClaimValueTypes.Integer32)
         };
 
         claims.AddRange(uloge.Select(uloga => new Claim("role", uloga)));

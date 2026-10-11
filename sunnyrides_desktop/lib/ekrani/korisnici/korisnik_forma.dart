@@ -177,19 +177,7 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
               TextFormField(
                 controller: _korisnickoIme,
                 decoration: const InputDecoration(labelText: 'Korisničko ime'),
-                validator: (vrijednost) {
-                  final tekst = vrijednost?.trim() ?? '';
-
-                  if (tekst.length < 3 || tekst.length > 50) {
-                    return 'Korisničko ime mora imati između 3 i 50 znakova.';
-                  }
-
-                  if (!RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(tekst)) {
-                    return 'Dozvoljena su slova, brojevi, tačka, donja crta i crtica.';
-                  }
-
-                  return null;
-                },
+                validator: Validatori.korisnickoIme,
               ),
               const SizedBox(height: Razmaci.l),
             ],
@@ -210,15 +198,7 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
               lijevo: TextFormField(
                 controller: _email,
                 decoration: const InputDecoration(labelText: 'Email'),
-                validator: (vrijednost) {
-                  final tekst = vrijednost?.trim() ?? '';
-
-                  if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(tekst)) {
-                    return 'Unesite ispravnu email adresu.';
-                  }
-
-                  return null;
-                },
+                validator: Validatori.email,
               ),
               desno: TextFormField(
                 controller: _telefon,
@@ -226,19 +206,8 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
                   labelText: 'Telefon',
                   hintText: '+387 61 234 567',
                 ),
-                validator: (vrijednost) {
-                  final tekst = vrijednost?.trim() ?? '';
-
-                  if (tekst.isEmpty) {
-                    return null;
-                  }
-
-                  if (!RegExp(r'^\+387 6\d{1} \d{3} \d{3}$').hasMatch(tekst)) {
-                    return 'Oblik: +387 61 234 567';
-                  }
-
-                  return null;
-                },
+                validator: (vrijednost) =>
+                    Validatori.telefon(vrijednost, obavezan: false),
               ),
             ),
             const SizedBox(height: Razmaci.l),

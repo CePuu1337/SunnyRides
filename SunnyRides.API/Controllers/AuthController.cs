@@ -70,11 +70,10 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("promjena-lozinke")]
-    public async Task<IActionResult> PromijeniLozinkuAsync(
+    public async Task<PrijavaOdgovorDto> PromijeniLozinkuAsync(
         [FromBody] PromjenaLozinkeRequest request, CancellationToken ct)
     {
-        await _authService.PromijeniLozinkuAsync(request, ct);
-        return NoContent();
+        return await _authService.PromijeniLozinkuAsync(request, ct);
     }
 
     [HttpPost("logout")]

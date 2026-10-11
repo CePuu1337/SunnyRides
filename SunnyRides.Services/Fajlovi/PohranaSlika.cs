@@ -69,6 +69,13 @@ public class PohranaSlika : IPohranaSlika
                 continue;
             }
 
+            // Seed slike dijeli vise zapisa i dio su repozitorija. Zapis koji na njih
+            // pokazuje se brise, a fajl ostaje za sve ostale.
+            if (putanja.StartsWith(PohranaOpcije.SeedPrefiks, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var relativna = putanja[(PohranaOpcije.JavniPrefiks.Length + 1)..];
             Obrisi(UApsolutnu(_opcije.JavniKorijen, relativna));
         }

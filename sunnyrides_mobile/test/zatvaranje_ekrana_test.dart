@@ -28,7 +28,10 @@ void main() {
     final navigator = GlobalKey<NavigatorState>();
 
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: navigator, home: _Korijen(stanje: stanje)),
+      MaterialApp(
+        navigatorKey: navigator,
+        home: _Korijen(stanje: stanje),
+      ),
     );
 
     navigator.currentState!.push(
@@ -51,7 +54,10 @@ void main() {
     final navigator = GlobalKey<NavigatorState>();
 
     await tester.pumpWidget(
-      MaterialApp(navigatorKey: navigator, home: _Korijen(stanje: stanje)),
+      MaterialApp(
+        navigatorKey: navigator,
+        home: _Korijen(stanje: stanje),
+      ),
     );
 
     showDialog<void>(

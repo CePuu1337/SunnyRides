@@ -55,17 +55,7 @@ public class AuthService : IAuthService
         // Blokiran korisnik se namjerno moze prijaviti - blokada sprjecava kreiranje
         // nove rezervacije, ne pristup vlastitoj historiji.
 
-        var uloge = korisnik.KorisnikRole.Select(x => x.Role.Naziv).ToList();
-
-        var token = _tokenService.Generisi(
-            korisnik.Id, korisnik.KorisnickoIme, korisnik.Ime, korisnik.Prezime, uloge);
-
-        return new PrijavaOdgovorDto
-        {
-            Token = token.Token,
-            IsticeUtc = token.IsticeUtc,
-            Korisnik = UDto(korisnik, uloge)
-        };
+        return NovaSesija(korisnik);
     }
 
     public async Task<KorisnikDto> RegistrujAsync(RegisterRequest request, CancellationToken ct = default)
@@ -121,11 +111,20 @@ public class AuthService : IAuthService
         return UDto(korisnik, new List<string> { Uloge.Klijent });
     }
 
-    public async Task PromijeniLozinkuAsync(PromjenaLozinkeRequest request, CancellationToken ct = default)
+    /// <summary>
+    /// Nova lozinka ponistava sve ranije tokene ovog korisnika - ako je lozinku neko
+    /// saznao, njegova sesija se ovim zatvara. Uredjaj sa kojeg je promjena napravljena
+    /// dobija novi token u odgovoru, pa njegov korisnik ostaje prijavljen.
+    /// </summary>
+    public async Task<PrijavaOdgovorDto> PromijeniLozinkuAsync(
+        PromjenaLozinkeRequest request, CancellationToken ct = default)
     {
         var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
 
-        var korisnik = await _context.Korisnici.FirstOrDefaultAsync(x => x.Id == korisnikId, ct)
+        var korisnik = await _context.Korisnici
+            .Include(x => x.KorisnikRole)
+                .ThenInclude(x => x.Role)
+            .FirstOrDefaultAsync(x => x.Id == korisnikId, ct)
             ?? throw NotFoundException.Za("Korisnik", korisnikId);
 
         if (!BCrypt.Net.BCrypt.Verify(request.StaraLozinka, korisnik.LozinkaHash))
@@ -139,7 +138,10 @@ public class AuthService : IAuthService
         }
 
         korisnik.LozinkaHash = BCrypt.Net.BCrypt.HashPassword(request.NovaLozinka);
+        korisnik.VerzijaTokena++;
         await _context.SaveChangesAsync(ct);
+
+        return NovaSesija(korisnik);
     }
 
     /// <summary>
@@ -235,6 +237,9 @@ public class AuthService : IAuthService
         zapis.Iskoristen = true;
         korisnik.LozinkaHash = BCrypt.Net.BCrypt.HashPassword(request.NovaLozinka);
 
+        // Ako je neko drugi znao staru lozinku i prijavio se njom, ta sesija se zatvara.
+        korisnik.VerzijaTokena++;
+
         await _context.SaveChangesAsync(ct);
 
         _logger.LogInformation("Korisnik {KorisnikId} je postavio novu lozinku kodom sa emaila.", korisnik.Id);
@@ -278,6 +283,23 @@ public class AuthService : IAuthService
             ?? throw NotFoundException.Za("Korisnik", korisnikId);
 
         return UDto(korisnik, korisnik.KorisnikRole.Select(x => x.Role.Naziv).ToList());
+    }
+
+    /// <summary>Token za korisnika cije su uloge vec ucitane.</summary>
+    private PrijavaOdgovorDto NovaSesija(Korisnik korisnik)
+    {
+        var uloge = korisnik.KorisnikRole.Select(x => x.Role.Naziv).ToList();
+
+        var token = _tokenService.Generisi(
+            korisnik.Id, korisnik.KorisnickoIme, korisnik.Ime, korisnik.Prezime, uloge,
+            korisnik.VerzijaTokena);
+
+        return new PrijavaOdgovorDto
+        {
+            Token = token.Token,
+            IsticeUtc = token.IsticeUtc,
+            Korisnik = UDto(korisnik, uloge)
+        };
     }
 
     private static KorisnikDto UDto(Korisnik korisnik, List<string> uloge) => new()
