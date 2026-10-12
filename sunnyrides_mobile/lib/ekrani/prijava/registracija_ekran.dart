@@ -206,9 +206,7 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
                   controller: _lozinka,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Lozinka'),
-                  validator: (vrijednost) => (vrijednost?.length ?? 0) < 6
-                      ? 'Lozinka mora imati bar šest znakova.'
-                      : null,
+                  validator: Validatori.lozinka,
                 ),
                 const SizedBox(height: Razmaci.l),
                 TextFormField(
@@ -217,9 +215,8 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
                   decoration: const InputDecoration(
                     labelText: 'Potvrda lozinke',
                   ),
-                  validator: (vrijednost) => vrijednost != _lozinka.text
-                      ? 'Lozinke se ne poklapaju.'
-                      : null,
+                  validator: (vrijednost) =>
+                      Validatori.potvrdaLozinke(vrijednost, _lozinka.text),
                 ),
                 const SizedBox(height: Razmaci.xl),
                 Obavjestenje.info(

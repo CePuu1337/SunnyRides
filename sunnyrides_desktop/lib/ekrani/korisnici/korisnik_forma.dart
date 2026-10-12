@@ -244,13 +244,7 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
                   controller: _lozinka,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Lozinka'),
-                  validator: (vrijednost) {
-                    if ((vrijednost?.length ?? 0) < 6) {
-                      return 'Lozinka mora imati bar šest znakova.';
-                    }
-
-                    return null;
-                  },
+                  validator: Validatori.lozinka,
                 ),
                 desno: TextFormField(
                   controller: _potvrda,
@@ -258,13 +252,8 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
                   decoration: const InputDecoration(
                     labelText: 'Potvrda lozinke',
                   ),
-                  validator: (vrijednost) {
-                    if (vrijednost != _lozinka.text) {
-                      return 'Lozinke se ne poklapaju.';
-                    }
-
-                    return null;
-                  },
+                  validator: (vrijednost) =>
+                      Validatori.potvrdaLozinke(vrijednost, _lozinka.text),
                 ),
               ),
             ],
@@ -409,26 +398,15 @@ class _ResetLozinkeDijalogStanje extends State<ResetLozinkeDijalog> {
               obscureText: true,
               autofocus: true,
               decoration: const InputDecoration(labelText: 'Nova lozinka'),
-              validator: (vrijednost) {
-                if ((vrijednost?.length ?? 0) < 6) {
-                  return 'Lozinka mora imati bar šest znakova.';
-                }
-
-                return null;
-              },
+              validator: Validatori.lozinka,
             ),
             const SizedBox(height: Razmaci.l),
             TextFormField(
               controller: _potvrda,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Potvrda lozinke'),
-              validator: (vrijednost) {
-                if (vrijednost != _nova.text) {
-                  return 'Lozinke se ne poklapaju.';
-                }
-
-                return null;
-              },
+              validator: (vrijednost) =>
+                  Validatori.potvrdaLozinke(vrijednost, _nova.text),
             ),
           ],
         ),

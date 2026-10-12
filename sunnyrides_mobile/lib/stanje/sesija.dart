@@ -100,12 +100,12 @@ class Sesija extends ChangeNotifier {
     _postavi(StanjeSesije.neprijavljen, null);
   }
 
-  void sesijaIstekla() {
+  void sesijaIstekla([String? poruka]) {
     if (_stanje != StanjeSesije.prijavljen) {
       return;
     }
 
-    _porukaOdjave = 'Sesija je istekla. Prijavite se ponovo.';
+    _porukaOdjave = poruka ?? 'Sesija je istekla. Prijavite se ponovo.';
     _postavi(StanjeSesije.neprijavljen, null);
   }
 

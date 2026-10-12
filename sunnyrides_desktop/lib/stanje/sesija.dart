@@ -85,13 +85,23 @@ class Sesija extends ChangeNotifier {
     _postavi(StanjeSesije.neprijavljen, null);
   }
 
-  /// Poziva se iz API klijenta kad server vrati 401.
-  void sesijaIstekla() {
+  /// Promjena vlastite lozinke, uz staru. Server ponistava sve ranije tokene i vraca
+  /// novi, koji se sacuva - pa korisnik na ovom racunaru ostaje prijavljen.
+  Future<void> promijeniLozinku({
+    required String stara,
+    required String nova,
+    required String potvrda,
+  }) async {
+    await _auth.promjenaLozinke(stara: stara, nova: nova, potvrda: potvrda);
+  }
+
+  /// Poziva se iz API klijenta kad server vrati 401, sa razlogom koji je server naveo.
+  void sesijaIstekla([String? poruka]) {
     if (_stanje != StanjeSesije.prijavljen) {
       return;
     }
 
-    _porukaOdjave = 'Sesija je istekla. Prijavite se ponovo.';
+    _porukaOdjave = poruka ?? 'Sesija je istekla. Prijavite se ponovo.';
     _postavi(StanjeSesije.neprijavljen, null);
   }
 

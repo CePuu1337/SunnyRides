@@ -456,16 +456,19 @@ class _Red extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'lozinka',
-                child: Row(
-                  children: [
-                    Icon(Icons.key_outlined, size: 18),
-                    SizedBox(width: Razmaci.m),
-                    Text('Nova lozinka'),
-                  ],
+              // Vlastitu lozinku administrator mijenja iz menija naloga, uz staru -
+              // kao i svaki drugi korisnik.
+              if (!jeJa)
+                const PopupMenuItem(
+                  value: 'lozinka',
+                  child: Row(
+                    children: [
+                      Icon(Icons.key_outlined, size: 18),
+                      SizedBox(width: Razmaci.m),
+                      Text('Nova lozinka'),
+                    ],
+                  ),
                 ),
-              ),
               if (!jeJa)
                 PopupMenuItem(
                   value: 'blokada',

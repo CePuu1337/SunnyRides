@@ -283,6 +283,14 @@ public class KorisnikService
         var korisnik = await Context.Korisnici.FirstOrDefaultAsync(x => x.Id == id, ct)
                        ?? throw NotFoundException.Za(NazivEntiteta, id);
 
+        // Uputstvo trazi staru lozinku kad korisnik mijenja vlastitu. Administrator
+        // svoju zato mijenja kao i svi ostali, kroz promjenu lozinke uz staru.
+        if (korisnik.Id == _trenutniKorisnik.ObaveznoKorisnikId())
+        {
+            throw new BusinessException(
+                "Vlastitu lozinku mijenjate kroz 'Promijeni lozinku' u meniju naloga, uz unos trenutne lozinke.");
+        }
+
         // Stara lozinka se namjerno ne trazi - administrator je ne zna. Zato ovu radnju
         // smije pozvati iskljucivo administrator, sto stoji na kontroleru.
         korisnik.LozinkaHash = BCrypt.Net.BCrypt.HashPassword(request.NovaLozinka);

@@ -4,6 +4,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../stanje/sesija.dart';
 import 'meni.dart';
+import 'promjena_lozinke_dijalog.dart';
 
 /// Gornja traka: naslov ekrana lijevo, zvono i nalog desno.
 class Zaglavlje extends StatelessWidget {
@@ -154,6 +155,27 @@ class _Nalog extends StatelessWidget {
     await context.read<Sesija>().odjava();
   }
 
+  Future<void> _promjenaLozinke(BuildContext context) async {
+    final promijenjena = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const PromjenaLozinkeDijalog(),
+    );
+
+    if (promijenjena != true || !context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Lozinka je promijenjena. Na drugim uređajima ćete se morati prijaviti '
+          'ponovo.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final okruzenje = context.read<Okruzenje>();
@@ -166,18 +188,21 @@ class _Nalog extends StatelessWidget {
       offset: const Offset(0, 48),
       position: PopupMenuPosition.under,
       onSelected: (izbor) {
-        if (izbor == 'odjava') {
-          _odjava(context);
+        switch (izbor) {
+          case 'lozinka':
+            _promjenaLozinke(context);
+          case 'odjava':
+            _odjava(context);
         }
       },
       itemBuilder: (context) => const [
         PopupMenuItem(
-          value: 'profil',
+          value: 'lozinka',
           child: Row(
             children: [
-              Icon(Icons.person_outline, size: 18),
+              Icon(Icons.lock_outline, size: 18),
               SizedBox(width: Razmaci.m),
-              Text('Moj profil'),
+              Text('Promijeni lozinku'),
             ],
           ),
         ),

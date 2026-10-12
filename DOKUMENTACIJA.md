@@ -484,9 +484,16 @@ svrstati ni prije ni poslije. Broj se poredi tačno.
 Kad korisnik sam promijeni lozinku, `POST /api/auth/promjena-lozinke` u odgovoru vraća
 **novi token**, isti oblik kao prijava. Uređaj sa kojeg je promjena napravljena tako
 ostaje prijavljen, a svi ostali dobijaju 401 na sljedećem zahtjevu. Kod administratorskog
-reseta i promjene uloga novog tokena nema — korisnik se prijavi ponovo. Isto važi i kad
-administrator to uradi nad vlastitim nalogom: desktop ga vrati na prijavu, a nova prijava
-donosi nove uloge.
+reseta i promjene uloga novog tokena nema — korisnik se prijavi ponovo. Kad administrator
+promijeni uloge vlastitom nalogu, desktop ga vrati na prijavu, a nova prijava donosi nove
+uloge. Vlastitu lozinku administrator ne može resetovati bez stare (vidi „Nalozi, uloge i
+profil").
+
+Odbijen token klijentska aplikacija ne prikazuje kao generičko „sesija je istekla".
+`ApiKlijent` razlog iz odgovora (`detail`) prosljeđuje sesiji, pa ekran za prijavu kaže
+šta se desilo: odjava, deaktiviran nalog ili promijenjena lozinka. Middleware uz to
+preskače endpointe sa `[AllowAnonymous]` — zastario token koji je aplikacija poslala uz
+prijavu ne smije oboriti samu prijavu.
 
 ### Gdje stoji `[Authorize]`
 
@@ -2574,13 +2581,15 @@ Uputstvo traži da forma za izmjenu korisnika ne prikazuje polja za lozinku, neg
 postoji zasebna radnja. Zato ni `KorisnikUpdateRequest` ni `ProfilUpdateRequest` nemaju
 ta polja, a postoje dvije odvojene radnje:
 
-| Radnja | Traži staru lozinku | Ko smije |
-|---|---|---|
-| `POST /api/auth/promjena-lozinke` | **da** | korisnik nad svojom |
-| `POST /api/korisnici/{id}/reset-lozinke` | ne | administrator nad tuđom |
+| Radnja | Traži staru lozinku | Ko smije | Gdje u aplikaciji |
+|---|---|---|---|
+| `POST /api/auth/promjena-lozinke` | **da** | svaki korisnik nad svojom | mobilna: Profil → Promjena lozinke; desktop: meni naloga → Promijeni lozinku |
+| `POST /api/korisnici/{id}/reset-lozinke` | ne | administrator nad tuđom | desktop: Korisnici → Nova lozinka |
 
 Administrator staru lozinku ne zna i ne treba je znati — zato je ta ruta administratorska
-i samo administratorska.
+i samo administratorska. Nad **vlastitim** nalogom je odbijena: uputstvo (4) traži staru
+lozinku kad korisnik mijenja svoju, pa i administrator svoju mijenja kao svi ostali. Zato
+desktop u listi korisnika kod vlastitog naloga stavku „Nova lozinka" ni ne nudi.
 
 ### Šta se ne može ni sa administratorskim pravima
 
@@ -2588,6 +2597,7 @@ i samo administratorska.
 |---|---|
 | ukloniti sebi administratorsku ulogu | ostao bi bez prava da tu grešku ispravi, a moguće je i da je jedini administrator |
 | deaktivirati vlastiti nalog | zaključao bi se van sistema |
+| resetovati vlastitu lozinku bez stare | i administrator vlastitu lozinku mijenja uz staru |
 | blokirati uposlenika ili administratora | blokada se odnosi na klijente; nalog osoblja se deaktivira |
 
 ### Brisanja nema
@@ -3346,7 +3356,8 @@ kopiju provjere, i nisu bile iste — izmjena profila je propuštala „a@b." je
 samo ima li `@` i tačke. Sada sve četiri koriste `Validatori` iz `sunnyrides_core`, sa
 istim izrazima kao `RegisterRequest` i `KorisnikInsertRequest` na serveru. Svaka poruka
 kaže i kakav se unos očekuje („Unesite broj u obliku +387 6X XXX XXX, npr.
-+387 61 234 567."), kako uputstvo (4) traži. Pokriveno testom `validacija_test.dart`.
++387 61 234 567."), kako uputstvo (4) traži. Isto važi za lozinku i njenu potvrdu, koje
+su bile kopirane na šest formi. Pokriveno testom `validacija_test.dart`.
 
 ### Šta mobilna aplikacija ne radi
 

@@ -35,6 +35,20 @@ void main() {
     });
   });
 
+  group('Lozinka', () {
+    test('ima iste granice kao na serveru', () {
+      expect(Validatori.lozinka('12345'), isNotNull);
+      expect(Validatori.lozinka('123456'), isNull);
+      expect(Validatori.lozinka('a' * 100), isNull);
+      expect(Validatori.lozinka('a' * 101), isNotNull);
+    });
+
+    test('potvrda mora biti ista kao lozinka', () {
+      expect(Validatori.potvrdaLozinke('tajna1', 'tajna1'), isNull);
+      expect(Validatori.potvrdaLozinke('tajna2', 'tajna1'), isNotNull);
+    });
+  });
+
   group('Korisnicko ime', () {
     test('duzina od 3 do 50 znakova', () {
       expect(Validatori.korisnickoIme('ab'), isNotNull);

@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.API.Auth;
@@ -39,7 +40,13 @@ public class OpozvaniTokenMiddleware
         var jti = context.User.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
         var sub = context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-        if (context.User.Identity?.IsAuthenticated == true
+        // Prijava i reset lozinke ne traze token, pa ih ni zastario token koji je
+        // aplikacija slucajno poslala uz zahtjev ne smije blokirati.
+        var otvorenEndpoint =
+            context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+
+        if (!otvorenEndpoint
+            && context.User.Identity?.IsAuthenticated == true
             && !string.IsNullOrWhiteSpace(jti)
             && int.TryParse(sub, out var korisnikId))
         {

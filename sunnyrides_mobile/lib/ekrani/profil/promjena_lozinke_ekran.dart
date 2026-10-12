@@ -94,9 +94,7 @@ class _PromjenaLozinkeEkranStanje extends State<PromjenaLozinkeEkran> {
               controller: _nova,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Nova lozinka'),
-              validator: (vrijednost) => (vrijednost ?? '').length < 6
-                  ? 'Lozinka mora imati najmanje 6 znakova.'
-                  : null,
+              validator: Validatori.lozinka,
             ),
             const SizedBox(height: Razmaci.m),
             TextFormField(
@@ -106,11 +104,12 @@ class _PromjenaLozinkeEkranStanje extends State<PromjenaLozinkeEkran> {
                 labelText: 'Potvrda nove lozinke',
               ),
               validator: (vrijednost) =>
-                  vrijednost == _nova.text ? null : 'Lozinke se ne poklapaju.',
+                  Validatori.potvrdaLozinke(vrijednost, _nova.text),
             ),
             const SizedBox(height: Razmaci.l),
             Obavjestenje.info(
-              'Nakon promjene lozinke ostajete prijavljeni na ovom uređaju.',
+              'Nakon promjene lozinke ostajete prijavljeni na ovom uređaju, a na '
+              'svim ostalim ćete se morati prijaviti ponovo.',
             ),
             const SizedBox(height: Razmaci.xl),
             FilledButton(

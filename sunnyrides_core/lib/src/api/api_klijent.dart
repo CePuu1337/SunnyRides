@@ -25,8 +25,10 @@ class ApiKlijent {
   final PohranaTokena _pohrana;
   final http.Client _klijent;
 
-  /// Poziva se kad server odbije token. Aplikacija na to vraca korisnika na prijavu.
-  void Function()? naIstekSesije;
+  /// Poziva se kad server odbije token, sa razlogom koji je server naveo (istekao
+  /// rok, odjava, promijenjena lozinka, deaktiviran nalog). Aplikacija na to vraca
+  /// korisnika na prijavu i tamo mu kaze zasto.
+  void Function(String poruka)? naIstekSesije;
 
   Future<dynamic> get(String putanja, {Map<String, dynamic>? upit}) async {
     return _posalji(() => _klijent.get(_adresa(putanja, upit), headers: _zaglavlja()));
@@ -62,7 +64,7 @@ class ApiKlijent {
     );
 
     if (odgovor.statusCode == 401) {
-      await _zavrsiSesiju();
+      await _zavrsiSesiju(odgovor);
     }
 
     if (odgovor.statusCode >= 400) {
@@ -203,7 +205,7 @@ class ApiKlijent {
     final odgovor = await _uhvatiMreznu(poziv);
 
     if (odgovor.statusCode == 401) {
-      await _zavrsiSesiju();
+      await _zavrsiSesiju(odgovor);
     }
 
     if (odgovor.statusCode >= 400) {
@@ -220,9 +222,9 @@ class ApiKlijent {
   /// Token je istekao ili je odjavom ponisten. Nema smisla ga dalje slati, a
   /// aplikacija vraca korisnika na prijavu - i kad je odbijen JSON poziv, i kad je
   /// odbijen dohvat fotografije ili PDF-a.
-  Future<void> _zavrsiSesiju() async {
+  Future<void> _zavrsiSesiju(http.Response odgovor) async {
     await _pohrana.obrisi();
-    naIstekSesije?.call();
+    naIstekSesije?.call(_uGresku(odgovor).poruka);
   }
 
   /// Mrezna greska se pretvara u istu vrstu izuzetka kao i greska sa servera,

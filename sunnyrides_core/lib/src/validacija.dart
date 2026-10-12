@@ -50,4 +50,18 @@ class Validatori {
         ? null
         : 'Unesite broj u obliku +387 6X XXX XXX, npr. +387 61 234 567.';
   }
+
+  /// Ista granica kao na serveru: od 6 do 100 znakova.
+  static String? lozinka(String? vrijednost) {
+    final duzina = vrijednost?.length ?? 0;
+
+    return duzina < 6 || duzina > 100
+        ? 'Lozinka mora imati od 6 do 100 znakova.'
+        : null;
+  }
+
+  /// Potvrda se poredi sa lozinkom upisanom u polje iznad.
+  static String? potvrdaLozinke(String? vrijednost, String lozinka) {
+    return vrijednost == lozinka ? null : 'Lozinke se ne poklapaju.';
+  }
 }

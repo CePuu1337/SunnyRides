@@ -21,10 +21,5 @@ void main() {
         expect(ValidacijaResetaLozinke.kod('K7M2Q9X1'), isNotNull);
       },
     );
-
-    test('nova lozinka ima isti minimum kao na serveru', () {
-      expect(ValidacijaResetaLozinke.lozinka('12345'), isNotNull);
-      expect(ValidacijaResetaLozinke.lozinka('123456'), isNull);
-    });
   });
 }

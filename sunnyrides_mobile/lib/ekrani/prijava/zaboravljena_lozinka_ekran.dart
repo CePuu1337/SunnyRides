@@ -218,7 +218,7 @@ class _ZaboravljenaLozinkaEkranStanje extends State<ZaboravljenaLozinkaEkran> {
               labelText: 'Nova lozinka',
               prefixIcon: Icon(Icons.lock_outline),
             ),
-            validator: ValidacijaResetaLozinke.lozinka,
+            validator: Validatori.lozinka,
           ),
           const SizedBox(height: Razmaci.l),
           TextFormField(
@@ -231,7 +231,7 @@ class _ZaboravljenaLozinkaEkranStanje extends State<ZaboravljenaLozinkaEkran> {
               prefixIcon: Icon(Icons.lock_outline),
             ),
             validator: (vrijednost) =>
-                vrijednost == _nova.text ? null : 'Lozinke se ne poklapaju.',
+                Validatori.potvrdaLozinke(vrijednost, _nova.text),
           ),
           const SizedBox(height: Razmaci.xl),
           SizedBox(
@@ -257,7 +257,8 @@ class _ZaboravljenaLozinkaEkranStanje extends State<ZaboravljenaLozinkaEkran> {
 }
 
 /// Provjera koda za reset lozinke, ista kao na serveru, da korisnik gresku vidi ispod
-/// polja prije nego zahtjev ode. Email se provjerava kroz zajednicke [Validatori].
+/// polja prije nego zahtjev ode. Email i lozinka se provjeravaju kroz zajednicke
+/// [Validatori].
 class ValidacijaResetaLozinke {
   const ValidacijaResetaLozinke._();
 
@@ -278,11 +279,5 @@ class ValidacijaResetaLozinke {
     return _oblikKoda.hasMatch(tekst)
         ? null
         : 'Kod ima tačno 8 znakova, slova i brojeve, npr. K7M2Q9XA.';
-  }
-
-  static String? lozinka(String? vrijednost) {
-    return (vrijednost ?? '').length < 6
-        ? 'Lozinka mora imati najmanje 6 znakova.'
-        : null;
   }
 }
