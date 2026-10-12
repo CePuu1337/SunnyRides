@@ -1574,6 +1574,19 @@ vidi.
 Alternativa — brojanje postojećih rezervacija za tu godinu — kod dva istovremena upisa
 dala bi isti broj i pala na jedinstvenom indeksu.
 
+### Razrada cijene se snima, ne računa ponovo
+
+Uz `UkupanIznos` rezervacija čuva i iz čega je nastao: `IznosNajma` (poslije sezone i
+popusta), `IznosPopusta`, `IznosOsiguranja`, depozit i stavke opreme sa cijenom po
+jedinici. Sve se upisuje pri kreiranju, iz istog obračuna koji je klijent vidio prije
+plaćanja. Zato detalji rezervacije, i na desktopu i na mobilnoj, mogu prikazati cijelu
+razradu i godinu kasnije, a zbir stavki je uvijek tačno ono što je naplaćeno. Ponovni
+obračun iz cjenovnika bi dao drugi broj čim se tarifa ili sezona promijeni.
+
+Polja `IznosNajma` i `IznosOsiguranja` su dodata naknadno (migracija
+`IznosiNaRezervaciji`). Rezervacije nastale prije toga u postojećoj bazi imaju tu nulu;
+seed ih puni, pa ih čista baza (`docker compose down -v`) ima ispravne.
+
 ### Šta zahtjev nema
 
 `RezervacijaInsertRequest` nema nijedno polje koje nosi novac ni stanje: nema

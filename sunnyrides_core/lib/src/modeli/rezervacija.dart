@@ -13,6 +13,8 @@ class Rezervacija {
     required this.ukupanIznos,
     required this.iznosDepozita,
     required this.iznosPopusta,
+    required this.iznosNajma,
+    required this.iznosOsiguranja,
     required this.isPaid,
     required this.datumKreiranja,
     required this.korisnikId,
@@ -44,6 +46,10 @@ class Rezervacija {
   final double ukupanIznos;
   final double iznosDepozita;
   final double iznosPopusta;
+
+  /// Najam poslije sezone i popusta, kakav je bio pri kreiranju rezervacije.
+  final double iznosNajma;
+  final double iznosOsiguranja;
   final bool isPaid;
   final DateTime datumKreiranja;
 
@@ -92,6 +98,8 @@ class Rezervacija {
       ukupanIznos: citajDouble(json['ukupanIznos']),
       iznosDepozita: citajDouble(json['iznosDepozita']),
       iznosPopusta: citajDouble(json['iznosPopusta']),
+      iznosNajma: citajDouble(json['iznosNajma']),
+      iznosOsiguranja: citajDouble(json['iznosOsiguranja']),
       isPaid: citajBool(json['isPaid']),
       datumKreiranja: citajDatum(json['datumKreiranja']),
       drziDo: citajDatumIliNista(json['drziDo']),

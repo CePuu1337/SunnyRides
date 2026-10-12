@@ -401,11 +401,30 @@ class _Obracun extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sve stavke su snimljene pri kreiranju rezervacije i ovdje se samo prikazuju -
+    // zbir je uvijek onaj ukupan iznos koji je klijent platio.
     return Column(
       children: [
+        _RedIznosa('Najam', Formati.novac(rezervacija.iznosNajma)),
         if (rezervacija.iznosPopusta > 0)
-          _RedIznosa('Popust', '− ${Formati.novac(rezervacija.iznosPopusta)}'),
-        _RedIznosa('Depozit', Formati.novac(rezervacija.iznosDepozita)),
+          _RedIznosa(
+            'u tome popust',
+            '− ${Formati.novac(rezervacija.iznosPopusta)}',
+          ),
+        for (final stavka in rezervacija.stavkeOpreme)
+          _RedIznosa(
+            '${stavka.naziv} × ${stavka.kolicina}',
+            Formati.novac(stavka.iznos),
+          ),
+        if (rezervacija.paketOsiguranjaNaziv != null)
+          _RedIznosa(
+            'Osiguranje · ${rezervacija.paketOsiguranjaNaziv}',
+            Formati.novac(rezervacija.iznosOsiguranja),
+          ),
+        _RedIznosa(
+          'Depozit (vraća se)',
+          Formati.novac(rezervacija.iznosDepozita),
+        ),
         const Divider(height: Razmaci.xl),
         _RedIznosa(
           'Ukupno',

@@ -236,12 +236,15 @@ class _DetaljiRezervacijeEkranStanje extends State<DetaljiRezervacijeEkran> {
                       naslov: 'Iznosi',
                       dijete: Column(
                         children: [
+                          _Red(
+                            oznaka: 'Najam',
+                            vrijednost: Formati.novac(rezervacija.iznosNajma),
+                          ),
                           if (rezervacija.iznosPopusta > 0)
                             _Red(
-                              oznaka: 'Popust',
-                              vrijednost: Formati.novac(
-                                rezervacija.iznosPopusta,
-                              ),
+                              oznaka: 'u tome popust',
+                              vrijednost:
+                                  '− ${Formati.novac(rezervacija.iznosPopusta)}',
                             ),
                           for (final stavka in rezervacija.stavkeOpreme)
                             _Red(
@@ -250,11 +253,14 @@ class _DetaljiRezervacijeEkranStanje extends State<DetaljiRezervacijeEkran> {
                             ),
                           if (rezervacija.paketOsiguranjaNaziv != null)
                             _Red(
-                              oznaka: 'Osiguranje',
-                              vrijednost: rezervacija.paketOsiguranjaNaziv!,
+                              oznaka:
+                                  'Osiguranje · ${rezervacija.paketOsiguranjaNaziv}',
+                              vrijednost: Formati.novac(
+                                rezervacija.iznosOsiguranja,
+                              ),
                             ),
                           _Red(
-                            oznaka: 'Depozit',
+                            oznaka: 'Depozit (vraća se)',
                             vrijednost: Formati.novac(
                               rezervacija.iznosDepozita,
                             ),

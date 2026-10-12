@@ -183,6 +183,8 @@ public partial class DatabaseSeeder
         var osiguranje = paket is null ? 0m : Zaokruzi(paket.CijenaPoDanu * dana);
 
         rezervacija.IznosPopusta = popust;
+        rezervacija.IznosNajma = osnovica - popust;
+        rezervacija.IznosOsiguranja = osiguranje;
         rezervacija.UkupanIznos = Zaokruzi(osnovica - popust + iznosOpreme + osiguranje + vozilo.IznosDepozita);
 
         // --- drzanje vozila i otkazivanje ---

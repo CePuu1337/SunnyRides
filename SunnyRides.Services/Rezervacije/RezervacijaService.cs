@@ -299,6 +299,11 @@ public class RezervacijaService
             UkupanIznos = cijena.UkupanIznos,
             IznosDepozita = cijena.IznosDepozita,
             IznosPopusta = cijena.IznosPopusta,
+
+            // Stavke razrade se snimaju uz ukupan iznos, da se kasnije mogu prikazati
+            // tacno onakve kakve su bile - izmjena cjenovnika ih ne smije pomjeriti.
+            IznosNajma = cijena.IznosNajma,
+            IznosOsiguranja = cijena.IznosOsiguranja,
             IsPaid = false,
             DrziDo = DateTime.UtcNow.Add(TrajanjeDrzanja),
             DatumKreiranja = DateTime.UtcNow

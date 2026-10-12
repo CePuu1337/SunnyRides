@@ -15,6 +15,11 @@ public class RezervacijaDto
     public decimal IznosDepozita { get; set; }
     public decimal IznosPopusta { get; set; }
 
+    /// <summary>Najam poslije sezone i popusta, kakav je bio pri kreiranju.</summary>
+    public decimal IznosNajma { get; set; }
+
+    public decimal IznosOsiguranja { get; set; }
+
     /// <summary>Klijentska aplikacija po ovome odlucuje hoce li uopste prikazati dugme za placanje.</summary>
     public bool IsPaid { get; set; }
 

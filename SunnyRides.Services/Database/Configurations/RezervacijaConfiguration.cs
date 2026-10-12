@@ -15,6 +15,8 @@ public class RezervacijaConfiguration : IEntityTypeConfiguration<Rezervacija>
         builder.Property(x => x.UkupanIznos).HasPrecision(18, 2);
         builder.Property(x => x.IznosDepozita).HasPrecision(18, 2);
         builder.Property(x => x.IznosPopusta).HasPrecision(18, 2);
+        builder.Property(x => x.IznosNajma).HasPrecision(18, 2);
+        builder.Property(x => x.IznosOsiguranja).HasPrecision(18, 2);
         builder.Property(x => x.NapomenaOtkazivanja).HasMaxLength(500);
 
         builder.HasOne(x => x.Korisnik)

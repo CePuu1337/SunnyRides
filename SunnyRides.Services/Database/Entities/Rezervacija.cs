@@ -17,6 +17,16 @@ public class Rezervacija
     public decimal UkupanIznos { get; set; }
     public decimal IznosDepozita { get; set; }
     public decimal IznosPopusta { get; set; }
+
+    /// <summary>
+    /// Najam poslije sezonskog mnozioca i popusta, snimljen pri kreiranju. Zajedno sa
+    /// opremom, osiguranjem i depozitom daje <see cref="UkupanIznos"/>, pa se razrada
+    /// cijene moze prikazati i godinu kasnije, bez ponovnog obracuna iz cjenovnika.
+    /// </summary>
+    public decimal IznosNajma { get; set; }
+
+    /// <summary>Cijena paketa osiguranja za cijeli najam, snimljena pri kreiranju.</summary>
+    public decimal IznosOsiguranja { get; set; }
     public bool IsPaid { get; set; }
     public DateTime? DrziDo { get; set; }
     public DateTime DatumKreiranja { get; set; }
