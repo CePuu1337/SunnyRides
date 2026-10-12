@@ -11,8 +11,8 @@ import '../../widgeti/slicica.dart';
 
 /// Zamjena vozila na rezervaciji koju pogadja blokada.
 ///
-/// Ponudjena vozila bira server: slobodna u terminu rezervacije, istog tipa, iste ili
-/// vise dnevne tarife, u istom gradu i dozvoljena klijentu po dozvoli. Dijalog samo
+/// Ponudjena vozila bira server: slobodna u terminu rezervacije, u istom gradu i
+/// dozvoljena klijentu po kategorijama njegove dozvole, bilo kojeg tipa. Dijalog samo
 /// prikazuje tu listu i salje izbor - pravila se ne ponavljaju ovdje, pa se ne mogu
 /// razici sa onima koje server stvarno provjerava.
 class ZamjenaVozilaDijalog extends StatefulWidget {
@@ -163,15 +163,16 @@ class _ZamjenaVozilaDijalogStanje extends State<ZamjenaVozilaDijalog> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Obavjestenje.info(
-                  'Ponuđena su vozila slobodna u terminu rezervacije, istog tipa, '
-                  'iste ili više klase, u istom gradu, koja klijent smije voziti. '
-                  'Prva su vozila iz iste poslovnice.',
+                  'Ponuđena su sva vozila u istom gradu koja su slobodna u terminu '
+                  'rezervacije i koja klijent smije voziti po svojoj dozvoli. Prva '
+                  'su vozila iz iste poslovnice i istog tipa. Cijena rezervacije '
+                  'ostaje ista, bez obzira na tarifu zamjenskog vozila.',
                 ),
                 const SizedBox(height: Razmaci.l),
                 if (_kandidati.isEmpty)
                   Obavjestenje.upozorenje(
-                    'Nema slobodnog vozila iste ili više klase za ovaj termin. '
-                    'Rezervaciju možete otkazati uz puni povrat.',
+                    'U ovom gradu nema slobodnog vozila koje klijent smije voziti '
+                    'u ovom terminu. Rezervaciju možete otkazati uz puni povrat.',
                   )
                 else
                   RadioGroup<int>(
@@ -234,6 +235,10 @@ class _Kandidat extends StatelessWidget {
         ),
         subtitle: Text(
           [
+            vozilo.tipVozilaNaziv,
+            vozilo.kategorijaDozvoleOznaka == null
+                ? null
+                : 'kat. ${vozilo.kategorijaDozvoleOznaka}',
             vozilo.poslovnicaNaziv,
             '${Formati.novac(vozilo.dnevnaTarifa)} / dan',
             vozilo.pogon,

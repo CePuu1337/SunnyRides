@@ -39,8 +39,29 @@ class RezervacijaServis {
     );
   }
 
+  /// Razlozi koje agencija smije navesti kad otkazuje. Klijentski razlozi ("Promjena
+  /// planova putovanja") ovdje nemaju smisla, pa ih server i ne vraca.
+  Future<List<RazlogOtkazivanja>> razloziOtkazivanja() async {
+    final odgovor = await _klijent.get(
+      '/api/razlozi-otkazivanja',
+      upit: {
+        'page': 0,
+        'pageSize': 50,
+        'includeTotalCount': false,
+        'orderBy': 'Naziv',
+        'zaAgenciju': true,
+        'aktivan': true,
+      },
+    );
+
+    return Strana.izJsona(
+      odgovor as Map<String, dynamic>,
+      RazlogOtkazivanja.izJsona,
+    ).stavke;
+  }
+
   /// Vozila koja mogu preuzeti rezervaciju kad je dogovoreno u kvaru. Sta je
-  /// prihvatljiva zamjena - tip, klasa, grad, dozvola klijenta - odlucuje server.
+  /// prihvatljiva zamjena - grad i dozvola klijenta - odlucuje server.
   Future<List<Vozilo>> zamjenskaVozila(int rezervacijaId) async {
     final odgovor = await _klijent.get(
       '/api/rezervacije/$rezervacijaId/zamjenska-vozila',

@@ -42,6 +42,8 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
   int _stranica = 0;
   int? _ukupno;
 
+  StreamSubscription<TipNotifikacije?>? _odlukaODozvoli;
+
   bool _ucitavanje = true;
   bool _dopunjavanje = false;
   String? _greska;
@@ -55,12 +57,19 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
 
     _skrol.addListener(_naSkrol);
 
+    // Kad uposlenik odluci o dozvoli, mijenja se sta klijent smije rezervisati.
+    // Ekran se tada sam osvjezi, bez odjave i ponovne prijave.
+    _odlukaODozvoli = context.read<NotifikacijeStanje>().odlukaODozvoli.listen(
+      (_) => _pripremi(),
+    );
+
     _pripremi();
   }
 
   @override
   void dispose() {
     _odgoda?.cancel();
+    _odlukaODozvoli?.cancel();
     _navigacija.removeListener(_naZahtjev);
     _skrol.dispose();
     _polje.dispose();

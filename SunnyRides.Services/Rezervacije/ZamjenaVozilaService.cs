@@ -59,19 +59,22 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
             .AsNoTracking()
             .Where(x => x.Aktivno
                         && x.Id != staro.Id
-                        && x.ModelVozila.TipVozilaId == staro.ModelVozila.TipVozilaId
-                        && x.DnevnaTarifa >= staro.DnevnaTarifa
                         && x.Poslovnica.GradId == staro.Poslovnica.GradId
                         && kategorije.Contains(x.ModelVozila.KategorijaDozvoleId));
 
         // Ista provjera dostupnosti koju koriste pretraga i kreiranje rezervacije.
         upit = _dostupnost.DodajUslovSlobodno(upit, rezervacija.DatumOd, rezervacija.DatumDo);
 
-        // Prvo vozila iz iste poslovnice - klijent ne mora nikud drugo - pa najblize
-        // po cijeni, jer je najslicnije onome sto je rezervisao.
+        // Prvo vozila iz iste poslovnice - klijent ne mora nikud drugo - pa istog tipa,
+        // pa najbliza po dnevnoj tarifi. Tako su na vrhu ona najslicnija rezervisanom,
+        // a ispod njih sve ostalo sto klijent smije voziti.
+        var tipVozila = staro.ModelVozila.TipVozilaId;
+        var tarifa = staro.DnevnaTarifa;
+
         var vozila = await upit
             .OrderByDescending(x => x.PoslovnicaId == staro.PoslovnicaId)
-            .ThenBy(x => x.DnevnaTarifa)
+            .ThenByDescending(x => x.ModelVozila.TipVozilaId == tipVozila)
+            .ThenBy(x => Math.Abs(x.DnevnaTarifa - tarifa))
             .ThenBy(x => x.Id)
             .Take(NajviseKandidata)
             .SaPovezanim()
@@ -192,7 +195,7 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
     }
 
     private static VoziloZaZamjenu ZaPravila(Vozilo vozilo) => new(
-        vozilo.Id, vozilo.Aktivno, vozilo.ModelVozila.TipVozilaId, vozilo.DnevnaTarifa, vozilo.Poslovnica.GradId);
+        vozilo.Id, vozilo.Aktivno, vozilo.Poslovnica.GradId);
 
     // --- ucitavanje --------------------------------------------------------
 

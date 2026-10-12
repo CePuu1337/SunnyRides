@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../api/api_greska.dart';
 import '../api/api_klijent.dart';
 import '../api/okruzenje.dart';
 import '../auth/pohrana_tokena.dart';
+import '../modeli/enumi.dart';
 import '../modeli/pretvaranje.dart';
 import '../realtime/veza_notifikacija.dart';
 
@@ -18,15 +21,26 @@ class NotifikacijeStanje extends ChangeNotifier {
     required PohranaTokena pohrana,
   })  : _veza = VezaNotifikacija(okruzenje: okruzenje, pohrana: pohrana) {
     _veza.naBrojNeprocitanih = postavi;
-    _veza.naNovuNotifikaciju = (notifikacija) => naNovuNotifikaciju?.call(notifikacija);
+    _veza.naNovuNotifikaciju = (notifikacija) =>
+        _nove.add(TipNotifikacije.izBroja(citajInt(notifikacija['tip'])));
   }
 
   final ApiKlijent _klijent;
   final VezaNotifikacija _veza;
+  final _nove = StreamController<TipNotifikacije?>.broadcast();
 
-  /// Ekran koji prikazuje listu obavjestenja moze se prikljuciti ovdje i dopuniti se
-  /// bez novog zahtjeva.
-  void Function(Map<String, dynamic> notifikacija)? naNovuNotifikaciju;
+  /// Svako novo obavjestenje sa huba, po tipu. Vise ekrana moze slusati istovremeno:
+  /// lista obavjestenja se dopuni, a ekrani koji zavise od dozvole se osvjeze.
+  Stream<TipNotifikacije?> get nove => _nove.stream;
+
+  /// Uposlenik je odobrio ili odbio dozvolu. Od toga zavisi sta klijent smije
+  /// rezervisati, pa pretraga, preporuke i ekran dozvole moraju povuci novo stanje -
+  /// bez odjave i ponovne prijave.
+  Stream<TipNotifikacije?> get odlukaODozvoli => nove.where(
+        (tip) =>
+            tip == TipNotifikacije.dozvolaOdobrena ||
+            tip == TipNotifikacije.dozvolaOdbijena,
+      );
 
   int _neprocitanih = 0;
 
@@ -64,6 +78,7 @@ class NotifikacijeStanje extends ChangeNotifier {
   @override
   void dispose() {
     _veza.raskini();
+    _nove.close();
     super.dispose();
   }
 }

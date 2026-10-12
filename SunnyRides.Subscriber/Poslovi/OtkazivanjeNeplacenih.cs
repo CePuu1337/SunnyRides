@@ -81,8 +81,11 @@ public class OtkazivanjeNeplacenih : PeriodicniPosao
         // promijenjeno stanje umjesto da radi nad starim.
         await context.ZakljucajRezervacijuAsync(id, ct);
 
+        // Dvije kolekcije (placanja i njihovi povrati) idu odvojenim upitima. Jednim bi
+        // se redovi mnozili, a upiti ostaju u istoj transakciji, pa vide isto stanje.
         var rezervacija = await context.Rezervacije
             .Include(x => x.Placanja).ThenInclude(p => p.Refundi)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         var sada = DateTime.UtcNow;

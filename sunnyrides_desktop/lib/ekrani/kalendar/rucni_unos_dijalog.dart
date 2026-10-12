@@ -624,7 +624,7 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
           Obavjestenje.upozorenje(
             'U tom periodu ${_pogodjene.length == 1 ? 'postoji rezervacija' : 'postoje ${_pogodjene.length} rezervacije'} '
             'na ovom vozilu. Blokada ih ne otkazuje sama: svaku možete prebaciti na '
-            'zamjensko vozilo iste ili više klase, ili otkazati uz puni povrat. '
+            'zamjensko vozilo koje klijent smije voziti, ili otkazati uz puni povrat. '
             'Klijent o oba dobija obavještenje i email.',
           ),
           const SizedBox(height: Razmaci.m),

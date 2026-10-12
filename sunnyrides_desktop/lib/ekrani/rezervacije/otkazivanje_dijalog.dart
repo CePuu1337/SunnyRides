@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/rezervacija_servis.dart';
-import '../../servisi/sifrarnik_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../../widgeti/obavjestenje.dart';
 
@@ -23,13 +21,13 @@ class OtkazivanjeDijalog extends StatefulWidget {
 
 class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
   late final RezervacijaServis _servis;
-  late final SifrarnikServis _sifrarnici;
 
   final _napomena = TextEditingController();
 
   ObracunOtkazivanja? _obracun;
-  List<StavkaSifrarnika> _razlozi = const [];
+  List<RazlogOtkazivanja> _razlozi = const [];
   int? _razlogId;
+  String? _greskaNapomene;
 
   bool _ucitavanje = true;
   bool _snimanje = false;
@@ -39,9 +37,7 @@ class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
   void initState() {
     super.initState();
 
-    final klijent = context.read<ApiKlijent>();
-    _servis = RezervacijaServis(klijent);
-    _sifrarnici = SifrarnikServis(klijent);
+    _servis = RezervacijaServis(context.read<ApiKlijent>());
 
     _ucitaj();
   }
@@ -54,18 +50,18 @@ class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
 
   Future<void> _ucitaj() async {
     try {
-      final obracun = await _servis.obracunOtkazivanja(widget.rezervacija.id);
-      final razlozi = await _sifrarnici.ucitaj(
-        SifrarnikServis.razloziOtkazivanja,
-      );
+      final rezultati = await Future.wait([
+        _servis.obracunOtkazivanja(widget.rezervacija.id),
+        _servis.razloziOtkazivanja(),
+      ]);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _obracun = obracun;
-        _razlozi = razlozi;
+        _obracun = rezultati[0] as ObracunOtkazivanja;
+        _razlozi = rezultati[1] as List<RazlogOtkazivanja>;
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {
@@ -80,9 +76,28 @@ class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
     }
   }
 
+  RazlogOtkazivanja? get _razlog {
+    for (final razlog in _razlozi) {
+      if (razlog.id == _razlogId) {
+        return razlog;
+      }
+    }
+
+    return null;
+  }
+
   Future<void> _otkazi() async {
     if (_razlogId == null) {
       setState(() => _greska = 'Odaberite razlog otkazivanja.');
+
+      return;
+    }
+
+    if ((_razlog?.traziNapomenu ?? false) && _napomena.text.trim().isEmpty) {
+      setState(
+        () => _greskaNapomene =
+            'Za razlog „${_razlog!.naziv}" napišite kratko objašnjenje za klijenta.',
+      );
 
       return;
     }
@@ -166,14 +181,26 @@ class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
                           child: Text(razlog.naziv),
                         ),
                     ],
-                    onChanged: (id) => setState(() => _razlogId = id),
+                    onChanged: (id) => setState(() {
+                      _razlogId = id;
+                      _greskaNapomene = null;
+                    }),
                   ),
                   const SizedBox(height: Razmaci.l),
                   TextField(
                     controller: _napomena,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Napomena (nije obavezna)',
+                    maxLength: 500,
+                    onChanged: (_) {
+                      if (_greskaNapomene != null) {
+                        setState(() => _greskaNapomene = null);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      labelText: (_razlog?.traziNapomenu ?? false)
+                          ? 'Napomena za klijenta (obavezna)'
+                          : 'Napomena za klijenta (nije obavezna)',
+                      errorText: _greskaNapomene,
                       alignLabelWithHint: true,
                     ),
                   ),

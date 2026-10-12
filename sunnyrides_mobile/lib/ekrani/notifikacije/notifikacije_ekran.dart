@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
@@ -17,6 +19,7 @@ class NotifikacijeEkran extends StatefulWidget {
 class _NotifikacijeEkranStanje extends State<NotifikacijeEkran> {
   late final NotifikacijaServis _servis;
   late final NotifikacijeStanje _stanje;
+  StreamSubscription<TipNotifikacije?>? _pretplata;
 
   List<Notifikacija> _stavke = const [];
   bool _ucitavanje = true;
@@ -30,14 +33,14 @@ class _NotifikacijeEkranStanje extends State<NotifikacijeEkran> {
     _stanje = context.read<NotifikacijeStanje>();
 
     // Dok je lista otvorena, novo obavjestenje sa huba se odmah upisuje u nju.
-    _stanje.naNovuNotifikaciju = (_) => _ucitaj();
+    _pretplata = _stanje.nove.listen((_) => _ucitaj());
 
     _ucitaj();
   }
 
   @override
   void dispose() {
-    _stanje.naNovuNotifikaciju = null;
+    _pretplata?.cancel();
     super.dispose();
   }
 

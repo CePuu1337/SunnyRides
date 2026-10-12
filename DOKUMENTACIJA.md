@@ -690,12 +690,12 @@ odgovara tome što jeste.
 | Oprema sa obje cijene | 400 sa objašnjenjem | ✅ |
 | Ciklus kreiraj → izmijeni → duplikat → obriši | 200, 200, 400, pa 404 | ✅ |
 
-> **Šta ovaj test nije dokazao.** Ograničenje `PageSize` na 100 nije provjereno kako
-> treba — `pageSize=5000` je vratio 6 zapisa, ali zato što gradova ukupno ima 6.
-> Granica se ne može vidjeti dok neka tabela ne pređe stotinu redova. Provjerava se
-> na donjoj granici istog `Math.Clamp` poziva: `pageSize=0` vraća jedan zapis, a ne
-> nula i ne grešku. Puni dokaz dolazi u fazi 11, kad rezervacije dobiju endpoint —
-> njih u seedu ima preko šezdeset, a pretraga bez filtera ih vraća sve.
+> **Granica od 100 je dokazana tek kasnije.** U ovoj fazi `pageSize=5000` je vratio 6
+> zapisa, ali zato što gradova ukupno ima 6, pa se gornja granica nije mogla vidjeti.
+> Tada je provjerena samo donja granica istog `Math.Clamp` poziva: `pageSize=0` vraća
+> jedan zapis, a ne nula i ne grešku. Gornja je provjerena u fazi 20, na rezervacijama:
+> `GET /api/rezervacije?PageSize=5000` kao administrator vratio je **100** zapisa u
+> `items`, uz `totalCount` 746.
 
 ---
 
@@ -1198,13 +1198,19 @@ rezervacija, sa obračunom povrata prije potvrde).
 | GET | `/api/rezervacije/{id}/zamjenska-vozila` | vozila koja mogu preuzeti rezervaciju, najviše 20 |
 | POST | `/api/rezervacije/{id}/zamjena-vozila` | prebacuje rezervaciju na odabrano vozilo |
 
-Oba su samo za osoblje. **Zamjensko vozilo mora biti iste ili bolje klase**: isti tip
-vozila, iste ili više dnevne tarife, u istom gradu, aktivno, slobodno u terminu
-rezervacije (ista provjera kao pri rezervaciji, `DodajUslovSlobodno`) i dozvoljeno
-klijentu po dozvoli na datum preuzimanja. Lista to postavlja kao upit na bazi, a pri
-samoj zamjeni se pravila provjeravaju ponovo (`PravilaZamjeneVozila`, pokriveno unit
-testovima), jer zahtjev može stići i sa vozilom koje lista nije ponudila. Prvo se nude
-vozila iz iste poslovnice, pa najbliža po cijeni.
+Oba su samo za osoblje. **Nudi se sve što klijent smije voziti**: aktivno vozilo u
+istom gradu, slobodno u terminu rezervacije (ista provjera kao pri rezervaciji,
+`DodajUslovSlobodno`) i dozvoljeno po kategorijama klijentove dozvole na datum
+preuzimanja. Tip vozila i tarifa namjerno nisu uslov. Prva verzija je tražila isti tip
+i istu ili višu tarifu, ali u praksi je to često značilo da zamjene nema, a klijentu je
+korisnije da dobije bilo šta što smije voziti nego da mu najam bude otkazan. Grad
+ostaje uslov, jer klijent vozilo preuzima tamo gdje je rezervisao.
+
+Lista to postavlja kao upit na bazi, a pri samoj zamjeni se pravila provjeravaju ponovo
+(`PravilaZamjeneVozila`, pokriveno unit testovima; dozvolu provjerava
+`DozvolaService.ObaveznoSmijeVozitiAsync`), jer zahtjev može stići i sa vozilom koje
+lista nije ponudila. Poredak: prvo vozila iz iste poslovnice, pa istog tipa, pa najbliža
+po dnevnoj tarifi — najsličnija rezervisanom su na vrhu.
 
 Zamjena ide u jednoj transakciji, istim redom kao kreiranje rezervacije: zaključa se
 red rezervacije i red novog vozila (`UPDLOCK, HOLDLOCK`), pa se tek onda provjeravaju
@@ -1213,8 +1219,9 @@ istovremeno uzeti isto vozilo za isti termin.
 
 Mijenja se samo rezervacija koja čeka plaćanje ili je potvrđena, čiji termin nije
 prošao i čije vozilo još nije izdato — izdato vozilo je fizički kod klijenta. **Cijena
-se ne mijenja**: klijent plaća ono što je rezervisao, a skuplje zamjensko vozilo je
-trošak agencije. Status se ne mijenja; zamjena ide u historiju rezervacije kao audit
+se ne mijenja**: klijent plaća ono što je rezervisao. Skuplje zamjensko vozilo je
+trošak agencije, a za jeftinije se razlika ne vraća — zamjena je usluga agencije u
+situaciji kad bi alternativa bila otkazivanje. Status se ne mijenja; zamjena ide u historiju rezervacije kao audit
 zapis (`RezervacijaStateMachine.ZabiljeziIzmjenu`: ko, kada, opis „staro → novo" i
 napomena). Poslovnica rezervacije prati novo vozilo, jer se vozilo preuzima tamo gdje
 stoji. Poslije upisa ide poruka `vozilo.zamijenjeno`, iz koje worker pravi
@@ -1711,6 +1718,12 @@ Server provjerava da je izabrani razlog aktivan i da je predviđen za onoga ko o
 Bez toga bi klijent kroz API mogao poslati „Vozilo je u kvaru ili na servisu" i u
 historiji bi izgledalo kao da je otkazala agencija. Razlog koji je već korišten ne
 može se obrisati — isključuje se.
+
+Obje aplikacije traže samo svoju listu: mobilna šalje `zaKlijenta=true`, desktop
+`zaAgenciju=true`, obje uz `aktivan=true`. Desktop je ranije učitavao cijeli šifrarnik,
+pa je uposlenik vidio i klijentske razloge koje server ionako odbija. Kad razlog traži
+napomenu, polje za napomenu postaje obavezno i greška se prikazuje ispod njega prije
+slanja.
 
 Na rezervaciji stoje `RazlogOtkazivanjaId` i `NapomenaOtkazivanja`. Razlog je prazan
 samo kad rezervaciju otkaže sistem (plaćanje stiglo nakon isteka držanja, a termin u
@@ -2247,6 +2260,11 @@ konekcije po poruci uputstvo navodi kao grešku.
 - Nijedna greška se ne guta u praznom `catch` bloku.
 - Povezivanje na broker se ponavlja sa sve dužim razmakom, jer se worker u Dockeru
   pokreće u isto vrijeme kad i RabbitMQ.
+- Svi servisi u `docker-compose.yml` imaju `restart: unless-stopped`. Bez toga je
+  worker poslije restarta računara ostao ugašen dok su API i broker radili: poruke su
+  se gomilale u redovima sa nula potrošača, a mailovi i obavještenja su tiho izostali.
+  Pošto worker potvrđuje poruku tek kad je obradi, sve što se nakupilo obradi se čim
+  ponovo krene.
 
 Poruka koja se ponovo isporuči poslije pada workera može donijeti drugi email za isti
 događaj. To je svjesno prihvaćeno: bolje dva emaila nego nijedan, a stanje u bazi se
@@ -3347,6 +3365,17 @@ puklo, a ekran je hvatao samo greške API-ja, pa se kružić vrtio zauvijek. Sad
 podacima — token nastaje na jednom mjestu i server ga evidentira kao i svaki drugi, pa
 ga odjava poništava. Ekran registracije uz to hvata i neočekivane greške, da dugme
 nikad ne ostane zaključano.
+
+### Odluka o dozvoli osvježava aplikaciju
+
+Kad uposlenik odobri ili odbije dozvolu, mijenja se šta klijent smije rezervisati. Server
+filtrira po dozvoli na svakom zahtjevu, ali ekran koji je već otvoren drži staro stanje -
+pretraga je i dalje pokazivala „Vozačka dozvola nije spremna" dok se klijent ne bi
+odjavio. `NotifikacijeStanje` zato svako obavještenje sa huba objavljuje i kao tok
+(`nove`), a izdvojen tok `odlukaODozvoli` slušaju početna, pretraga, profil i ekran
+dozvole: na obavještenje `DozvolaOdobrena` ili `DozvolaOdbijena` same ponovo učitaju
+podatke. Isti tok sad koristi i lista obavještenja, umjesto jednog callbacka koji je
+mogao imati samo jednog slušaoca.
 
 ### Provjere unosa su na jednom mjestu
 

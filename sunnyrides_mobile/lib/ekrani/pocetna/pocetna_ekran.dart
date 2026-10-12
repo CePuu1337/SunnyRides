@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
@@ -27,6 +29,7 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
   List<Obavijest> _obavijesti = const [];
   List<Stavka> _tipovi = const [];
   DozvoljeneKategorije? _kategorije;
+  StreamSubscription<TipNotifikacije?>? _odlukaODozvoli;
 
   bool _ucitavanje = true;
   String? _greska;
@@ -36,7 +39,20 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
     super.initState();
 
     _katalog = KatalogServis(context.read<ApiKlijent>());
+
+    // Kad uposlenik odluci o dozvoli, mijenja se sta klijent smije rezervisati.
+    // Ekran se tada sam osvjezi, bez odjave i ponovne prijave.
+    _odlukaODozvoli = context.read<NotifikacijeStanje>().odlukaODozvoli.listen(
+      (_) => _ucitaj(),
+    );
+
     _ucitaj();
+  }
+
+  @override
+  void dispose() {
+    _odlukaODozvoli?.cancel();
+    super.dispose();
   }
 
   Future<void> _ucitaj() async {

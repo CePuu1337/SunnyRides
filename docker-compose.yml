@@ -1,7 +1,11 @@
+# Svi servisi se sami podizu poslije restarta Dockera ili racunara, i poslije pada.
+# Bez toga bi worker koji jednom stane ostao ugasen, a API bi i dalje slao poruke
+# koje niko ne obradjuje - mailovi i obavjestenja bi tiho izostali.
 services:
   sunnyrides-db:
     image: mcr.microsoft.com/mssql/server:2022-CU12-ubuntu-22.04
     container_name: sunnyrides-db
+    restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${DB_SA_PASSWORD}
@@ -15,6 +19,7 @@ services:
   sunnyrides-rabbitmq:
     image: rabbitmq:3.13-management
     container_name: sunnyrides-rabbitmq
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -33,6 +38,7 @@ services:
       context: .
       dockerfile: SunnyRides.API/Dockerfile
     container_name: sunnyrides-api
+    restart: unless-stopped
     env_file: .env
     environment:
       CONNECTION_STRING: "Server=sunnyrides-db,1433;Database=220182;User=sa;Password=${DB_SA_PASSWORD};TrustServerCertificate=True;"
@@ -57,6 +63,7 @@ services:
       context: .
       dockerfile: SunnyRides.Subscriber/Dockerfile
     container_name: sunnyrides-subscriber
+    restart: unless-stopped
     env_file: .env
     environment:
       CONNECTION_STRING: "Server=sunnyrides-db,1433;Database=220182;User=sa;Password=${DB_SA_PASSWORD};TrustServerCertificate=True;"

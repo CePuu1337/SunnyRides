@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -26,13 +28,27 @@ class _MojaDozvolaEkranStanje extends State<MojaDozvolaEkran> {
   bool _ucitavanje = true;
   StranaDozvole? _uToku;
   String? _greska;
+  StreamSubscription<TipNotifikacije?>? _odlukaODozvoli;
 
   @override
   void initState() {
     super.initState();
 
     _servis = ProfilServis(context.read<ApiKlijent>());
+
+    // Status se mijenja kad uposlenik odobri ili odbije dozvolu - ekran ga prikaze
+    // cim obavjestenje stigne.
+    _odlukaODozvoli = context.read<NotifikacijeStanje>().odlukaODozvoli.listen(
+      (_) => _ucitaj(),
+    );
+
     _ucitaj();
+  }
+
+  @override
+  void dispose() {
+    _odlukaODozvoli?.cancel();
+    super.dispose();
   }
 
   Future<void> _ucitaj() async {

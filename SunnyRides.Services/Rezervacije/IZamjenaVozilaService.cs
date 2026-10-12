@@ -11,8 +11,8 @@ namespace SunnyRides.Services.Rezervacije;
 public interface IZamjenaVozilaService
 {
     /// <summary>
-    /// Vozila koja mogu preuzeti rezervaciju: slobodna u njenom terminu, istog tipa,
-    /// iste ili vise dnevne tarife, u istom gradu, i dozvoljena klijentu po dozvoli.
+    /// Vozila koja mogu preuzeti rezervaciju: slobodna u njenom terminu, u istom gradu
+    /// i dozvoljena klijentu po dozvoli, bilo kojeg tipa i cijene.
     /// </summary>
     Task<List<VoziloDto>> ZamjenskaVozilaAsync(int rezervacijaId, CancellationToken ct = default);
 

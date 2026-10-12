@@ -109,8 +109,8 @@ public class RezervacijaController : ControllerBase
 
     /// <summary>
     /// Vozila koja mogu preuzeti rezervaciju kad dogovoreno vozilo ode u kvar: slobodna
-    /// u njenom terminu, istog tipa, iste ili vise klase, u istom gradu, i dozvoljena
-    /// klijentu. Samo za osoblje - vozilo mijenja agencija, ne klijent.
+    /// u njenom terminu, u istom gradu i dozvoljena klijentu po dozvoli, bilo kojeg
+    /// tipa. Samo za osoblje - vozilo mijenja agencija, ne klijent.
     /// </summary>
     [HttpGet("{id:int}/zamjenska-vozila")]
     [Authorize(Roles = Uloge.AdministratorIliUposlenik)]

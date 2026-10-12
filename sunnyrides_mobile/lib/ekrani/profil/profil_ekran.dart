@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +27,7 @@ class _ProfilEkranStanje extends State<ProfilEkran> {
 
   Korisnik? _korisnik;
   VozackaDozvola? _dozvola;
+  StreamSubscription<TipNotifikacije?>? _odlukaODozvoli;
 
   bool _ucitavanje = true;
   bool _slanjeSlike = false;
@@ -35,7 +38,19 @@ class _ProfilEkranStanje extends State<ProfilEkran> {
     super.initState();
 
     _servis = ProfilServis(context.read<ApiKlijent>());
+
+    // Status dozvole u profilu se osvjezi cim uposlenik o njoj odluci.
+    _odlukaODozvoli = context.read<NotifikacijeStanje>().odlukaODozvoli.listen(
+      (_) => _ucitaj(),
+    );
+
     _ucitaj();
+  }
+
+  @override
+  void dispose() {
+    _odlukaODozvoli?.cancel();
+    super.dispose();
   }
 
   Future<void> _ucitaj() async {

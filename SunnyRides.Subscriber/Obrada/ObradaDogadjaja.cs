@@ -180,7 +180,7 @@ public class ObradaDogadjaja
         var tekst =
             $"Postovani/a {rezervacija.Korisnik.Ime},\n\n" +
             $"vozilo na rezervaciji {rezervacija.Broj} ({staro}) nije ispravno za vas termin, " +
-            $"pa smo ga zamijenili vozilom {novo}, iste ili bolje klase. Cijena rezervacije se ne mijenja.\n\n" +
+            $"pa smo ga zamijenili vozilom {novo}. Cijena rezervacije se ne mijenja.\n\n" +
             OpisRezervacije(rezervacija) +
             "\nAko vam zamjena ne odgovara, javite se poslovnici - rezervaciju mozemo otkazati uz puni povrat.\n\n" +
             "SunnyRides";

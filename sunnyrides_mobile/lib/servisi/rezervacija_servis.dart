@@ -104,26 +104,3 @@ class RezervacijaServis {
     return odgovor is Map<String, dynamic> ? odgovor : const {};
   }
 }
-
-/// Razlog iz padajuce liste pri otkazivanju.
-class RazlogOtkazivanja {
-  const RazlogOtkazivanja({
-    required this.id,
-    required this.naziv,
-    required this.traziNapomenu,
-  });
-
-  final int id;
-  final String naziv;
-
-  /// Uz neke razloge ("Ostalo") napomena je obavezna.
-  final bool traziNapomenu;
-
-  factory RazlogOtkazivanja.izJsona(Map<String, dynamic> json) {
-    return RazlogOtkazivanja(
-      id: citajInt(json['id']),
-      naziv: json['naziv']?.toString() ?? '',
-      traziNapomenu: citajBool(json['traziNapomenu']),
-    );
-  }
-}
