@@ -42,6 +42,8 @@ Oznake kroz dokument: ✅ urađeno · 🟡 djelimično · ⬜ još nije.
 | 17 | Desktop aplikacija | ✅ |
 | 18 | Mobilna aplikacija | ✅ |
 | 19 | PDF izvještaji | ✅ |
+| 20 | Čišćenje, samoprovjera, test na čistom okruženju i funkcionalni prolaz | ✅ |
+| 21 | Release buildovi i predaja — buildovi su u GitHub Release-u, ne u repozitoriju | ✅ |
 
 ### Šta prijava obećava, a plan izrade nema kao zasebnu fazu
 
@@ -2300,10 +2302,16 @@ Riješeno je u dva sloja:
 1. **Adrese u seed podacima su na rezervisanim domenama** — `example.com` za klijente i
    `sunnyrides.example` za osoblje. Standard (RFC 2606) te domene drži po strani baš za
    primjere i one ne mogu pripasti nikome, pa poruka nema kome da stigne.
-2. **`SMTP_PREUSMJERI_NA` u `.env`** — kad je postavljeno, svaki email ide na tu adresu
-   umjesto na korisnikovu, a u naslovu stoji `[za <stvarna adresa>]`. Tako se cijeli
-   tok može ispratiti na vlastitom sandučetu, a adresa unesena greškom ne može nikome
-   otići. U pravom radu polje ostaje prazno.
+2. **`SMTP_PREUSMJERI_NA` u `.env`** — kad je postavljeno, email namijenjen adresi na
+   rezervisanoj domeni ide na tu adresu, a u naslovu stoji `[za <stvarna adresa>]`.
+   Koje su domene rezervisane odlučuje `DemoAdrese.JeDemo` (`example.com/.net/.org` i
+   sve pod `.example`, `.test`, `.invalid`, `.localhost`), pokriveno testovima. Tako se
+   tok demo korisnika može ispratiti na vlastitom sandučetu.
+
+   Prva verzija je preusmjeravala **svaki** email. To je smetalo pri pregledu rada:
+   ko otvori nalog svojim stvarnim emailom ne bi dobio ni potvrdu plaćanja ni kod za
+   reset lozinke, jer bi sve otišlo autoru. Sad stvarna adresa dobija svoju poštu, a
+   preusmjeravaju se samo adrese na koje pošta ionako nikad ne bi stigla.
 
 ### Periodični poslovi
 

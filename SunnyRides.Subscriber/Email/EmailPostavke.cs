@@ -16,13 +16,9 @@ public class EmailPostavke
     public string? Posiljalac { get; init; }
 
     /// <summary>
-    /// Kad je postavljena, svaki email ide na ovu adresu umjesto na adresu korisnika.
-    ///
-    /// Baza je puna izmisljenih ljudi, ali adresa iz demo podataka teoretski moze
-    /// pripasti nekom stvarnom. Ova zastita je zato tu kao drugi sloj: demo adrese su
-    /// vec na rezervisanim domenama, a ovim se i greskom unesena stvarna adresa
-    /// zaustavi prije nego iko dobije poruku koju nije trazio. U pravom radu se ne
-    /// postavlja.
+    /// Kad je postavljena, email namijenjen demo korisniku (adresa na rezervisanoj
+    /// domeni, vidi <c>DemoAdrese</c>) ide na ovu adresu. Tako se mailovi seed
+    /// korisnika mogu procitati, a stvarne adrese dobijaju svoju postu normalno.
     /// </summary>
     public string? PreusmjeriNa { get; init; }
 

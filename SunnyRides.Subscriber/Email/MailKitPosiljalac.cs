@@ -3,6 +3,7 @@ using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using MimeKit;
 using MimeKit.Text;
+using SunnyRides.Services.Poruke;
 
 namespace SunnyRides.Subscriber.Email;
 
@@ -39,14 +40,14 @@ public class MailKitPosiljalac : IPosiljalacEmaila
             return;
         }
 
-        // Zastita od slanja stvarnim ljudima dok se radi sa demo podacima. Kad je
-        // SMTP_PREUSMJERI_NA postavljeno, poruka ide na tu adresu, a u naslovu i tekstu
-        // pise kome je stvarno bila namijenjena.
+        // Demo korisnici imaju adrese na rezervisanim domenama, na koje mail nikad ne bi
+        // stigao. Kad je SMTP_PREUSMJERI_NA postavljeno, njihova poruka ide na tu adresu,
+        // a u naslovu i tekstu pise kome je bila namijenjena. Stvarna adresa - nalog
+        // koji je neko otvorio svojim emailom - dobija mail normalno.
         var stvarniPrimalac = primalac;
         var preusmjerenje = _postavke.PreusmjeriNa;
 
-        if (!string.IsNullOrWhiteSpace(preusmjerenje)
-            && !string.Equals(preusmjerenje, primalac, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(preusmjerenje) && DemoAdrese.JeDemo(primalac))
         {
             stvarniPrimalac = preusmjerenje;
             naslov = $"[za {primalac}] {naslov}";

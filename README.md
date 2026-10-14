@@ -27,26 +27,75 @@ prema kategoriji svoje vozačke dozvole ne smije voziti. Sve ostalo je oko toga.
 
 ---
 
-## Šta treba imati instalirano
+## Pokretanje za pregled rada
 
-- .NET SDK 9.0 ili noviji
-- Docker Desktop
-- Flutter 3.x sa uključenim Windows desktop i Android toolchainom
-- `dotnet-ef` alat: `dotnet tool install --global dotnet-ef`
+Ovako se rad pokreće iz predanog stanja, bez ikakve izmjene koda, portova ili
+konekcijskih stringova. Potrebni su samo **Docker Desktop** i **Android emulator**
+(AVD), za mobilnu aplikaciju.
+
+**1. Konfiguracija.** U korijenu repozitorija stoji `.env-tajne.zip`. Raspakuj ga na
+isto mjesto, pa pored `docker-compose.yml` nastane `.env`. Šifra je predana uz rad na
+DLWMS-u. Arhiva je šifrovana AES-256 algoritmom, koji Windows Explorer ne otvara, pa
+treba 7-Zip ili WinRAR:
+
+```powershell
+& "C:\Program Files\7-Zip\7z.exe" x .env-tajne.zip
+```
+
+Može i desnim klikom na fajl → 7-Zip → Extract Here.
+
+**2. Backend.** Iz korijena repozitorija:
+
+```bash
+docker compose up --build
+```
+
+Prvo pokretanje povlači SQL Server i RabbitMQ image-e i traje nekoliko minuta. API sam
+napravi bazu `220182`, primijeni migracije i napuni je demo podacima. Spreman je kad u
+logu piše „Baza je spremna." i kad se otvara `http://localhost:5000/swagger`.
+
+Servisi imaju `restart: unless-stopped`, pa se poslije restarta Dockera ili računara
+sami ponovo podignu.
+
+Buildovi aplikacija su u ZIP arhivi na GitHub Release-u, ne u repozitoriju. Unutar
+arhive su na istim putanjama na kojima ih Flutter pravi:
+
+```
+sunnyrides_desktop/build/windows/x64/runner/Release/sunnyrides_desktop.exe
+sunnyrides_mobile/build/app/outputs/flutter-apk/app-release.apk
+```
+
+**3. Desktop aplikacija.** Pokreni `sunnyrides_desktop.exe` iz foldera `Release`. Fajl
+mora ostati u tom folderu, pored `data\` i `.dll` fajlova. Spaja se na
+`http://localhost:5000`.
+
+**4. Mobilna aplikacija.** Pokreni emulator, obriši eventualnu staru verziju
+aplikacije, pa prevuci `app-release.apk` na prozor emulatora.
+Aplikacija se spaja na `http://10.0.2.2:5000`, što je za Android emulator `localhost`
+host računara.
+
+**Mailovi.** Demo korisnici imaju adrese na rezervisanim domenama (`@example.com`,
+`@sunnyrides.example`), na koje pošta ne može stići, pa njihove mailove worker šalje na
+adresu autora. Nalog otvoren kroz mobilnu aplikaciju sa stvarnim emailom dobija
+potvrde, obavještenja i kod za reset lozinke na taj email. Obavještenja u aplikaciji
+stižu svima, u realnom vremenu.
 
 ---
 
-## Pokretanje
+## Razvoj
 
-**1. Konfiguracija.** Kopiraj `.env.example` u `.env` i popuni vrijednosti:
+Za rad na kodu još trebaju:
+
+- .NET SDK 9.0 ili noviji
+- Flutter (stabilna grana) sa uključenim Windows desktop i Android toolchainom
+- `dotnet-ef` alat: `dotnet tool install --global dotnet-ef`
+
+**Konfiguracija.** `.env.example` je šablon sa svim ključevima i objašnjenjima. Za
+vlastito okruženje kopiraj ga u `.env` i popuni:
 
 ```bash
 cp .env.example .env
 ```
-
-Za lokalni rad dovoljno je postaviti `DB_SA_PASSWORD`, `CONNECTION_STRING`,
-`RABBITMQ_PASSWORD` i `JWT_KEY`. Stripe i SMTP vrijednosti trebaju tek za plaćanje
-i slanje emaila.
 
 `JWT_KEY` mora biti nasumičan niz od najmanje 32 znaka. Ne izmišljaj ga rukom:
 
@@ -57,20 +106,14 @@ $rng.GetBytes($bytes)
 [Convert]::ToBase64String($bytes)
 ```
 
-**2. Podigni sve:**
-
-```bash
-docker compose up --build
-```
-
-Prvi put povlači SQL Server i RabbitMQ image-e, pa potraje. Kad završi:
+Kad su servisi podignuti:
 
 - API je na `http://localhost:5000`, Swagger na `http://localhost:5000/swagger`
 - RabbitMQ konzola je na `http://localhost:15672`, prijava `guest` / `guest`
 - Baza je na `localhost,1433`, korisnik `sa`
 
-**3. Ako radiš na backendu**, praktičnije je dići samo infrastrukturu pa API
-pokretati iz Visual Studija:
+**Rad na backendu.** Praktičnije je dići samo infrastrukturu pa API pokretati iz
+Visual Studija:
 
 ```bash
 docker compose up -d sunnyrides-db sunnyrides-rabbitmq
@@ -83,7 +126,8 @@ dotnet run --project SunnyRides.API
 > a `docker-compose.yml` je za kontejnere prepisuje na ime servisa. Oba načina rade
 > bez diranja fajlova.
 
-**4. Flutter aplikacije:**
+**Flutter aplikacije.** Adresa API-ja se zadaje komandom, a bez nje se uzima
+podrazumijevana (`localhost` za desktop, `10.0.2.2` za emulator):
 
 ```bash
 # desktop
@@ -93,7 +137,17 @@ flutter run -d windows --dart-define=API_BASE_URL=http://localhost:5000
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000
 ```
 
-Adresa `10.0.2.2` nije greška — tako Android emulator vidi `localhost` host mašine.
+**Release buildovi**, isti kao oni u GitHub Release-u:
+
+```bash
+cd sunnyrides_mobile
+flutter clean
+flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:5000
+
+cd ../sunnyrides_desktop
+flutter clean
+flutter build windows --release --dart-define=API_BASE_URL=http://localhost:5000
+```
 
 ---
 
@@ -122,6 +176,7 @@ odbija, pa se na njoj vidi i neuspjelo plaćanje.
 SunnyRides/
 ├── docker-compose.yml
 ├── .env                        # tajne, nije u gitu
+├── .env-tajne.zip              # .env pod šifrom, za pregled rada
 ├── .env.example                # šablon, jeste u gitu
 ├── DOKUMENTACIJA.md            # kako sistem radi iznutra
 ├── recommender-dokumentacija.md
