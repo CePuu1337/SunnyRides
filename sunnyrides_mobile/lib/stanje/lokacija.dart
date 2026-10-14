@@ -68,6 +68,10 @@ class Lokacija extends ChangeNotifier {
     }
   }
 
+  /// Ponovo cita lokaciju ako je ukljucena - za povlacenje za osvjezavanje, kad
+  /// se klijent u medjuvremenu pomjerio. Kad nije ukljucena, ne radi nista.
+  Future<String?> osvjezi() async => ukljucena ? ukljuci() : null;
+
   /// Nazad na grad iz profila.
   void iskljuci() {
     if (_tacka == null) {

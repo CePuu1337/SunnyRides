@@ -155,7 +155,14 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
     await _trazi();
   }
 
+  /// Redni broj zadnje pretrage. Odgovor na stariju pretragu moze stici poslije
+  /// novije - kad se brzo tipka ili prebaci sa lokacije na grad - i tada se
+  /// odbacuje, da lista ne pokaze rezultate uslova koji vise ne vaze.
+  int _brojPretrage = 0;
+
   Future<void> _trazi() async {
+    final broj = ++_brojPretrage;
+
     setState(() {
       _ucitavanje = true;
       _greska = null;
@@ -165,7 +172,7 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
     try {
       final strana = await _upit(0);
 
-      if (!mounted) {
+      if (!mounted || broj != _brojPretrage) {
         return;
       }
 
@@ -177,7 +184,7 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {
-      if (!mounted) {
+      if (!mounted || broj != _brojPretrage) {
         return;
       }
 
@@ -185,6 +192,23 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
         _greska = greska.poruka;
         _ucitavanje = false;
       });
+    }
+  }
+
+  /// Povlacenje za osvjezavanje ponovo cita i lokaciju telefona, ako je
+  /// ukljucena. Nova tacka sama pokrene pretragu, pa se ovdje trazi samo kad
+  /// lokacija nije ukljucena ili se nije javila.
+  Future<void> _osvjezi() async {
+    final prije = _lokacija.tacka;
+    final poruka = await _lokacija.osvjezi();
+
+    if (poruka != null && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(poruka)));
+    }
+
+    if (_lokacija.tacka == prije) {
+      await _trazi();
     }
   }
 
@@ -229,10 +253,19 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
 
     setState(() => _dopunjavanje = true);
 
+    // Ako u medjuvremenu krene nova pretraga, ova stranica pripada staroj.
+    final broj = _brojPretrage;
+
     try {
       final strana = await _upit(_stranica + 1);
 
       if (!mounted) {
+        return;
+      }
+
+      if (broj != _brojPretrage) {
+        setState(() => _dopunjavanje = false);
+
         return;
       }
 
@@ -422,7 +455,7 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
                             ),
                     )
                   : RefreshIndicator(
-                      onRefresh: _trazi,
+                      onRefresh: _osvjezi,
                       child: ListView.separated(
                         controller: _skrol,
                         padding: const EdgeInsets.fromLTRB(

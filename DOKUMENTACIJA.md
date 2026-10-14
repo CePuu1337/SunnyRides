@@ -2781,7 +2781,10 @@ aplikaciji sa samo približnom dozvolom Android novu poziciju javlja najviše je
 deset minuta, pa bi klijent koji se pomjerio dobijao najbližu poslovnicu od mjesta
 gdje je bio. Za izbor poslovnice dovoljno je i jedno i drugo.
 Položaj se šalje kao `latituda` i `longituda` uz pretragu i ne čuva se nigdje: ni na
-serveru, ni na telefonu, a nestaje sa odjavom. Ako klijent odbije dozvolu ili je
+serveru, ni na telefonu, a nestaje sa odjavom. Dok je lokacija uključena, povlačenje
+za osvježavanje na početnoj i u pretrazi čita je ponovo, pa klijent koji se pomjerio
+dobije novu najbližu poslovnicu. Odgovor koji stigne poslije novijeg zahtjeva (kad se
+brzo prebaci sa lokacije na grad) se odbacuje, da stara udaljenost ne prepiše novu. Ako klijent odbije dozvolu ili je
 lokacija isključena, dobije poruku, a udaljenost se i dalje mjeri od grada.
 
 Sistem preporuke se ovim ne mijenja. Grad poslovnice je i dalje jedan od signala u

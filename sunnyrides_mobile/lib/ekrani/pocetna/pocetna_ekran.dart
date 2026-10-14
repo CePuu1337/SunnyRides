@@ -32,6 +32,11 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
   Tacka? _zadnjaTacka;
   int? _zadnjiGrad;
 
+  /// Redni broj zadnjeg upita za najblizu poslovnicu. Odgovor na stariji upit
+  /// stize ponekad poslije novijeg - na primjer kad klijent brzo prebaci sa
+  /// lokacije na grad - i tada se odbacuje, da ne prepise noviji.
+  int _upitNajblize = 0;
+
   List<Preporuka> _preporuke = const [];
   NajblizaPoslovnica? _najbliza;
   List<Obavijest> _obavijesti = const [];
@@ -81,17 +86,37 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
     _zadnjaTacka = _lokacija.tacka;
     _zadnjiGrad = grad;
 
+    final broj = ++_upitNajblize;
+
     try {
       final najbliza = await _katalog.najblizaPoslovnica(
         lokacija: _lokacija.tacka,
       );
 
-      if (mounted) {
+      if (mounted && broj == _upitNajblize) {
         setState(() => _najbliza = najbliza);
       }
-    } on ApiGreska {
-      // Kartica ostaje kakva je bila; ostatak ekrana radi i bez nje.
+    } on ApiGreska catch (greska) {
+      // Ostatak ekrana radi i bez kartice, ali klijent mora znati da prikazana
+      // udaljenost vise ne odgovara onome sto je odabrao.
+      if (mounted && broj == _upitNajblize) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(greska.poruka)));
+      }
     }
+  }
+
+  /// Povlacenje za osvjezavanje ponovo cita i lokaciju telefona, ako je
+  /// ukljucena - klijent koji se pomjerio tako dobije novu najblizu poslovnicu.
+  Future<void> _osvjezi() async {
+    final poruka = await _lokacija.osvjezi();
+
+    if (poruka != null && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(poruka)));
+    }
+
+    await _ucitaj(tiho: true);
   }
 
   /// Povlacenje za osvjezavanje ucitava tiho: sadrzaj ostaje na ekranu dok ne
@@ -101,6 +126,8 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
       _ucitavanje = !tiho;
       _greska = null;
     });
+
+    final broj = ++_upitNajblize;
 
     try {
       // Nezavisni upiti idu paralelno - jedan po jedan bi ekran drzao prazan duze
@@ -122,7 +149,9 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
         _obavijesti = rezultati[1] as List<Obavijest>;
         _tipovi = rezultati[2] as List<Stavka>;
         _kategorije = rezultati[3] as DozvoljeneKategorije;
-        _najbliza = rezultati[4] as NajblizaPoslovnica?;
+        if (broj == _upitNajblize) {
+          _najbliza = rezultati[4] as NajblizaPoslovnica?;
+        }
         _ucitavanje = false;
       });
 
@@ -160,7 +189,7 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
           greska: _greska,
           naPonovniPokusaj: _ucitaj,
           dijete: RefreshIndicator(
-            onRefresh: () => _ucitaj(tiho: true),
+            onRefresh: _osvjezi,
             child: ListView(
               padding: const EdgeInsets.only(bottom: Razmaci.xxl),
               children: [
