@@ -15,26 +15,29 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "ba.edu.fit.sunnyrides_mobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
+
+        // Broj i naziv verzije dolaze iz pubspec.yaml.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // APK se instalira u emulator za pregled rada, ne objavljuje se na Google
+            // Play, pa je potpis debug kljucem dovoljan.
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+
+    lint {
+        // Release build inace pokrece lint i nad paketima. Za stripe_android lint
+        // trazi play-services-tapandpay, biblioteku koja nije u javnim Maven
+        // repozitorijima, pa build pada prije nego APK nastane. Aplikaciji ta
+        // biblioteka ne treba - koristi je samo dodavanje kartica u Google Wallet.
+        checkReleaseBuilds = false
     }
 }
 

@@ -3277,7 +3277,7 @@ greška, jer za njega nije.
 
 ### Zašto je promijenjen Android manifest
 
-Tri stvari koje šablon iz `flutter create` ne pokriva:
+Stvari koje šablon iz `flutter create` ne pokriva:
 
 | Promjena | Zašto |
 |---|---|
@@ -3285,6 +3285,7 @@ Tri stvari koje šablon iz `flutter create` ne pokriva:
 | `LaunchTheme`/`NormalTheme` na `Theme.AppCompat` | PaymentSheet koristi AppCompat komponente |
 | `INTERNET` dozvola u glavnom manifestu | Flutter je upisuje samo u debug, pa release APK bez nje ne može pozvati API |
 | `networkSecurityConfig` | Android od verzije 9 blokira običan HTTP; dozvola je sužena na `10.0.2.2` i `localhost`, gdje API u razvoju stvarno stoji |
+| `lint { checkReleaseBuilds = false }` u `app/build.gradle.kts` | release build pokreće lint i nad paketima, a lint za `stripe_android` traži `play-services-tapandpay`, koje nema u javnim Maven repozitorijima - build pada prije nego APK nastane; aplikaciji ta biblioteka ne treba |
 
 ### Prosječna ocjena vozila
 
