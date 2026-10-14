@@ -37,6 +37,13 @@ public class RezervacijaService
     private readonly IRezervacijaStateMachine _stateMachine;
     private readonly IIzvrsilacPovrata _izvrsilacPovrata;
     private readonly IObjavljivacPoruka _objavljivac;
+    private readonly IOpsegPoslovnice _opseg;
+
+    /// <summary>
+    /// Kad listu trazi uposlenik, ovdje stoji njegova poslovnica i lista se suzava na
+    /// rezervacije te poslovnice. Administrator i klijent ovdje imaju null.
+    /// </summary>
+    private int? _ogranicenjeNaPoslovnicu;
 
     /// <summary>
     /// Kad zahtjev dolazi od klijenta, ovdje stoji njegov identifikator i lista se
@@ -53,7 +60,8 @@ public class RezervacijaService
         IPricingService pricingService,
         IRezervacijaStateMachine stateMachine,
         IIzvrsilacPovrata izvrsilacPovrata,
-        IObjavljivacPoruka objavljivac)
+        IObjavljivacPoruka objavljivac,
+        IOpsegPoslovnice opseg)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -63,6 +71,7 @@ public class RezervacijaService
         _stateMachine = stateMachine;
         _izvrsilacPovrata = izvrsilacPovrata;
         _objavljivac = objavljivac;
+        _opseg = opseg;
     }
 
     protected override string NazivEntiteta => "Rezervacija";
@@ -78,6 +87,7 @@ public class RezervacijaService
         RezervacijaSearchObject search, CancellationToken ct = default)
     {
         _ogranicenjeNaKorisnika = JeOsoblje() ? null : _trenutniKorisnik.ObaveznoKorisnikId();
+        _ogranicenjeNaPoslovnicu = await _opseg.OgranicenjeAsync(ct);
 
         return await base.GetAsync(search, ct);
     }
@@ -94,6 +104,9 @@ public class RezervacijaService
             throw new ForbiddenException("Mozete vidjeti samo svoje rezervacije.");
         }
 
+        // Uposlenik vidi samo rezervacije svoje poslovnice, i kad broj upise rucno.
+        await _opseg.ObaveznoDozvoljenaAsync(rezervacija.PoslovnicaId, ct);
+
         return rezervacija;
     }
 
@@ -103,6 +116,11 @@ public class RezervacijaService
         if (_ogranicenjeNaKorisnika.HasValue)
         {
             upit = upit.Where(x => x.KorisnikId == _ogranicenjeNaKorisnika.Value);
+        }
+
+        if (_ogranicenjeNaPoslovnicu is { } poslovnicaUposlenika)
+        {
+            upit = upit.Where(x => x.PoslovnicaId == poslovnicaUposlenika);
         }
 
         if (!string.IsNullOrWhiteSpace(search.Broj))
@@ -239,6 +257,9 @@ public class RezervacijaService
         }
 
         await ObaveznoKlijentAsync(klijentId, ct);
+
+        // Uposlenik unosi rezervacije samo za vozila svoje poslovnice.
+        await _opseg.ObaveznoDozvoljenoVoziloAsync(request.VoziloId, ct);
 
         return await KreirajZaAsync(klijentId, request, ct);
     }
@@ -491,6 +512,8 @@ public class RezervacijaService
         {
             throw new ForbiddenException("Mozete otkazati samo svoje rezervacije.");
         }
+
+        await _opseg.ObaveznoDozvoljenaAsync(rezervacija.PoslovnicaId, ct);
 
         return rezervacija;
     }

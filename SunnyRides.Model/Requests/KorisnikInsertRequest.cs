@@ -48,4 +48,10 @@ public class KorisnikInsertRequest
 
     [MinLength(1, ErrorMessage = "Odaberite najmanje jednu ulogu.")]
     public List<int> UlogeIds { get; set; } = new();
+
+    /// <summary>
+    /// Poslovnica u kojoj uposlenik radi. Obavezna kad je korisnik uposlenik; za
+    /// administratora i klijenta se ignorise.
+    /// </summary>
+    public int? PoslovnicaId { get; set; }
 }

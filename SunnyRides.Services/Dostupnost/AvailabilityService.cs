@@ -2,6 +2,7 @@ using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
+using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
@@ -14,10 +15,12 @@ public class AvailabilityService : IAvailabilityService
     private const int NajvisePogodjenih = 100;
 
     private readonly SunnyRidesDbContext _context;
+    private readonly IOpsegPoslovnice _opseg;
 
-    public AvailabilityService(SunnyRidesDbContext context)
+    public AvailabilityService(SunnyRidesDbContext context, IOpsegPoslovnice opseg)
     {
         _context = context;
+        _opseg = opseg;
     }
 
     public IQueryable<Vozilo> DodajUslovSlobodno(
@@ -118,6 +121,10 @@ public class AvailabilityService : IAvailabilityService
         int voziloId, DateTime datumOd, DateTime datumDo, CancellationToken ct = default)
     {
         ProvjeriPeriod(datumOd, datumDo);
+
+        // Lista nosi kontakte klijenata, pa je uposlenik vidi samo za vozila svoje
+        // poslovnice - iste one kojima smije zadati blokadu.
+        await _opseg.ObaveznoDozvoljenoVoziloAsync(voziloId, ct);
 
         // Gornja granica postoji iako je lista po prirodi kratka: endpoint bez limita
         // uputstvo ne prihvata. Poredak po pocetku znaci da prva pogodjena rezervacija,

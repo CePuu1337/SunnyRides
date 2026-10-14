@@ -17,9 +17,13 @@ namespace SunnyRides.API.Controllers;
 ///
 /// PDF se vraca kao bajtovi. Desktop aplikacija ih preuzima i otvara za pregled i
 /// stampu; nista se ne generise u Flutteru.
+///
+/// Izvjestaji su samo za administratora. Oni porede poslovnice i pokazuju prihod
+/// cijele agencije, a uposlenik radi u jednoj poslovnici i za svoj posao ima pregled
+/// poslovanja sveden na nju.
 /// </summary>
 [ApiController]
-[Authorize(Roles = Uloge.AdministratorIliUposlenik)]
+[Authorize(Roles = Uloge.Administrator)]
 [Route("api/izvjestaji")]
 public class IzvjestajController : ControllerBase
 {

@@ -179,6 +179,7 @@ class Meni {
           podnaslov: 'Iskorištenost flote i finansijski pregled',
           ikona: Icons.insert_chart_outlined,
           gradi: _izvjestaji,
+          samoAdministrator: true,
         ),
       ],
     ),

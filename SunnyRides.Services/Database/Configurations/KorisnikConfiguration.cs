@@ -21,5 +21,11 @@ public class KorisnikConfiguration : IEntityTypeConfiguration<Korisnik>
         // Prijava ide preko korisnickog imena, email je jedinstven radi reseta lozinke
         builder.HasIndex(x => x.KorisnickoIme).IsUnique();
         builder.HasIndex(x => x.Email).IsUnique();
+
+        // Poslovnica u kojoj uposlenik radi ne brise se dok u njoj neko radi.
+        builder.HasOne(x => x.Poslovnica)
+               .WithMany()
+               .HasForeignKey(x => x.PoslovnicaId)
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -40,6 +40,7 @@ public class PlacanjeService
     private readonly StripePostavke _postavke;
     private readonly IObjavljivacPoruka _objavljivac;
     private readonly ILogger<PlacanjeService> _logger;
+    private readonly IOpsegPoslovnice _opseg;
 
     /// <summary>Kad zahtjev dolazi od klijenta, lista se suzava na njegova placanja.</summary>
     private int? _ogranicenjeNaKorisnika;
@@ -56,7 +57,8 @@ public class PlacanjeService
         IAvailabilityService dostupnost,
         StripePostavke postavke,
         IObjavljivacPoruka objavljivac,
-        ILogger<PlacanjeService> logger)
+        ILogger<PlacanjeService> logger,
+        IOpsegPoslovnice opseg)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -67,6 +69,7 @@ public class PlacanjeService
         _postavke = postavke;
         _objavljivac = objavljivac;
         _logger = logger;
+        _opseg = opseg;
     }
 
     protected override string NazivEntiteta => "Placanje";
@@ -501,9 +504,11 @@ public class PlacanjeService
         var veza = await Context.Refundi
             .AsNoTracking()
             .Where(x => x.Id == povratId)
-            .Select(x => new { x.PlacanjeId, x.Placanje.RezervacijaId })
+            .Select(x => new { x.PlacanjeId, x.Placanje.RezervacijaId, x.Placanje.Rezervacija.PoslovnicaId })
             .FirstOrDefaultAsync(ct)
             ?? throw NotFoundException.Za("Povrat", povratId);
+
+        await _opseg.ObaveznoDozvoljenaAsync(veza.PoslovnicaId, ct);
 
         await using var transakcija = await Context.Database.BeginTransactionAsync(ct);
         await Context.ZakljucajRezervacijuAsync(veza.RezervacijaId, ct);

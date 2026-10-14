@@ -2,6 +2,7 @@ using Mapster;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SunnyRides.Model.DTOs;
+using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
@@ -17,13 +18,18 @@ public class SlikaVozilaService : ISlikaVozilaService
     private readonly SunnyRidesDbContext _context;
     private readonly IPohranaSlika _pohrana;
     private readonly ILogger<SlikaVozilaService> _logger;
+    private readonly IOpsegPoslovnice _opseg;
 
     public SlikaVozilaService(
-        SunnyRidesDbContext context, IPohranaSlika pohrana, ILogger<SlikaVozilaService> logger)
+        SunnyRidesDbContext context,
+        IPohranaSlika pohrana,
+        ILogger<SlikaVozilaService> logger,
+        IOpsegPoslovnice opseg)
     {
         _context = context;
         _pohrana = pohrana;
         _logger = logger;
+        _opseg = opseg;
     }
 
     public async Task<List<SlikaVozilaDto>> ZaVoziloAsync(int voziloId, CancellationToken ct = default)
@@ -43,7 +49,7 @@ public class SlikaVozilaService : ISlikaVozilaService
     public async Task<SlikaVozilaDto> DodajAsync(
         int voziloId, Stream sadrzaj, long duzinaBajta, CancellationToken ct = default)
     {
-        await ObaveznoVoziloAsync(voziloId, ct);
+        await ObaveznoSvojeVoziloAsync(voziloId, ct);
 
         var postojece = await _context.SlikeVozila
             .Where(x => x.VoziloId == voziloId)
@@ -93,6 +99,8 @@ public class SlikaVozilaService : ISlikaVozilaService
     public async Task<SlikaVozilaDto> PostaviGlavnuAsync(
         int voziloId, int slikaId, CancellationToken ct = default)
     {
+        await ObaveznoSvojeVoziloAsync(voziloId, ct);
+
         var sveSlike = await _context.SlikeVozila
             .Where(x => x.VoziloId == voziloId)
             .ToListAsync(ct);
@@ -115,6 +123,8 @@ public class SlikaVozilaService : ISlikaVozilaService
 
     public async Task ObrisiAsync(int voziloId, int slikaId, CancellationToken ct = default)
     {
+        await ObaveznoSvojeVoziloAsync(voziloId, ct);
+
         var sveSlike = await _context.SlikeVozila
             .Where(x => x.VoziloId == voziloId)
             .ToListAsync(ct);
@@ -156,4 +166,11 @@ public class SlikaVozilaService : ISlikaVozilaService
             throw NotFoundException.Za("Vozilo", voziloId);
         }
     }
+
+    /// <summary>
+    /// Galeriju mijenja samo uposlenik poslovnice u kojoj vozilo stoji. Pregled slika
+    /// je otvoren svima, kao i katalog.
+    /// </summary>
+    private Task ObaveznoSvojeVoziloAsync(int voziloId, CancellationToken ct) =>
+        _opseg.ObaveznoDozvoljenoVoziloAsync(voziloId, ct);
 }

@@ -28,6 +28,10 @@ public class VoziloService
     private readonly IHistorijaPretrageService _historijaPretrage;
     private readonly IRecommenderService _recommender;
     private readonly IPricingService _pricing;
+    private readonly IOpsegPoslovnice _opseg;
+
+    /// <summary>Poslovnica uposlenika; lista vozila se suzava na nju.</summary>
+    private int? _ogranicenjeNaPoslovnicu;
 
     /// <summary>
     /// Gornja granica vozila koja ulaze u rangiranje po preporuci. Flota je desetak puta
@@ -60,7 +64,8 @@ public class VoziloService
         ICurrentUserService trenutniKorisnik,
         IHistorijaPretrageService historijaPretrage,
         IRecommenderService recommender,
-        IPricingService pricing)
+        IPricingService pricing,
+        IOpsegPoslovnice opseg)
         : base(context)
     {
         _pohrana = pohrana;
@@ -70,6 +75,7 @@ public class VoziloService
         _historijaPretrage = historijaPretrage;
         _recommender = recommender;
         _pricing = pricing;
+        _opseg = opseg;
     }
 
     /// <summary>
@@ -81,6 +87,7 @@ public class VoziloService
         VoziloSearchObject search, CancellationToken ct = default)
     {
         _dozvoljeneKategorije = null;
+        _ogranicenjeNaPoslovnicu = await _opseg.OgranicenjeAsync(ct);
 
         if (search.SamoDozvoljenaZaMene)
         {
@@ -250,6 +257,12 @@ public class VoziloService
 
     protected override IQueryable<Vozilo> AddFilter(VoziloSearchObject search, IQueryable<Vozilo> upit)
     {
+        // Uposlenik u administraciji flote vidi samo vozila svoje poslovnice.
+        if (_ogranicenjeNaPoslovnicu is { } poslovnicaUposlenika)
+        {
+            upit = upit.Where(x => x.PoslovnicaId == poslovnicaUposlenika);
+        }
+
         if (!string.IsNullOrWhiteSpace(search.ModelNaziv))
         {
             // Svaka rijec mora postojati u marki ili u modelu, pa "Honda", "PCX" i
@@ -358,6 +371,7 @@ public class VoziloService
         VoziloInsertRequest request, Vozilo entitet, CancellationToken ct)
     {
         await ProvjeriVezeAsync(request.ModelVozilaId, request.PoslovnicaId, ct);
+        await _opseg.ObaveznoDozvoljenaAsync(request.PoslovnicaId, ct);
         ProvjeriGodinu(request.GodinaProizvodnje);
         ProvjeriTarife(request.SatnaTarifa, request.DnevnaTarifa);
 
@@ -370,6 +384,13 @@ public class VoziloService
         VoziloUpdateRequest request, Vozilo entitet, CancellationToken ct)
     {
         await ProvjeriVezeAsync(request.ModelVozilaId, request.PoslovnicaId, ct);
+
+        // Uposlenik mijenja samo vozila svoje poslovnice i ne moze ih premjestiti u
+        // drugu. Stara poslovnica se cita prije nego je zahtjev prepisao.
+        var dosadasnja = Context.Entry(entitet).Property(x => x.PoslovnicaId).OriginalValue;
+        await _opseg.ObaveznoDozvoljenaAsync(dosadasnja, ct);
+        await _opseg.ObaveznoDozvoljenaAsync(request.PoslovnicaId, ct);
+
         ProvjeriGodinu(request.GodinaProizvodnje);
         ProvjeriTarife(request.SatnaTarifa, request.DnevnaTarifa);
 

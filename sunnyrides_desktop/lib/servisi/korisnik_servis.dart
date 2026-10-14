@@ -71,10 +71,16 @@ class KorisnikServis {
     return Korisnik.izJsona(odgovor as Map<String, dynamic>);
   }
 
-  Future<Korisnik> postaviUloge(int id, List<int> ulogeIds) async {
+  /// Poslovnica ide uz uloge, jer je uposleniku obavezna - kad nalog postane
+  /// uposlenik, server mora odmah znati gdje radi.
+  Future<Korisnik> postaviUloge(
+    int id,
+    List<int> ulogeIds, {
+    int? poslovnicaId,
+  }) async {
     final odgovor = await _klijent.put(
       '/api/korisnici/$id/uloge',
-      tijelo: {'ulogeIds': ulogeIds},
+      tijelo: {'ulogeIds': ulogeIds, 'poslovnicaId': poslovnicaId},
     );
 
     return Korisnik.izJsona(odgovor as Map<String, dynamic>);

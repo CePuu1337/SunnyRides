@@ -200,7 +200,7 @@ public partial class DatabaseSeeder
         if (status == StatusRezervacije.Cancelled)
         {
             var otkazaoKlijent = Sansa(60);
-            rezervacija.OtkazaoKorisnik = otkazaoKlijent ? klijent : _uposlenik;
+            rezervacija.OtkazaoKorisnik = otkazaoKlijent ? klijent : UposlenikZa(rezervacija.Poslovnica);
             rezervacija.RazlogOtkazivanja = Izaberi(otkazaoKlijent ? _razloziKlijenta : _razloziAgencije);
             rezervacija.DatumOtkazivanja = datumKreiranja.AddDays(Broj(1, 10));
         }
@@ -239,7 +239,8 @@ public partial class DatabaseSeeder
                 if (rezervacija.Status == StatusRezervacije.Completed)
                 {
                     Zapis(StatusRezervacije.Confirmed, StatusRezervacije.Completed,
-                        "Evidentiran povrat vozila.", rezervacija.DatumDo.AddMinutes(Broj(5, 90)), _uposlenik);
+                        "Evidentiran povrat vozila.", rezervacija.DatumDo.AddMinutes(Broj(5, 90)),
+                        UposlenikZa(rezervacija.Poslovnica));
                 }
                 break;
 

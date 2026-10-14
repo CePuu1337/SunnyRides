@@ -51,8 +51,12 @@ public class PrimopredajaService
     private readonly IIzvrsilacPovrata _izvrsilacPovrata;
     private readonly IObjavljivacPoruka _objavljivac;
     private readonly ILogger<PrimopredajaService> _logger;
+    private readonly IOpsegPoslovnice _opseg;
 
     private int? _ogranicenjeNaKorisnika;
+
+    /// <summary>Poslovnica uposlenika; lista primopredaja se suzava na nju.</summary>
+    private int? _ogranicenjeNaPoslovnicu;
 
     public PrimopredajaService(
         SunnyRidesDbContext context,
@@ -62,7 +66,8 @@ public class PrimopredajaService
         IPohranaSlika pohrana,
         IIzvrsilacPovrata izvrsilacPovrata,
         IObjavljivacPoruka objavljivac,
-        ILogger<PrimopredajaService> logger)
+        ILogger<PrimopredajaService> logger,
+        IOpsegPoslovnice opseg)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -72,6 +77,7 @@ public class PrimopredajaService
         _izvrsilacPovrata = izvrsilacPovrata;
         _objavljivac = objavljivac;
         _logger = logger;
+        _opseg = opseg;
     }
 
     protected override string NazivEntiteta => "Primopredaja";
@@ -85,20 +91,22 @@ public class PrimopredajaService
         PrimopredajaSearchObject search, CancellationToken ct = default)
     {
         _ogranicenjeNaKorisnika = JeOsoblje() ? null : _trenutniKorisnik.ObaveznoKorisnikId();
+        _ogranicenjeNaPoslovnicu = await _opseg.OgranicenjeAsync(ct);
 
         return await base.GetAsync(search, ct);
     }
 
     public override async Task<PrimopredajaDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
-        var vlasnikId = await Context.Primopredaje
+        var vlasnik = await Context.Primopredaje
             .AsNoTracking()
             .Where(x => x.Id == id)
-            .Select(x => (int?)x.Rezervacija.KorisnikId)
+            .Select(x => new { x.Rezervacija.KorisnikId, x.Rezervacija.PoslovnicaId })
             .FirstOrDefaultAsync(ct)
             ?? throw NotFoundException.Za(NazivEntiteta, id);
 
-        ProvjeriVlasnistvo(vlasnikId, "Mozete vidjeti samo primopredaje svojih rezervacija.");
+        ProvjeriVlasnistvo(vlasnik.KorisnikId, "Mozete vidjeti samo primopredaje svojih rezervacija.");
+        await _opseg.ObaveznoDozvoljenaAsync(vlasnik.PoslovnicaId, ct);
 
         return await base.GetByIdAsync(id, ct);
     }
@@ -109,6 +117,11 @@ public class PrimopredajaService
         if (_ogranicenjeNaKorisnika.HasValue)
         {
             upit = upit.Where(x => x.Rezervacija.KorisnikId == _ogranicenjeNaKorisnika.Value);
+        }
+
+        if (_ogranicenjeNaPoslovnicu is { } poslovnicaUposlenika)
+        {
+            upit = upit.Where(x => x.Rezervacija.PoslovnicaId == poslovnicaUposlenika);
         }
 
         if (search.RezervacijaId.HasValue)
@@ -161,11 +174,18 @@ public class PrimopredajaService
         var fotografija = await Context.FotografijePrimopredaje
             .AsNoTracking()
             .Where(x => x.Id == fotografijaId)
-            .Select(x => new { x.Putanja, x.PrimopredajaId, x.Primopredaja.Rezervacija.KorisnikId })
+            .Select(x => new
+            {
+                x.Putanja,
+                x.PrimopredajaId,
+                x.Primopredaja.Rezervacija.KorisnikId,
+                x.Primopredaja.Rezervacija.PoslovnicaId
+            })
             .FirstOrDefaultAsync(ct)
             ?? throw NotFoundException.Za("Fotografija", fotografijaId);
 
         ProvjeriVlasnistvo(fotografija.KorisnikId, "Mozete preuzeti samo fotografije svojih rezervacija.");
+        await _opseg.ObaveznoDozvoljenaAsync(fotografija.PoslovnicaId, ct);
 
         return await _pohrana.OtvoriPrivatnoAsync(
             fotografija.Putanja, $"primopredaja-{fotografija.PrimopredajaId}-{fotografijaId}.jpg", ct);
@@ -199,6 +219,12 @@ public class PrimopredajaService
         if (search.PoslovnicaId.HasValue)
         {
             upit = upit.Where(x => x.PoslovnicaId == search.PoslovnicaId.Value);
+        }
+
+        // Uposlenik vidi raspored svoje poslovnice, bez obzira na filter iz zahtjeva.
+        if (await _opseg.OgranicenjeAsync(ct) is { } poslovnicaUposlenika)
+        {
+            upit = upit.Where(x => x.PoslovnicaId == poslovnicaUposlenika);
         }
 
         int? ukupno = search.IncludeTotalCount ? await upit.CountAsync(ct) : null;
@@ -312,6 +338,7 @@ public class PrimopredajaService
             .FirstOrDefaultAsync(x => x.Id == request.RezervacijaId, ct)
             ?? throw NotFoundException.Za("Rezervacija", request.RezervacijaId);
 
+        await _opseg.ObaveznoDozvoljenaAsync(rezervacija.PoslovnicaId, ct);
         ProvjeriDaJePotvrdjena(rezervacija);
 
         if (rezervacija.Primopredaje.Any(x => x.Tip == TipPrimopredaje.Izdavanje))
@@ -703,8 +730,13 @@ public class PrimopredajaService
             upit = upit.AsNoTracking();
         }
 
-        return await upit.FirstOrDefaultAsync(x => x.Id == rezervacijaId, ct)
+        var rezervacija = await upit.FirstOrDefaultAsync(x => x.Id == rezervacijaId, ct)
             ?? throw NotFoundException.Za("Rezervacija", rezervacijaId);
+
+        // Povrat i obracun povrata radi samo uposlenik poslovnice kojoj najam pripada.
+        await _opseg.ObaveznoDozvoljenaAsync(rezervacija.PoslovnicaId, ct);
+
+        return rezervacija;
     }
 
     protected override string PorukaZaDuplikat() =>

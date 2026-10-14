@@ -133,7 +133,8 @@ public class KorisnikService
         SaUlogama(upit);
 
     private static IQueryable<Korisnik> SaUlogama(IQueryable<Korisnik> upit) =>
-        upit.Include(x => x.KorisnikRole).ThenInclude(kr => kr.Role);
+        upit.Include(x => x.KorisnikRole).ThenInclude(kr => kr.Role)
+            .Include(x => x.Poslovnica);
 
     public async Task<List<RoleDto>> UlogeAsync(CancellationToken ct = default)
     {
@@ -167,6 +168,9 @@ public class KorisnikService
                 DatumDodjele = DateTime.UtcNow
             });
         }
+
+        entitet.PoslovnicaId = await PoslovnicaZaUlogeAsync(
+            uloge.Select(x => x.Naziv), request.PoslovnicaId, ct);
     }
 
     protected override async Task BeforeUpdateAsync(
@@ -181,6 +185,13 @@ public class KorisnikService
         {
             throw new BusinessException("Ne mozete deaktivirati vlastiti nalog.");
         }
+
+        var uloge = await Context.KorisnikRole
+            .Where(x => x.KorisnikId == entitet.Id)
+            .Select(x => x.Role.Naziv)
+            .ToListAsync(ct);
+
+        entitet.PoslovnicaId = await PoslovnicaZaUlogeAsync(uloge, request.PoslovnicaId, ct);
 
         // Deaktiviran nalog ne smije raditi ni sa tokenom koji je dobio ranije.
         var biloAktivan = Context.Entry(entitet).Property(x => x.Aktivan).OriginalValue;
@@ -250,6 +261,9 @@ public class KorisnikService
             korisnik.KorisnikRole.Remove(veza);
             Context.Remove(veza);
         }
+
+        korisnik.PoslovnicaId = await PoslovnicaZaUlogeAsync(
+            nove.Select(x => x.Naziv), request.PoslovnicaId ?? korisnik.PoslovnicaId, ct);
 
         var dodane = nove.Where(x => postojece.All(v => v.RoleId != x.Id)).ToList();
         var uklonjenih = postojece.Count(x => !noveIds.Contains(x.RoleId));
@@ -432,6 +446,37 @@ public class KorisnikService
         {
             throw new BusinessException("Nalog sa tom email adresom vec postoji.");
         }
+    }
+
+    /// <summary>
+    /// Poslovnica koju korisnik sa ovim ulogama treba imati.
+    ///
+    /// Uposlenik radi u tacno jednoj poslovnici, pa je ona za njega obavezna.
+    /// Administrator vidi sve poslovnice, a klijent nije vezan ni za jednu, pa se
+    /// njima poslovnica ne cuva - da ne ostane zaboravljena vrijednost koja bi, kad im
+    /// se jednom oduzme administratorska uloga, tiho odredila sta vide.
+    /// </summary>
+    private async Task<int?> PoslovnicaZaUlogeAsync(
+        IEnumerable<string> uloge, int? poslovnicaId, CancellationToken ct)
+    {
+        if (!VezaZaPoslovnicu.JeVezan(uloge))
+        {
+            return null;
+        }
+
+        if (poslovnicaId is null)
+        {
+            throw new BusinessException("Odaberite poslovnicu u kojoj uposlenik radi.");
+        }
+
+        var postoji = await Context.Poslovnice.AnyAsync(x => x.Id == poslovnicaId.Value, ct);
+
+        if (!postoji)
+        {
+            throw new BusinessException("Odabrana poslovnica ne postoji.");
+        }
+
+        return poslovnicaId;
     }
 
     private static void ProvjeriGodine(DateTime datumRodjenja)

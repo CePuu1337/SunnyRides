@@ -17,6 +17,14 @@ int citajInt(dynamic vrijednost, {int podrazumijevano = 0}) {
   return podrazumijevano;
 }
 
+int? citajIntIliNista(dynamic vrijednost) {
+  if (vrijednost == null) {
+    return null;
+  }
+
+  return citajInt(vrijednost);
+}
+
 double citajDouble(dynamic vrijednost, {double podrazumijevano = 0}) {
   if (vrijednost is num) {
     return vrijednost.toDouble();

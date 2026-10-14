@@ -6,6 +6,7 @@ import '../../modeli/kalendar.dart';
 import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/kalendar_servis.dart';
 import '../../servisi/sifrarnik_servis.dart';
+import '../../stanje/opseg_poslovnice.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/polja.dart';
 import '../../widgeti/sadrzaj.dart';
@@ -66,7 +67,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
 
       if (mounted) {
         setState(() {
-          _poslovnice = poslovnice;
+          _poslovnice = dozvoljenePoslovnice(context, poslovnice);
           _tipovi = tipovi;
         });
       }

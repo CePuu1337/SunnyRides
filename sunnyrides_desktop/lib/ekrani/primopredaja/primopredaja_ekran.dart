@@ -6,6 +6,7 @@ import '../../modeli/primopredaja.dart';
 import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/primopredaja_servis.dart';
 import '../../servisi/sifrarnik_servis.dart';
+import '../../stanje/opseg_poslovnice.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/polja.dart';
 import '../../widgeti/sadrzaj.dart';
@@ -54,7 +55,7 @@ class _PrimopredajaEkranStanje extends State<PrimopredajaEkran> {
       final poslovnice = await _sifrarnici.ucitaj(SifrarnikServis.poslovnice);
 
       if (mounted) {
-        setState(() => _poslovnice = poslovnice);
+        setState(() => _poslovnice = dozvoljenePoslovnice(context, poslovnice));
       }
     } on ApiGreska {
       // Filter ostaje prazan; raspored se i bez njega prikazuje.

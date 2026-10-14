@@ -314,7 +314,7 @@ Sta se upisuje:
 
 | Entitet | Koliko |
 |---|---|
-| Korisnici | 20 (4 osoblje, 16 klijenata) |
+| Korisnici | 22 (6 osoblje, 16 klijenata) |
 | Vozila | 35, svako sa slikom i thumbnailom |
 | Rezervacije | 95, kroz sest mjeseci unazad i dva mjeseca unaprijed, u sva cetiri statusa |
 | Placanja | 92 |
@@ -1226,7 +1226,8 @@ trošak agencije, a za jeftinije se razlika ne vraća — zamjena je usluga agen
 situaciji kad bi alternativa bila otkazivanje. Status se ne mijenja; zamjena ide u historiju rezervacije kao audit
 zapis (`RezervacijaStateMachine.ZabiljeziIzmjenu`: ko, kada, opis „staro → novo" i
 napomena). Poslovnica rezervacije prati novo vozilo, jer se vozilo preuzima tamo gdje
-stoji. Poslije upisa ide poruka `vozilo.zamijenjeno`, iz koje worker pravi
+stoji. Uposleniku se zato nude samo vozila njegove poslovnice (vidi „Uposlenik radi u
+jednoj poslovnici"). Poslije upisa ide poruka `vozilo.zamijenjeno`, iz koje worker pravi
 obavještenje (`VoziloZamijenjeno`) i email klijentu.
 
 ---
@@ -2662,6 +2663,63 @@ administratorskom unosu, gdje ih bira administrator, a ne onaj ko nalog dobija.
 
 ---
 
+## Uposlenik radi u jednoj poslovnici
+
+Prva verzija je svakom uposleniku davala cijelu agenciju: vidio je i mijenjao vozila,
+rezervacije i primopredaje svih poslovnica. To ne odgovara tome kako agencija radi —
+uposlenik u Mostaru nema šta izdavati vozilo koje stoji u Splitu. Sada je svaki
+uposlenik vezan za jednu poslovnicu (`Korisnik.PoslovnicaId`), a administrator i dalje
+vidi sve.
+
+| | Administrator | Uposlenik |
+|---|---|---|
+| vozila, galerija, blokade | sve poslovnice | samo svoja |
+| rezervacije, otkazivanje, zamjena vozila | sve poslovnice | samo svoja |
+| primopredaja i raspored | sve poslovnice | samo svoja |
+| kalendar flote | sve poslovnice | samo svoja |
+| pregled poslovanja | cijela agencija | brojke svoje poslovnice |
+| PDF izvještaji | da, po poslovnici ili za sve | ne |
+| vozačke dozvole | da | da — dozvola pripada klijentu, ne poslovnici |
+| recenzije | da | da — moderacija sadržaja nije vezana za poslovnicu |
+
+**Poslovnica se čita iz baze, prema korisniku iz tokena.** Ne dolazi iz zahtjeva — da
+dolazi, uposlenik bi je jednostavno promijenio u adresi. To radi jedan servis,
+`IOpsegPoslovnice` (Scoped, čita poslovnicu najviše jednom po zahtjevu), i svaki servis
+koji radi sa podacima poslovnice ga pita na dva načina:
+
+- **liste** (`OgranicenjeAsync`) — filter po poslovnici se dodaje u upit, preko onoga
+  što je uposlenik izabrao u filteru. Lista mu zato nikad ne vrati tuđe zapise;
+- **pojedinačni zapis i izmjene** (`ObaveznoDozvoljenaAsync`,
+  `ObaveznoDozvoljenoVoziloAsync`) — zapis druge poslovnice daje 403.
+
+Uposlenik bez poslovnice ne vidi ništa, umjesto da vidi sve. Do toga ne bi trebalo doći,
+jer servis korisnika poslovnicu uposleniku traži, ali greška u podacima ne smije otvoriti
+pristup cijeloj agenciji.
+
+**Ko je vezan** odlučuje jedno pravilo, `VezaZaPoslovnicu.JeVezan` (pokriveno testom):
+uposlenik jeste, administrator nije ni kad uz to ima i ulogu uposlenika, klijent nije.
+Administratoru i klijentu se poslovnica ni ne čuva — da ne ostane zaboravljena vrijednost
+koja bi, kad mu se jednom oduzme administratorska uloga, tiho odredila šta vidi.
+
+Poslovnicu bira administrator na formi korisnika na desktopu; polje se pojavi kad je
+odabrana uloga uposlenika. Ide i uz izmjenu naloga i uz promjenu uloga
+(`UlogeKorisnikaRequest.PoslovnicaId`), jer kad nalog postane uposlenik, server mora
+odmah znati gdje radi. Poslovnica u kojoj rade uposlenici se ne može obrisati.
+
+Promjena poslovnice ne traži novu prijavu. Token ne nosi poslovnicu, nego se ona čita
+pri svakom zahtjevu, pa premještanje važi od sljedećeg klika.
+
+**Desktop** prati isto pravilo, ali se ne oslanja na njega: uposleniku u filterima
+nudi samo njegovu poslovnicu, novo vozilo mu stavlja u nju, u zaglavlju piše gdje radi,
+a stavku „Izvještaji" ne prikazuje. Server bi ga ionako odbio; ovo je da ne gleda
+dugmad koja mu ne rade.
+
+Zamjenska vozila uposleniku se nude samo iz njegove poslovnice. Zamjena seli
+rezervaciju tamo gdje novo vozilo stoji, pa bi mu vozilo iz druge poslovnice odnijelo
+rezervaciju iz ruku. Administrator i dalje bira iz cijelog grada.
+
+---
+
 ## Pregled poslovanja i kalendar flote
 
 > ✅ Urađeno nakon faze 16, kao priprema za desktop aplikaciju.
@@ -2779,6 +2837,10 @@ nego se popuni cijela forma.
 ## PDF izvještaji
 
 > ✅ Faza 19 je gotova: iskorištenost flote i finansijski pregled.
+
+Izvještaji su samo za administratora (`[Authorize(Roles = Administrator)]` na cijelom
+kontroleru). Oni porede poslovnice i pokazuju prihod cijele agencije, a uposlenik radi u
+jednoj poslovnici i za svoj posao ima pregled poslovanja sveden na nju.
 
 Oba izvještaja imaju **dva oblika**: podatak i PDF. Podatak (`GET .../iskoristenost-flote`)
 služi za pregled prije generisanja — uputstvo traži da korisnik provjeri parametre prije
@@ -3468,6 +3530,10 @@ Sve seed lozinke su `test`.
 | Mobilna | `mobile` |
 | Administrator | `administrator` |
 | Uposlenik | `uposlenik` |
+
+Nalog `uposlenik` radi u poslovnici Mostar i vidi samo nju. Uposlenici ostalih
+poslovnica su `adna.husic` (Neum), `mirza.begic` (Split) i `edin.mehic` (Dubrovnik),
+sa istom lozinkom.
 
 Sve četiri prijave su provjerene nakon faze 6 i rade. To nije formalnost: seed i
 prijava moraju koristiti **isti BCrypt format**, jer ako se raziđu, nijedan seed

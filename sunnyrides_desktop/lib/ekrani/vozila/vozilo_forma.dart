@@ -7,6 +7,8 @@ import '../../modeli/stavka_sifrarnika.dart';
 import '../../modeli/vozilo.dart';
 import '../../servisi/sifrarnik_servis.dart';
 import '../../servisi/vozilo_servis.dart';
+import '../../stanje/opseg_poslovnice.dart';
+import '../../stanje/sesija.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../sifrarnici/poslovnica_forma.dart';
 import 'galerija_vozila.dart';
@@ -48,11 +50,17 @@ class _VoziloFormaStanje extends State<VoziloForma> {
   bool _snimanje = false;
   String? _greska;
 
+  /// Poslovnicu otvara samo administrator; uposlenik radi u postojecoj.
+  bool _jeAdministrator = false;
+
   bool get _jeIzmjena => widget.vozilo != null;
 
   @override
   void initState() {
     super.initState();
+
+    final ja = context.read<Sesija>().korisnik;
+    _jeAdministrator = ja?.jeAdministrator ?? false;
 
     final klijent = context.read<ApiKlijent>();
     _servis = VoziloServis(klijent);
@@ -74,7 +82,10 @@ class _VoziloFormaStanje extends State<VoziloForma> {
     _depozit = TextEditingController(text: _iznos(vozilo?.iznosDepozita));
 
     _modelId = vozilo?.modelVozilaId;
-    _poslovnicaId = vozilo?.poslovnicaId;
+    // Novo vozilo uposlenika ide u njegovu poslovnicu - druge ni nema na izbor.
+    _poslovnicaId =
+        vozilo?.poslovnicaId ??
+        (ja != null && ja.vezanZaPoslovnicu ? ja.poslovnicaId : null);
     _aktivno = vozilo?.aktivno ?? true;
 
     _ucitajSifrarnike();
@@ -114,7 +125,7 @@ class _VoziloFormaStanje extends State<VoziloForma> {
 
       setState(() {
         _modeli = modeli;
-        _poslovnice = poslovnice;
+        _poslovnice = dozvoljenePoslovnice(context, poslovnice);
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {
@@ -276,15 +287,17 @@ class _VoziloFormaStanje extends State<VoziloForma> {
                                 : null,
                           ),
                         ),
-                        const SizedBox(width: Razmaci.s),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: IconButton.outlined(
-                            tooltip: 'Nova poslovnica',
-                            onPressed: _novaPoslovnica,
-                            icon: const Icon(Icons.add, size: 18),
+                        if (_jeAdministrator) ...[
+                          const SizedBox(width: Razmaci.s),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: IconButton.outlined(
+                              tooltip: 'Nova poslovnica',
+                              onPressed: _novaPoslovnica,
+                              icon: const Icon(Icons.add, size: 18),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

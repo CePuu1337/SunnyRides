@@ -5,6 +5,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 import '../../modeli/kalendar.dart';
 import '../../modeli/vozilo.dart';
 import '../../servisi/rezervacija_servis.dart';
+import '../../stanje/sesija.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../../widgeti/obavjestenje.dart';
 import '../../widgeti/slicica.dart';
@@ -142,6 +143,9 @@ class _ZamjenaVozilaDijalogStanje extends State<ZamjenaVozilaDijalog> {
 
   @override
   Widget build(BuildContext context) {
+    // Uposlenik bira samo iz svoje poslovnice, administrator iz cijelog grada.
+    final vezan = context.read<Sesija>().korisnik?.vezanZaPoslovnicu ?? false;
+
     return DijalogForme(
       naslov: 'Zamjensko vozilo',
       podnaslov:
@@ -163,16 +167,24 @@ class _ZamjenaVozilaDijalogStanje extends State<ZamjenaVozilaDijalog> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Obavjestenje.info(
-                  'Ponuđena su sva vozila u istom gradu koja su slobodna u terminu '
-                  'rezervacije i koja klijent smije voziti po svojoj dozvoli. Prva '
-                  'su vozila iz iste poslovnice i istog tipa. Cijena rezervacije '
-                  'ostaje ista, bez obzira na tarifu zamjenskog vozila.',
+                  vezan
+                      ? 'Ponuđena su vozila vaše poslovnice koja su slobodna u '
+                            'terminu rezervacije i koja klijent smije voziti po '
+                            'svojoj dozvoli. Prva su vozila istog tipa. Cijena '
+                            'rezervacije ostaje ista, bez obzira na tarifu '
+                            'zamjenskog vozila.'
+                      : 'Ponuđena su sva vozila u istom gradu koja su slobodna u '
+                            'terminu rezervacije i koja klijent smije voziti po '
+                            'svojoj dozvoli. Prva su vozila iz iste poslovnice i '
+                            'istog tipa. Cijena rezervacije ostaje ista, bez obzira '
+                            'na tarifu zamjenskog vozila.',
                 ),
                 const SizedBox(height: Razmaci.l),
                 if (_kandidati.isEmpty)
                   Obavjestenje.upozorenje(
-                    'U ovom gradu nema slobodnog vozila koje klijent smije voziti '
-                    'u ovom terminu. Rezervaciju možete otkazati uz puni povrat.',
+                    '${vezan ? 'U vašoj poslovnici' : 'U ovom gradu'} nema '
+                    'slobodnog vozila koje klijent smije voziti u ovom terminu. '
+                    'Rezervaciju možete otkazati uz puni povrat.',
                   )
                 else
                   RadioGroup<int>(

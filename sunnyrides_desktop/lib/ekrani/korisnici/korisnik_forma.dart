@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/korisnik_servis.dart';
+import '../../servisi/sifrarnik_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
 
 /// Otvaranje naloga i izmjena postojeceg.
@@ -31,10 +33,18 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
   late final TextEditingController _potvrda;
 
   late final KorisnikServis _servis;
+  late final SifrarnikServis _sifrarnici;
 
   late DateTime _datumRodjenja;
   late Set<int> _odabraneUloge;
   late bool _aktivan;
+
+  List<StavkaSifrarnika> _poslovnice = const [];
+
+  // Ostaje zapamcena i kad se uloga uposlenika skine, jer izmjena naloga ide prije
+  // promjene uloga i server je tada jos vidi kao uposlenika. Kome ne treba, server
+  // je ionako ne cuva.
+  int? _poslovnicaId;
 
   bool _snimanje = false;
   String? _greska;
@@ -45,7 +55,9 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
   void initState() {
     super.initState();
 
-    _servis = KorisnikServis(context.read<ApiKlijent>());
+    final klijent = context.read<ApiKlijent>();
+    _servis = KorisnikServis(klijent);
+    _sifrarnici = SifrarnikServis(klijent);
 
     final korisnik = widget.korisnik;
 
@@ -65,7 +77,37 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
         .where((u) => korisnik?.uloge.contains(u.naziv) ?? false)
         .map((u) => u.id)
         .toSet();
+
+    _poslovnicaId = korisnik?.poslovnicaId;
+    _ucitajPoslovnice();
   }
+
+  Future<void> _ucitajPoslovnice() async {
+    try {
+      final poslovnice = await _sifrarnici.ucitaj(SifrarnikServis.poslovnice);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() => _poslovnice = poslovnice);
+    } on ApiGreska catch (greska) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() => _greska = greska.poruka);
+    }
+  }
+
+  bool _odabranaUloga(String naziv) => widget.uloge.any(
+    (u) => u.naziv == naziv && _odabraneUloge.contains(u.id),
+  );
+
+  /// Uposlenik radi u jednoj poslovnici. Administrator vidi sve, pa za njega
+  /// poslovnica nema znacenja ni kad ima i ulogu uposlenika.
+  bool get _trebaPoslovnica =>
+      _odabranaUloga(Uloge.uposlenik) && !_odabranaUloga(Uloge.administrator);
 
   @override
   void dispose() {
@@ -104,6 +146,12 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
       return;
     }
 
+    if (_trebaPoslovnica && _poslovnicaId == null) {
+      setState(() => _greska = 'Odaberite poslovnicu u kojoj uposlenik radi.');
+
+      return;
+    }
+
     setState(() {
       _snimanje = true;
       _greska = null;
@@ -118,6 +166,7 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
           'telefon': _telefon.text.trim().isEmpty ? null : _telefon.text.trim(),
           'datumRodjenja': _datumRodjenja.toUtc().toIso8601String(),
           'aktivan': _aktivan,
+          'poslovnicaId': _poslovnicaId,
         });
 
         // Uloge se postavljaju zasebnim pozivom, jer ih izmjena naloga ne nosi -
@@ -125,6 +174,7 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
         await _servis.postaviUloge(
           widget.korisnik!.id,
           _odabraneUloge.toList(),
+          poslovnicaId: _poslovnicaId,
         );
       } else {
         await _servis.dodaj({
@@ -137,6 +187,7 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
           'lozinka': _lozinka.text,
           'potvrdaLozinke': _potvrda.text,
           'ulogeIds': _odabraneUloge.toList(),
+          'poslovnicaId': _trebaPoslovnica ? _poslovnicaId : null,
         });
       }
 
@@ -283,6 +334,32 @@ class _KorisnikFormaStanje extends State<KorisnikForma> {
                   ),
               ],
             ),
+            if (_trebaPoslovnica) ...[
+              const SizedBox(height: Razmaci.l),
+              DropdownButtonFormField<int>(
+                initialValue: _poslovnice.any((x) => x.id == _poslovnicaId)
+                    ? _poslovnicaId
+                    : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Poslovnica u kojoj radi',
+                  helperText:
+                      'Uposlenik vidi i uređuje samo vozila, rezervacije i '
+                      'primopredaje svoje poslovnice.',
+                ),
+                items: [
+                  for (final poslovnica in _poslovnice)
+                    DropdownMenuItem(
+                      value: poslovnica.id,
+                      child: Text(poslovnica.naziv),
+                    ),
+                ],
+                onChanged: (id) => setState(() {
+                  _poslovnicaId = id;
+                  _greska = null;
+                }),
+              ),
+            ],
           ],
         ),
       ),

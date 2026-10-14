@@ -433,6 +433,13 @@ class _Red extends StatelessWidget {
                     pozadina: Boje.neutralnoPozadina,
                     bojaTeksta: Boje.neutralnoTekst,
                   ),
+                if (korisnik.vezanZaPoslovnicu &&
+                    korisnik.poslovnicaNaziv != null)
+                  StatusnaPilula(
+                    tekst: korisnik.poslovnicaNaziv!,
+                    pozadina: Boje.infoPozadina,
+                    bojaTeksta: Boje.infoTekst,
+                  ),
               ],
             ),
           ),

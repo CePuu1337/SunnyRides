@@ -433,6 +433,9 @@ namespace SunnyRides.Services.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("PoslovnicaId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Prezime")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -456,6 +459,8 @@ namespace SunnyRides.Services.Migrations
 
                     b.HasIndex("KorisnickoIme")
                         .IsUnique();
+
+                    b.HasIndex("PoslovnicaId");
 
                     b.ToTable("Korisnik", (string)null);
                 });
@@ -1570,6 +1575,16 @@ namespace SunnyRides.Services.Migrations
                         .IsRequired();
 
                     b.Navigation("Korisnik");
+                });
+
+            modelBuilder.Entity("SunnyRides.Services.Database.Entities.Korisnik", b =>
+                {
+                    b.HasOne("SunnyRides.Services.Database.Entities.Poslovnica", "Poslovnica")
+                        .WithMany()
+                        .HasForeignKey("PoslovnicaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Poslovnica");
                 });
 
             modelBuilder.Entity("SunnyRides.Services.Database.Entities.KorisnikRole", b =>

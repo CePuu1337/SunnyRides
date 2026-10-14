@@ -46,6 +46,7 @@ public static class RegistracijaServisa
 
         // CurrentUserService cita iskljucivo iz ClaimsPrincipal-a trenutnog zahtjeva.
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IOpsegPoslovnice, OpsegPoslovnice>();
 
         services.AddScoped<IAuthService, AuthService>();
 

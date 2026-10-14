@@ -6,6 +6,7 @@ import '../../modeli/rezervacija.dart';
 import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/rezervacija_servis.dart';
 import '../../servisi/sifrarnik_servis.dart';
+import '../../stanje/opseg_poslovnice.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/paginator.dart';
 import '../../widgeti/polja.dart';
@@ -48,7 +49,7 @@ class _RezervacijeEkranStanje extends State<RezervacijeEkran> {
       final poslovnice = await _sifrarnici.ucitaj(SifrarnikServis.poslovnice);
 
       if (mounted) {
-        setState(() => _poslovnice = poslovnice);
+        setState(() => _poslovnice = dozvoljenePoslovnice(context, poslovnice));
       }
     } on ApiGreska {
       // Filter po poslovnici ostaje prazan, lista i bez njega radi.

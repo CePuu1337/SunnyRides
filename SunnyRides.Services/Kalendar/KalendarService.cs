@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
 using SunnyRides.Model.SearchObjects;
+using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Exceptions;
@@ -21,10 +22,12 @@ public class KalendarService : IKalendarService
     private const int MaksimalnoVozila = 200;
 
     private readonly SunnyRidesDbContext _context;
+    private readonly IOpsegPoslovnice _opseg;
 
-    public KalendarService(SunnyRidesDbContext context)
+    public KalendarService(SunnyRidesDbContext context, IOpsegPoslovnice opseg)
     {
         _context = context;
+        _opseg = opseg;
     }
 
     public async Task<KalendarFloteDto> KalendarAsync(
@@ -92,6 +95,13 @@ public class KalendarService : IKalendarService
         KalendarSearchObject search, CancellationToken ct)
     {
         var upit = _context.Vozila.AsNoTracking().Where(x => x.Aktivno);
+
+        // Uposlenik vidi samo vozila svoje poslovnice, sta god da je trazio u filteru.
+        var ogranicenje = await _opseg.OgranicenjeAsync(ct);
+        if (ogranicenje.HasValue)
+        {
+            upit = upit.Where(x => x.PoslovnicaId == ogranicenje.Value);
+        }
 
         if (search.PoslovnicaId.HasValue)
         {

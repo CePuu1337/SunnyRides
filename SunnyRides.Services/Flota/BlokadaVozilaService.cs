@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
@@ -26,11 +27,34 @@ public class BlokadaVozilaService
     private const int MaksimalnoTrajanjeDana = 365;
 
     private readonly ICurrentUserService _trenutniKorisnik;
+    private readonly IOpsegPoslovnice _opseg;
 
-    public BlokadaVozilaService(SunnyRidesDbContext context, ICurrentUserService trenutniKorisnik)
+    /// <summary>Poslovnica uposlenika; lista blokada se suzava na vozila te poslovnice.</summary>
+    private int? _ogranicenjeNaPoslovnicu;
+
+    public BlokadaVozilaService(
+        SunnyRidesDbContext context, ICurrentUserService trenutniKorisnik, IOpsegPoslovnice opseg)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
+        _opseg = opseg;
+    }
+
+    public override async Task<PagedResult<BlokadaVozilaDto>> GetAsync(
+        BlokadaVozilaSearchObject search, CancellationToken ct = default)
+    {
+        _ogranicenjeNaPoslovnicu = await _opseg.OgranicenjeAsync(ct);
+
+        return await base.GetAsync(search, ct);
+    }
+
+    public override async Task<BlokadaVozilaDto> GetByIdAsync(int id, CancellationToken ct = default)
+    {
+        var blokada = await base.GetByIdAsync(id, ct);
+
+        await ObaveznoSvojeVoziloAsync(blokada.VoziloId, ct);
+
+        return blokada;
     }
 
     protected override string NazivEntiteta => "Blokada vozila";
@@ -40,6 +64,11 @@ public class BlokadaVozilaService
     protected override IQueryable<BlokadaVozila> AddFilter(
         BlokadaVozilaSearchObject search, IQueryable<BlokadaVozila> upit)
     {
+        if (_ogranicenjeNaPoslovnicu is { } poslovnicaUposlenika)
+        {
+            upit = upit.Where(x => x.Vozilo.PoslovnicaId == poslovnicaUposlenika);
+        }
+
         if (search.VoziloId.HasValue)
         {
             upit = upit.Where(x => x.VoziloId == search.VoziloId.Value);
@@ -97,6 +126,7 @@ public class BlokadaVozilaService
         BlokadaVozilaInsertRequest request, BlokadaVozila entitet, CancellationToken ct)
     {
         await ObaveznoPostojiAsync<Vozilo>(request.VoziloId, "Vozilo", ct);
+        await ObaveznoSvojeVoziloAsync(request.VoziloId, ct);
         ProvjeriPeriod(request.DatumOd, request.DatumDo);
 
         // Ko je blokadu evidentirao dolazi iskljucivo iz tokena. Zahtjev to polje
@@ -105,15 +135,24 @@ public class BlokadaVozilaService
         entitet.DatumKreiranja = DateTime.UtcNow;
     }
 
-    protected override Task BeforeUpdateAsync(
+    protected override async Task BeforeUpdateAsync(
         BlokadaVozilaUpdateRequest request, BlokadaVozila entitet, CancellationToken ct)
     {
+        await ObaveznoSvojeVoziloAsync(entitet.VoziloId, ct);
         ProvjeriPeriod(request.DatumOd, request.DatumDo);
 
         // KreiraoKorisnikId se pri izmjeni ne dira - blokada ostaje pripisana onome
         // ko ju je unio, cak i kad je kasnije neko drugi ispravi.
-        return Task.CompletedTask;
     }
+
+    protected override async Task BeforeDeleteAsync(BlokadaVozila entitet, CancellationToken ct)
+    {
+        await ObaveznoSvojeVoziloAsync(entitet.VoziloId, ct);
+    }
+
+    /// <summary>Blokade zadaje i mijenja uposlenik poslovnice u kojoj vozilo stoji.</summary>
+    private Task ObaveznoSvojeVoziloAsync(int voziloId, CancellationToken ct) =>
+        _opseg.ObaveznoDozvoljenoVoziloAsync(voziloId, ct);
 
     private static void ProvjeriPeriod(DateTime od, DateTime doDatuma)
     {

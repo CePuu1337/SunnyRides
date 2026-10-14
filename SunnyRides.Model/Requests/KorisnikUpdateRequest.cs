@@ -32,4 +32,10 @@ public class KorisnikUpdateRequest
     public DateTime DatumRodjenja { get; set; }
 
     public bool Aktivan { get; set; } = true;
+
+    /// <summary>
+    /// Poslovnica u kojoj uposlenik radi. Obavezna kad je korisnik uposlenik; za
+    /// administratora i klijenta se ignorise.
+    /// </summary>
+    public int? PoslovnicaId { get; set; }
 }

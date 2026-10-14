@@ -155,7 +155,7 @@ public partial class DatabaseSeeder
                 DatumOd = pocetak,
                 DatumDo = pocetak.AddDays(Broj(1, 5)).AddHours(10),
                 Razlog = Izaberi(razloziBlokade),
-                KreiraoKorisnik = _uposlenik,
+                KreiraoKorisnik = UposlenikZa(vozilo.Poslovnica),
                 DatumKreiranja = pocetak.AddDays(-Broj(1, 10))
             });
         }

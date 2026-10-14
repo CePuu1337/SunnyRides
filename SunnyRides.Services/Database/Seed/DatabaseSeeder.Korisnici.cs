@@ -13,6 +13,11 @@ public partial class DatabaseSeeder
     private Korisnik _administrator = null!;
     private Korisnik _uposlenik = null!;
 
+    /// <summary>Uposlenik svake poslovnice - on u seedu izdaje i prima njena vozila.</summary>
+    private readonly Dictionary<Poslovnica, Korisnik> _uposleniciPoslovnica = new();
+
+    private Korisnik UposlenikZa(Poslovnica poslovnica) => _uposleniciPoslovnica[poslovnica];
+
     /// <summary>
     /// Kategorije koje pojedini klijent stvarno posjeduje. Koristi se kasnije, da se
     /// rezervacija ne dodijeli klijentu koji to vozilo ne smije voziti.
@@ -58,8 +63,31 @@ public partial class DatabaseSeeder
         _administrator = Napravi("administrator", "Ammar", "Puce", "administrator@sunnyrides.example", "+387 61 100 100", 28, _roleAdministrator);
         var desktop = Napravi("desktop", "Desktop", "Pregled", "desktop@sunnyrides.example", "+387 61 100 101", 30, _roleAdministrator);
         _uposlenik = Napravi("uposlenik", "Emina", "Hodzic", "emina.hodzic@sunnyrides.example", "+387 61 200 200", 26, _roleUposlenik);
-        var uposlenikDrugi = Napravi("mirza.begic", "Mirza", "Begic", "mirza.begic@sunnyrides.example", "+387 61 200 201", 34, _roleUposlenik);
-        _osoblje = new List<Korisnik> { _administrator, desktop, _uposlenik, uposlenikDrugi };
+        var uposlenikSplit = Napravi("mirza.begic", "Mirza", "Begic", "mirza.begic@sunnyrides.example", "+387 61 200 201", 34, _roleUposlenik);
+        var uposlenikNeum = Napravi("adna.husic", "Adna", "Husic", "adna.husic@sunnyrides.example", "+387 61 200 202", 29, _roleUposlenik);
+        var uposlenikDubrovnik = Napravi("edin.mehic", "Edin", "Mehic", "edin.mehic@sunnyrides.example", "+387 61 200 203", 37, _roleUposlenik);
+
+        // Svaki uposlenik radi u jednoj poslovnici i vidi samo nju. Nalog "uposlenik"
+        // je u Mostaru; administrator vidi sve poslovnice.
+        var poPoslovnici = new (Korisnik Uposlenik, string Poslovnica)[]
+        {
+            (uposlenikNeum, "SunnyRides Neum"),
+            (_uposlenik, "SunnyRides Mostar"),
+            (uposlenikSplit, "SunnyRides Split"),
+            (uposlenikDubrovnik, "SunnyRides Dubrovnik")
+        };
+
+        foreach (var (uposlenik, naziv) in poPoslovnici)
+        {
+            var poslovnica = _poslovnice.Single(x => x.Naziv == naziv);
+            uposlenik.Poslovnica = poslovnica;
+            _uposleniciPoslovnica[poslovnica] = uposlenik;
+        }
+
+        _osoblje = new List<Korisnik>
+        {
+            _administrator, desktop, _uposlenik, uposlenikSplit, uposlenikNeum, uposlenikDubrovnik
+        };
 
         // --- klijenti ---
         var mobile = Napravi("mobile", "Mobilni", "Pregled", "mobile@sunnyrides.example", "+387 62 300 300", 29, _roleKlijent);

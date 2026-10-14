@@ -4,6 +4,7 @@ using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
 using SunnyRides.Model.Poruke;
 using SunnyRides.Model.Requests;
+using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
@@ -28,6 +29,7 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
     private readonly IRezervacijaStateMachine _stateMachine;
     private readonly IRezervacijaService _rezervacije;
     private readonly IObjavljivacPoruka _objavljivac;
+    private readonly IOpsegPoslovnice _opseg;
 
     public ZamjenaVozilaService(
         SunnyRidesDbContext context,
@@ -35,7 +37,8 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
         IDozvolaService dozvolaService,
         IRezervacijaStateMachine stateMachine,
         IRezervacijaService rezervacije,
-        IObjavljivacPoruka objavljivac)
+        IObjavljivacPoruka objavljivac,
+        IOpsegPoslovnice opseg)
     {
         _context = context;
         _dostupnost = dostupnost;
@@ -43,12 +46,14 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
         _stateMachine = stateMachine;
         _rezervacije = rezervacije;
         _objavljivac = objavljivac;
+        _opseg = opseg;
     }
 
     public async Task<List<VoziloDto>> ZamjenskaVozilaAsync(
         int rezervacijaId, CancellationToken ct = default)
     {
         var rezervacija = await UcitajAsync(rezervacijaId, ct);
+        await _opseg.ObaveznoDozvoljenaAsync(rezervacija.PoslovnicaId, ct);
         ProvjeriDaSeMozeMijenjati(rezervacija);
 
         var staro = rezervacija.Vozilo;
@@ -61,6 +66,15 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
                         && x.Id != staro.Id
                         && x.Poslovnica.GradId == staro.Poslovnica.GradId
                         && kategorije.Contains(x.ModelVozila.KategorijaDozvoleId));
+
+        // Uposlenik nudi samo vozila svoje poslovnice. Zamjena rezervaciju seli tamo
+        // gdje novo vozilo stoji, pa bi mu vozilo iz druge poslovnice odnijelo
+        // rezervaciju iz ruku. Administrator bira iz cijelog grada.
+        var ogranicenje = await _opseg.OgranicenjeAsync(ct);
+        if (ogranicenje.HasValue)
+        {
+            upit = upit.Where(x => x.PoslovnicaId == ogranicenje.Value);
+        }
 
         // Ista provjera dostupnosti koju koriste pretraga i kreiranje rezervacije.
         upit = _dostupnost.DodajUslovSlobodno(upit, rezervacija.DatumOd, rezervacija.DatumDo);
@@ -102,6 +116,7 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
         await _dostupnost.ZakljucajVoziloAsync(request.NovoVoziloId, ct);
 
         var rezervacija = await UcitajZaIzmjenuAsync(rezervacijaId, ct);
+        await _opseg.ObaveznoDozvoljenaAsync(rezervacija.PoslovnicaId, ct);
         ProvjeriDaSeMozeMijenjati(rezervacija);
 
         var staro = rezervacija.Vozilo;
@@ -114,6 +129,7 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
                 $"Vozilo sa identifikatorom {request.NovoVoziloId} ne postoji.");
 
         ProvjeriZamjensko(staro, novo);
+        await _opseg.ObaveznoDozvoljenaAsync(novo.PoslovnicaId, ct);
 
         // Klijent mora smjeti voziti novo vozilo - ista provjera kao pri rezervaciji,
         // na datum preuzimanja.

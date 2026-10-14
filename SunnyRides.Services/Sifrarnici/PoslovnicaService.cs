@@ -96,6 +96,13 @@ public class PoslovnicaService
             throw new BusinessException(
                 $"Poslovnica \"{entitet.Naziv}\" se ne moze obrisati jer za nju postoje zalihe opreme ({brojStanja}).");
         }
+
+        var brojUposlenika = await Context.Korisnici.CountAsync(x => x.PoslovnicaId == entitet.Id, ct);
+        if (brojUposlenika > 0)
+        {
+            throw new BusinessException(
+                $"Poslovnica \"{entitet.Naziv}\" se ne moze obrisati jer u njoj rade uposlenici ({brojUposlenika}). Prvo ih premjestite u drugu poslovnicu.");
+        }
     }
 
     /// <summary>

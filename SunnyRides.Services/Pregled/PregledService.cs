@@ -1,21 +1,32 @@
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
+using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
+using SunnyRides.Services.Database.Entities;
 
 namespace SunnyRides.Services.Pregled;
 
 public class PregledService : IPregledService
 {
     private readonly SunnyRidesDbContext _context;
+    private readonly IOpsegPoslovnice _opseg;
 
-    public PregledService(SunnyRidesDbContext context)
+    // Poslovnica na koju je pregled sveden. Postavlja se na pocetku pregleda i vazi za
+    // sve upite u njemu.
+    private int? _poslovnicaId;
+
+    public PregledService(SunnyRidesDbContext context, IOpsegPoslovnice opseg)
     {
         _context = context;
+        _opseg = opseg;
     }
 
     public async Task<PregledPoslovanjaDto> PregledAsync(CancellationToken ct = default)
     {
+        // Uposlenik vidi brojke svoje poslovnice, administrator cijele agencije.
+        _poslovnicaId = await _opseg.OgranicenjeAsync(ct);
+
         var sada = DateTime.UtcNow;
         var pocetakMjeseca = new DateTime(sada.Year, sada.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var pocetakDana = sada.Date;
@@ -24,7 +35,7 @@ public class PregledService : IPregledService
         // Skup vozila koja su u ovom trenutku kod klijenata. Racuna se jednom i koristi
         // na tri mjesta - u metrikama i u oba presjeka - umjesto da se isti uslov pise
         // tri puta i tri puta izvrsava.
-        var uNajmu = await _context.Rezervacije
+        var uNajmu = await Rezervacije()
             .AsNoTracking()
             .Where(x => x.Status == StatusRezervacije.Confirmed
                         && x.DatumOd <= sada && x.DatumDo >= sada
@@ -68,30 +79,32 @@ public class PregledService : IPregledService
         int vozilaUNajmu,
         CancellationToken ct)
     {
-        var aktivnihVozila = await _context.Vozila.CountAsync(x => x.Aktivno, ct);
+        var aktivnihVozila = await Vozila().CountAsync(x => x.Aktivno, ct);
 
-        var aktivneRezervacije = await _context.Rezervacije
+        var aktivneRezervacije = await Rezervacije()
             .CountAsync(x => x.Status == StatusRezervacije.Confirmed && x.DatumDo >= sada, ct);
 
         // Prihod se racuna iz stvarno naplacenog iznosa, ne iz iznosa rezervacije.
         // Rezervacija nosi koliko je trebalo naplatiti, a placanje koliko jeste.
-        var naplaceno = await _context.Placanja
+        var naplaceno = await Placanja()
             .Where(x => x.Status == StatusPlacanja.Succeeded && x.DatumKreiranja >= pocetakMjeseca)
             .SumAsync(x => (decimal?)x.NaplaceniIznos, ct) ?? 0m;
 
         // Povrat koji je odbijen ili ponisten nije novac koji je otisao, pa se ne broji.
-        var refundirano = await _context.Refundi
+        var refundirano = await Refundi()
             .Where(x => x.DatumKreiranja >= pocetakMjeseca
                         && x.Status != StatusPlacanja.Failed
                         && x.Status != StatusPlacanja.Canceled)
             .SumAsync(x => (decimal?)x.Iznos, ct) ?? 0m;
 
+        // Dozvola pripada klijentu, ne poslovnici, i svaki uposlenik je moze obraditi.
+        // Zato se ovaj broj ne svodi na poslovnicu.
         var neverifikovaneDozvole = await _context.VozackeDozvole
             .CountAsync(x => x.Status == StatusDozvole.NaCekanju, ct);
 
         // Neplacene rezervacije koje jos drze termin. One kojima je drzanje isteklo
         // preuzima periodicni posao u workeru i osoblje s njima nema sta raditi.
-        var neplaceneRezervacije = await _context.Rezervacije
+        var neplaceneRezervacije = await Rezervacije()
             .CountAsync(x => x.Status == StatusRezervacije.Pending
                              && x.DrziDo != null && x.DrziDo > sada, ct);
 
@@ -133,12 +146,12 @@ public class PregledService : IPregledService
         decimal netoTekuci,
         CancellationToken ct)
     {
-        var naplacenoPrethodno = await _context.Placanja
+        var naplacenoPrethodno = await Placanja()
             .Where(x => x.Status == StatusPlacanja.Succeeded
                         && x.DatumKreiranja >= prethodniOd && x.DatumKreiranja < prethodniDo)
             .SumAsync(x => (decimal?)x.NaplaceniIznos, ct) ?? 0m;
 
-        var refundiranoPrethodno = await _context.Refundi
+        var refundiranoPrethodno = await Refundi()
             .Where(x => x.DatumKreiranja >= prethodniOd && x.DatumKreiranja < prethodniDo
                         && x.Status != StatusPlacanja.Failed
                         && x.Status != StatusPlacanja.Canceled)
@@ -146,18 +159,18 @@ public class PregledService : IPregledService
 
         // Nove rezervacije se broje po datumu kreiranja, bez obzira na to za koji su
         // termin - to je mjera koliko je posla doslo u tom periodu.
-        var noveTekuci = await _context.Rezervacije
+        var noveTekuci = await Rezervacije()
             .CountAsync(x => x.DatumKreiranja >= pocetakMjeseca && x.DatumKreiranja < sada, ct);
 
-        var novePrethodno = await _context.Rezervacije
+        var novePrethodno = await Rezervacije()
             .CountAsync(x => x.DatumKreiranja >= prethodniOd && x.DatumKreiranja < prethodniDo, ct);
 
         // Zavrsene se broje po datumu vracanja, jer se najam tada i zavrsio.
-        var zavrseneTekuci = await _context.Rezervacije
+        var zavrseneTekuci = await Rezervacije()
             .CountAsync(x => x.Status == StatusRezervacije.Completed
                              && x.DatumDo >= pocetakMjeseca && x.DatumDo < sada, ct);
 
-        var zavrsenePrethodno = await _context.Rezervacije
+        var zavrsenePrethodno = await Rezervacije()
             .CountAsync(x => x.Status == StatusRezervacije.Completed
                              && x.DatumDo >= prethodniOd && x.DatumDo < prethodniDo, ct);
 
@@ -217,7 +230,7 @@ public class PregledService : IPregledService
         TipPrimopredaje tip,
         CancellationToken ct)
     {
-        return await _context.Rezervacije
+        return await Rezervacije()
             .AsNoTracking()
             .Where(x => x.Status == StatusRezervacije.Confirmed || x.Status == StatusRezervacije.Completed)
             .Where(uslov)
@@ -245,7 +258,7 @@ public class PregledService : IPregledService
     private async Task<List<PresjekPoTipuDto>> PoTipuAsync(
         IReadOnlyList<int> tipoviUNajmu, CancellationToken ct)
     {
-        var vozila = await _context.Vozila
+        var vozila = await Vozila()
             .AsNoTracking()
             .Where(x => x.Aktivno)
             .GroupBy(x => new { x.ModelVozila.TipVozilaId, x.ModelVozila.TipVozila.Naziv })
@@ -267,7 +280,7 @@ public class PregledService : IPregledService
     private async Task<List<PresjekPoPoslovniciDto>> PoPoslovniciAsync(
         IReadOnlyList<int> poslovniceUNajmu, CancellationToken ct)
     {
-        var vozila = await _context.Vozila
+        var vozila = await Vozila()
             .AsNoTracking()
             .Where(x => x.Aktivno)
             .GroupBy(x => new { x.PoslovnicaId, x.Poslovnica.Naziv })
@@ -285,4 +298,26 @@ public class PregledService : IPregledService
             .OrderByDescending(x => x.BrojVozila)
             .ToList();
     }
+
+    // --- izvori sa ogranicenjem --------------------------------------------
+
+    private IQueryable<Rezervacija> Rezervacije() =>
+        _poslovnicaId is int id
+            ? _context.Rezervacije.Where(x => x.PoslovnicaId == id)
+            : _context.Rezervacije;
+
+    private IQueryable<Vozilo> Vozila() =>
+        _poslovnicaId is int id
+            ? _context.Vozila.Where(x => x.PoslovnicaId == id)
+            : _context.Vozila;
+
+    private IQueryable<Placanje> Placanja() =>
+        _poslovnicaId is int id
+            ? _context.Placanja.Where(x => x.Rezervacija.PoslovnicaId == id)
+            : _context.Placanja;
+
+    private IQueryable<Refund> Refundi() =>
+        _poslovnicaId is int id
+            ? _context.Refundi.Where(x => x.Placanje.Rezervacija.PoslovnicaId == id)
+            : _context.Refundi;
 }

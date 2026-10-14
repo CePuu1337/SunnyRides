@@ -6,6 +6,7 @@ import '../../modeli/stavka_sifrarnika.dart';
 import '../../modeli/vozilo.dart';
 import '../../servisi/sifrarnik_servis.dart';
 import '../../servisi/vozilo_servis.dart';
+import '../../stanje/opseg_poslovnice.dart';
 import '../../stanje/sesija.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/paginator.dart';
@@ -64,7 +65,7 @@ class _VozilaEkranStanje extends State<VozilaEkran> {
       setState(() {
         _marke = marke;
         _tipovi = tipovi;
-        _poslovnice = poslovnice;
+        _poslovnice = dozvoljenePoslovnice(context, poslovnice);
       });
     } on ApiGreska {
       // Filteri ostaju prazni. Lista i bez njih radi, pa se ekran ne obara zbog toga.

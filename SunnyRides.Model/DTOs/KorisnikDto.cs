@@ -21,4 +21,8 @@ public class KorisnikDto
 
     /// <summary>Nazivi uloga, ne identifikatori - klijent ih prikazuje i po njima odlucuje sta nudi.</summary>
     public List<string> Uloge { get; set; } = new();
+
+    /// <summary>Poslovnica uposlenika. Prazno za administratora i klijenta.</summary>
+    public int? PoslovnicaId { get; set; }
+    public string? PoslovnicaNaziv { get; set; }
 }

@@ -7,4 +7,9 @@ public class UlogeKorisnikaRequest
 {
     [MinLength(1, ErrorMessage = "Korisnik mora imati najmanje jednu ulogu.")]
     public List<int> UlogeIds { get; set; } = new();
+
+    /// <summary>
+    /// Poslovnica, kad korisnik dobija ulogu uposlenika. Prazno zadrzava postojecu.
+    /// </summary>
+    public int? PoslovnicaId { get; set; }
 }

@@ -17,6 +17,8 @@ class Korisnik {
     this.telefon,
     this.putanjaSlike,
     this.thumbnailUrl,
+    this.poslovnicaId,
+    this.poslovnicaNaziv,
   });
 
   final int id;
@@ -32,6 +34,14 @@ class Korisnik {
   final bool aktivan;
   final bool blokiran;
   final List<String> uloge;
+
+  /// Poslovnica u kojoj uposlenik radi. Administrator i klijent je nemaju.
+  final int? poslovnicaId;
+  final String? poslovnicaNaziv;
+
+  /// Uposlenik je vezan za svoju poslovnicu i vidi samo nju. Administrator nije,
+  /// ni kad uz to ima i ulogu uposlenika. Isto pravilo provodi i server.
+  bool get vezanZaPoslovnicu => jeUposlenik && !jeAdministrator;
 
   String get punoIme => '$ime $prezime';
 
@@ -82,6 +92,8 @@ class Korisnik {
       aktivan: citajBool(json['aktivan'], podrazumijevano: true),
       blokiran: citajBool(json['blokiran']),
       uloge: citajTekstove(json['uloge']),
+      poslovnicaId: citajIntIliNista(json['poslovnicaId']),
+      poslovnicaNaziv: json['poslovnicaNaziv']?.toString(),
     );
   }
 }

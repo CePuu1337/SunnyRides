@@ -246,7 +246,11 @@ class _Nalog extends StatelessWidget {
                 ),
               ),
               Text(
-                korisnik.glavnaUloga,
+                // Uposlenik uz ulogu vidi i poslovnicu, jer mu je cijela
+                // aplikacija svedena na nju.
+                korisnik.vezanZaPoslovnicu && korisnik.poslovnicaNaziv != null
+                    ? '${korisnik.glavnaUloga} · ${korisnik.poslovnicaNaziv}'
+                    : korisnik.glavnaUloga,
                 style: const TextStyle(
                   color: Boje.tekstPrigusen,
                   fontSize: 11.5,

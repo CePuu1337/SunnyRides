@@ -110,7 +110,7 @@ public partial class DatabaseSeeder
                             : "Povrat depozita nakon urednog vracanja vozila.",
                         Status = StatusPlacanja.Succeeded,
                         ProviderRefundId = $"re_seed_dep_{rezervacija.Id}",
-                        KreiraoKorisnik = _uposlenik,
+                        KreiraoKorisnik = UposlenikZa(rezervacija.Poslovnica),
                         DatumKreiranja = rezervacija.DatumDo.AddHours(Broj(1, 26))
                     });
                 }
@@ -181,7 +181,7 @@ public partial class DatabaseSeeder
             NivoGoriva = Broj(80, 101),
             Napomena = "Vozilo izdato u ispravnom stanju.",
             KontrolnaListaProdjena = true,
-            IzvrsioKorisnik = _uposlenik
+            IzvrsioKorisnik = UposlenikZa(rezervacija.Poslovnica)
         };
         DodajFotografiju(izdavanje, fotografija);
         _context.Primopredaje.Add(izdavanje);
@@ -206,7 +206,7 @@ public partial class DatabaseSeeder
             Kilometraza = kmPriIzdavanju + predjeno,
             NivoGoriva = Broj(20, 101),
             KontrolnaListaProdjena = true,
-            IzvrsioKorisnik = _uposlenik
+            IzvrsioKorisnik = UposlenikZa(rezervacija.Poslovnica)
         };
         DodajFotografiju(povrat, fotografija);
 
@@ -229,7 +229,7 @@ public partial class DatabaseSeeder
                 Opis = Izaberi(opisi),
                 Iznos = iznosStete,
                 DatumEvidentiranja = povrat.DatumVrijeme,
-                EvidentiraoKorisnik = _uposlenik
+                EvidentiraoKorisnik = UposlenikZa(rezervacija.Poslovnica)
             };
             povrat.Napomena = "Evidentirano ostecenje pri povratu, vidjeti prilozene fotografije.";
         }

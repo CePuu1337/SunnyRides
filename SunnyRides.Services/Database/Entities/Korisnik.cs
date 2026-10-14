@@ -16,6 +16,14 @@ public class Korisnik
     public DateTime DatumRegistracije { get; set; }
 
     /// <summary>
+    /// Poslovnica u kojoj uposlenik radi. Obavezna za uposlenika, prazna za
+    /// administratora i klijenta. Ogranicava sta uposlenik vidi i sta smije raditi
+    /// (vidi <c>IOpsegPoslovnice</c>).
+    /// </summary>
+    public int? PoslovnicaId { get; set; }
+    public Poslovnica? Poslovnica { get; set; }
+
+    /// <summary>
     /// Upisuje se u svaki token pri prijavi. Kad se promijeni lozinka, nalog deaktivira
     /// ili mu se promijene uloge, broj se poveca - i svaki ranije izdat token tog
     /// korisnika prestaje vaziti, na svim uredjajima, bez cekanja da istekne.
