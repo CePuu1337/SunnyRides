@@ -6,6 +6,8 @@ public class GradDto
     public int DrzavaId { get; set; }
     public string Naziv { get; set; } = null!;
     public string? PostanskiBroj { get; set; }
+    public double? Latituda { get; set; }
+    public double? Longituda { get; set; }
 
     /// <summary>Naziv drzave, da lista ne mora za svaki red praviti jos jedan poziv.</summary>
     public string? DrzavaNaziv { get; set; }

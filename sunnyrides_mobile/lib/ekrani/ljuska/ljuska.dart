@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../../stanje/lokacija.dart';
 import '../../stanje/navigacija.dart';
 import '../pocetna/pocetna_ekran.dart';
 import '../pretraga/pretraga_ekran.dart';
@@ -30,6 +31,7 @@ class _LjuskaStanje extends State<Ljuska> {
 
   late final NotifikacijeStanje _notifikacije;
   late final Navigacija _navigacija;
+  final _lokacija = Lokacija();
 
   int _aktivna = 0;
 
@@ -51,6 +53,7 @@ class _LjuskaStanje extends State<Ljuska> {
   void dispose() {
     _navigacija.removeListener(_naZahtjevZaKarticom);
     _navigacija.dispose();
+    _lokacija.dispose();
     _notifikacije.dispose();
     super.dispose();
   }
@@ -82,6 +85,7 @@ class _LjuskaStanje extends State<Ljuska> {
       providers: [
         ChangeNotifierProvider<NotifikacijeStanje>.value(value: _notifikacije),
         ChangeNotifierProvider<Navigacija>.value(value: _navigacija),
+        ChangeNotifierProvider<Lokacija>.value(value: _lokacija),
       ],
       child: PopScope(
         canPop: false,

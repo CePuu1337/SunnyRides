@@ -7,6 +7,14 @@
          ide kroz sistemski birac, pa joj dozvola nije potrebna. -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
+    <!-- Lokacija, samo kad je klijent sam zatrazi dugmetom "Moja lokacija".
+         Android tada nudi izbor izmedju precizne i priblizne lokacije. Precizna
+         je navedena jer aplikaciji sa samo pribliznom dozvolom Android novu
+         poziciju javlja najvise jednom u deset minuta, pa bi klijent koji se
+         pomjerio jos dugo vidio staru najblizu poslovnicu. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
     <application
         android:label="SunnyRides"
         android:name="${applicationName}"

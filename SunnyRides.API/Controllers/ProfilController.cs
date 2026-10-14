@@ -42,6 +42,18 @@ public class ProfilController : ControllerBase
         return await _korisnikService.AzurirajProfilAsync(request, ct);
     }
 
+    /// <summary>
+    /// Samo grad. Mobilna aplikacija ga trazi odmah poslije registracije: forma
+    /// registracije je anonimna i ne moze ucitati listu gradova, pa se grad bira cim
+    /// je klijent prijavljen.
+    /// </summary>
+    [HttpPut("grad")]
+    public async Task<KorisnikDto> PostaviGradAsync(
+        [FromBody] GradKorisnikaRequest request, CancellationToken ct)
+    {
+        return await _korisnikService.PostaviGradAsync(request, ct);
+    }
+
     [HttpPost("slika")]
     [RequestSizeLimit(6 * 1024 * 1024)]
     public async Task<KorisnikDto> PostaviSlikuAsync(IFormFile fajl, CancellationToken ct)

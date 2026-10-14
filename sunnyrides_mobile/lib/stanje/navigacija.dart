@@ -2,10 +2,11 @@ import 'package:flutter/foundation.dart';
 
 /// Sta pretraga treba otvoriti kad je pozove neki drugi ekran.
 class ZahtjevPretrage {
-  const ZahtjevPretrage({this.tekst, this.tipVozilaId});
+  const ZahtjevPretrage({this.tekst, this.tipVozilaId, this.poslovnicaId});
 
   final String? tekst;
   final int? tipVozilaId;
+  final int? poslovnicaId;
 }
 
 /// Prebacivanje izmedju kartica donje trake, izvan ljuske.
@@ -28,8 +29,12 @@ class Navigacija extends ChangeNotifier {
     notifyListeners();
   }
 
-  void otvoriPretragu({String? tekst, int? tipVozilaId}) {
-    _pretraga = ZahtjevPretrage(tekst: tekst, tipVozilaId: tipVozilaId);
+  void otvoriPretragu({String? tekst, int? tipVozilaId, int? poslovnicaId}) {
+    _pretraga = ZahtjevPretrage(
+      tekst: tekst,
+      tipVozilaId: tipVozilaId,
+      poslovnicaId: poslovnicaId,
+    );
     _kartica = 1;
     notifyListeners();
   }

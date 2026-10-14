@@ -27,6 +27,7 @@ class Vozilo {
     this.kategorijaDozvoleOznaka,
     this.poslovnicaNaziv,
     this.gradNaziv,
+    this.udaljenostKm,
     this.thumbnailUrl,
   });
 
@@ -63,6 +64,10 @@ class Vozilo {
   final String? kategorijaDozvoleOznaka;
   final String? poslovnicaNaziv;
   final String? gradNaziv;
+
+  /// Zracna udaljenost poslovnice od klijenta. Prazna kad se ne zna odakle mjeriti.
+  final double? udaljenostKm;
+
   final String? thumbnailUrl;
 
   String get naziv {
@@ -118,7 +123,48 @@ class Vozilo {
       kategorijaDozvoleOznaka: json['kategorijaDozvoleOznaka']?.toString(),
       poslovnicaNaziv: json['poslovnicaNaziv']?.toString(),
       gradNaziv: json['gradNaziv']?.toString(),
+      udaljenostKm: citajDoubleIliNista(json['udaljenostKm']),
       thumbnailUrl: json['thumbnailUrl']?.toString(),
+    );
+  }
+}
+
+/// Poslovnica najbliza klijentu, za karticu na pocetnom ekranu.
+class NajblizaPoslovnica {
+  const NajblizaPoslovnica({
+    required this.id,
+    required this.naziv,
+    required this.adresa,
+    required this.udaljenostKm,
+    required this.poLokaciji,
+    this.gradNaziv,
+    this.radnoVrijeme,
+    this.polazniGrad,
+  });
+
+  final int id;
+  final String naziv;
+  final String adresa;
+  final String? gradNaziv;
+  final String? radnoVrijeme;
+  final double udaljenostKm;
+
+  /// Udaljenost je mjerena od lokacije telefona, a ne od grada iz profila.
+  final bool poLokaciji;
+
+  /// Grad iz profila, kad je udaljenost mjerena od njega.
+  final String? polazniGrad;
+
+  factory NajblizaPoslovnica.izJsona(Map<String, dynamic> json) {
+    return NajblizaPoslovnica(
+      id: citajInt(json['id']),
+      naziv: json['naziv']?.toString() ?? '',
+      adresa: json['adresa']?.toString() ?? '',
+      gradNaziv: json['gradNaziv']?.toString(),
+      radnoVrijeme: json['radnoVrijeme']?.toString(),
+      udaljenostKm: citajDouble(json['udaljenostKm']),
+      poLokaciji: citajBool(json['poLokaciji']),
+      polazniGrad: json['polazniGrad']?.toString(),
     );
   }
 }

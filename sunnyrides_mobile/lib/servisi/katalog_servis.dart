@@ -1,5 +1,6 @@
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../modeli/tacka.dart';
 import '../modeli/vozilo.dart';
 
 /// Sve sto klijent cita iz ponude: preporuke, vozila, obavijesti i sifarnici koji
@@ -52,6 +53,7 @@ class KatalogServis {
     double? cijenaDo,
     DateTime? slobodnoOd,
     DateTime? slobodnoDo,
+    Tacka? lokacija,
     bool samoDozvoljenaZaMene = true,
   }) async {
     final odgovor = await _klijent.get(
@@ -69,6 +71,8 @@ class KatalogServis {
         'slobodnoDo': slobodnoDo,
         'aktivno': true,
         'samoDozvoljenaZaMene': samoDozvoljenaZaMene,
+        'latituda': lokacija?.latituda,
+        'longituda': lokacija?.longituda,
       },
     );
 
@@ -99,6 +103,19 @@ class KatalogServis {
     );
 
     return Strana.izJsona(_mapa(odgovor), Obavijest.izJsona).stavke;
+  }
+
+  /// Poslovnica najbliza klijentu, od lokacije telefona kad je poznata, inace od
+  /// grada iz profila. Nista kad se ne zna odakle mjeriti.
+  Future<NajblizaPoslovnica?> najblizaPoslovnica({Tacka? lokacija}) async {
+    final odgovor = await _klijent.get(
+      '/api/poslovnice/najbliza',
+      upit: {'latituda': lokacija?.latituda, 'longituda': lokacija?.longituda},
+    );
+
+    return odgovor is Map<String, dynamic>
+        ? NajblizaPoslovnica.izJsona(odgovor)
+        : null;
   }
 
   Future<List<Stavka>> tipoviVozila() => _sifarnik('/api/tipovi-vozila');

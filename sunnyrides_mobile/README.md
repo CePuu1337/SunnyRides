@@ -29,6 +29,11 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000
 Prijava: `mobile` / `test`. Testna kartica: `4242 4242 4242 4242`, bilo koji budući
 datum, CVC `123`.
 
+Pretraga počinje od najbliže poslovnice, mjereno od grada iz profila. Dugme „Moja
+lokacija" traži približnu lokaciju telefona. Emulator ima izmišljenu lokaciju u
+Kaliforniji, pa se za probu postavlja ručno: Extended controls (`...` uz emulator) →
+Location → upisati npr. Mostar → Set location.
+
 ## Build za predaju
 
 ```bash

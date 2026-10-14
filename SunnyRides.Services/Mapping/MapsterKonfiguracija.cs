@@ -301,6 +301,7 @@ public static class MapsterKonfiguracija
         TypeAdapterConfig<Korisnik, KorisnikDto>.NewConfig()
             .Map(dto => dto.Uloge, e => e.KorisnikRole.Select(kr => kr.Role.Naziv).ToList())
             .Map(dto => dto.ThumbnailUrl, e => PutanjeSlika.Thumbnail(e.PutanjaSlike))
-            .Map(dto => dto.PoslovnicaNaziv, e => e.Poslovnica != null ? e.Poslovnica.Naziv : null);
+            .Map(dto => dto.PoslovnicaNaziv, e => e.Poslovnica != null ? e.Poslovnica.Naziv : null)
+            .Map(dto => dto.GradNaziv, e => e.Grad != null ? e.Grad.Naziv : null);
     }
 }

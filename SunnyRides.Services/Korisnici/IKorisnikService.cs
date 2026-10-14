@@ -41,6 +41,9 @@ public interface IKorisnikService
 
     Task<KorisnikDto> AzurirajProfilAsync(ProfilUpdateRequest request, CancellationToken ct = default);
 
+    /// <summary>Samo grad, bez ostalih podataka profila.</summary>
+    Task<KorisnikDto> PostaviGradAsync(GradKorisnikaRequest request, CancellationToken ct = default);
+
     Task<KorisnikDto> PostaviSlikuAsync(Stream sadrzaj, long duzinaBajta, CancellationToken ct = default);
 
     Task<KorisnikDto> UkloniSlikuAsync(CancellationToken ct = default);

@@ -19,6 +19,8 @@ class Korisnik {
     this.thumbnailUrl,
     this.poslovnicaId,
     this.poslovnicaNaziv,
+    this.gradId,
+    this.gradNaziv,
   });
 
   final int id;
@@ -39,9 +41,18 @@ class Korisnik {
   final int? poslovnicaId;
   final String? poslovnicaNaziv;
 
+  /// Grad klijenta, po kojem mu se nude najblize poslovnice. Osoblje ga nema.
+  final int? gradId;
+  final String? gradNaziv;
+
   /// Uposlenik je vezan za svoju poslovnicu i vidi samo nju. Administrator nije,
   /// ni kad uz to ima i ulogu uposlenika. Isto pravilo provodi i server.
   bool get vezanZaPoslovnicu => jeUposlenik && !jeAdministrator;
+
+  /// Klijent bez grada ga mora odabrati prije nego udje u aplikaciju - po njemu mu
+  /// se nude najblize poslovnice. Pri registraciji se grad ne bira, jer je forma
+  /// anonimna i ne moze ucitati listu gradova.
+  bool get trebaOdabratiGrad => jeKlijent && gradId == null;
 
   String get punoIme => '$ime $prezime';
 
@@ -94,6 +105,8 @@ class Korisnik {
       uloge: citajTekstove(json['uloge']),
       poslovnicaId: citajIntIliNista(json['poslovnicaId']),
       poslovnicaNaziv: json['poslovnicaNaziv']?.toString(),
+      gradId: citajIntIliNista(json['gradId']),
+      gradNaziv: json['gradNaziv']?.toString(),
     );
   }
 }

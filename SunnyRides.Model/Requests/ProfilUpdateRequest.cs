@@ -30,4 +30,11 @@ public class ProfilUpdateRequest
 
     [Required(ErrorMessage = "Datum rodjenja je obavezan.")]
     public DateTime DatumRodjenja { get; set; }
+
+    /// <summary>
+    /// Grad u kojem je korisnik. Klijentu je obavezan, jer se po njemu nude najblize
+    /// poslovnice; osoblje ga ne mora imati.
+    /// </summary>
+    [Range(1, int.MaxValue, ErrorMessage = "Odaberite grad.")]
+    public int? GradId { get; set; }
 }

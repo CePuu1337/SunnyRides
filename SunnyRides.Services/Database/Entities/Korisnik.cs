@@ -24,6 +24,14 @@ public class Korisnik
     public Poslovnica? Poslovnica { get; set; }
 
     /// <summary>
+    /// Grad u kojem je klijent. Po njemu mu se nude najblize poslovnice. Klijent ga
+    /// bira odmah poslije registracije i moze ga promijeniti u profilu; osoblje ga
+    /// nema, jer uposlenik vec ima svoju poslovnicu.
+    /// </summary>
+    public int? GradId { get; set; }
+    public Grad? Grad { get; set; }
+
+    /// <summary>
     /// Upisuje se u svaki token pri prijavi. Kad se promijeni lozinka, nalog deaktivira
     /// ili mu se promijene uloge, broj se poveca - i svaki ranije izdat token tog
     /// korisnika prestaje vaziti, na svim uredjajima, bez cekanja da istekne.

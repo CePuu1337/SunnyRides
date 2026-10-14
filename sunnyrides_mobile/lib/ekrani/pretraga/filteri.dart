@@ -5,10 +5,14 @@ import '../../modeli/vozilo.dart';
 
 /// Nacin poredanja rezultata pretrage.
 ///
-/// Vrijednost je ono sto ide serveru kao orderBy. "Preporuka" i "Ocjena" nisu kolone
-/// nego racun - prva kroz sistem preporuke, druga nad recenzijama - pa ih server
-/// obradjuje posebno.
+/// Vrijednost je ono sto ide serveru kao orderBy. "Udaljenost", "Preporuka" i
+/// "Ocjena" nisu kolone nego racun - udaljenost od klijenta, sistem preporuke i
+/// prosjek recenzija - pa ih server obradjuje posebno.
+///
+/// "Najblize meni" je pocetni poredak: poslovnice od najblize, a unutar poslovnice
+/// vozila po preporuci.
 enum Poredak {
+  najblize('Najbliže meni', 'Udaljenost'),
   preporuka('Preporučeno za vas', 'Preporuka'),
   cijenaRastuce('Cijena: niža prvo', 'DnevnaTarifa asc'),
   cijenaOpadajuce('Cijena: viša prvo', 'DnevnaTarifa desc'),
@@ -33,7 +37,7 @@ class Filteri {
     this.cijenaDo,
     this.datumOd,
     this.datumDo,
-    this.poredak = Poredak.preporuka,
+    this.poredak = Poredak.najblize,
   });
 
   final String? tekst;

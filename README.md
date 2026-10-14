@@ -165,6 +165,9 @@ Sve lozinke su `test`.
 Uposlenik radi u jednoj poslovnici i vidi samo nju — nalog `uposlenik` je u Mostaru.
 Administrator vidi sve poslovnice i jedini ima izvještaje.
 
+Klijent `mobile` je iz Sarajeva, grada bez poslovnice, pa mu je najbliža Mostar.
+Novi klijent grad bira odmah poslije registracije.
+
 Nalozi se kreiraju seedom pri prvom pokretanju API-ja nad praznom bazom.
 
 Plaćanje ide kroz Stripe sandbox. Testna kartica je `4242 4242 4242 4242`, bilo koji

@@ -39,6 +39,7 @@ public class AuthService : IAuthService
             .Include(x => x.KorisnikRole)
                 .ThenInclude(x => x.Role)
             .Include(x => x.Poslovnica)
+            .Include(x => x.Grad)
             .FirstOrDefaultAsync(x => x.KorisnickoIme == request.KorisnickoIme, ct);
 
         // Ista poruka i kad korisnik ne postoji i kad je lozinka pogresna. Razlicite
@@ -126,6 +127,7 @@ public class AuthService : IAuthService
             .Include(x => x.KorisnikRole)
                 .ThenInclude(x => x.Role)
             .Include(x => x.Poslovnica)
+            .Include(x => x.Grad)
             .FirstOrDefaultAsync(x => x.Id == korisnikId, ct)
             ?? throw NotFoundException.Za("Korisnik", korisnikId);
 
@@ -281,6 +283,7 @@ public class AuthService : IAuthService
             .Include(x => x.KorisnikRole)
                 .ThenInclude(x => x.Role)
             .Include(x => x.Poslovnica)
+            .Include(x => x.Grad)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == korisnikId, ct)
             ?? throw NotFoundException.Za("Korisnik", korisnikId);
@@ -321,7 +324,9 @@ public class AuthService : IAuthService
         Blokiran = korisnik.Blokiran,
         Uloge = uloge,
         PoslovnicaId = korisnik.PoslovnicaId,
-        PoslovnicaNaziv = korisnik.Poslovnica?.Naziv
+        PoslovnicaNaziv = korisnik.Poslovnica?.Naziv,
+        GradId = korisnik.GradId,
+        GradNaziv = korisnik.Grad?.Naziv
     };
 
     private static int GodineNaDan(DateTime datumRodjenja, DateTime naDan)

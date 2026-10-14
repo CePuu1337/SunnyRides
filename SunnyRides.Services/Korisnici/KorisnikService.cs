@@ -134,7 +134,8 @@ public class KorisnikService
 
     private static IQueryable<Korisnik> SaUlogama(IQueryable<Korisnik> upit) =>
         upit.Include(x => x.KorisnikRole).ThenInclude(kr => kr.Role)
-            .Include(x => x.Poslovnica);
+            .Include(x => x.Poslovnica)
+            .Include(x => x.Grad);
 
     public async Task<List<RoleDto>> UlogeAsync(CancellationToken ct = default)
     {
@@ -369,6 +370,18 @@ public class KorisnikService
         await ProvjeriJedinstvenostAsync(null, request.Email, korisnikId, ct);
         ProvjeriGodine(request.DatumRodjenja);
 
+        // Klijentu se po gradu nude najblize poslovnice, pa ga ne moze ukloniti.
+        // Osoblje grad nema i ne mora ga slati.
+        if (request.GradId is null && _trenutniKorisnik.JeUUlozi(Uloge.Klijent))
+        {
+            throw new BusinessException("Odaberite grad u kojem ste.");
+        }
+
+        if (request.GradId is { } gradId)
+        {
+            await ObaveznoPostojiAsync<Grad>(gradId, "Grad", ct);
+        }
+
         // Mijenjaju se samo polja iz zahtjeva. Korisnicko ime, uloge, status naloga i
         // lozinka ostaju netaknuti - njih ovaj zahtjev ni ne nosi.
         korisnik.Ime = request.Ime.Trim();
@@ -376,8 +389,25 @@ public class KorisnikService
         korisnik.Email = request.Email.Trim();
         korisnik.Telefon = string.IsNullOrWhiteSpace(request.Telefon) ? null : request.Telefon.Trim();
         korisnik.DatumRodjenja = request.DatumRodjenja;
+        korisnik.GradId = request.GradId;
 
         await SacuvajAsync(ct);
+
+        return await GetByIdAsync(korisnikId, ct);
+    }
+
+    public async Task<KorisnikDto> PostaviGradAsync(
+        GradKorisnikaRequest request, CancellationToken ct = default)
+    {
+        var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
+
+        var korisnik = await Context.Korisnici.FirstOrDefaultAsync(x => x.Id == korisnikId, ct)
+                       ?? throw NotFoundException.Za(NazivEntiteta, korisnikId);
+
+        await ObaveznoPostojiAsync<Grad>(request.GradId, "Grad", ct);
+
+        korisnik.GradId = request.GradId;
+        await Context.SaveChangesAsync(ct);
 
         return await GetByIdAsync(korisnikId, ct);
     }

@@ -234,6 +234,12 @@ namespace SunnyRides.Services.Migrations
                     b.Property<int>("DrzavaId")
                         .HasColumnType("int");
 
+                    b.Property<double?>("Latituda")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longituda")
+                        .HasColumnType("float");
+
                     b.Property<string>("Naziv")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -418,6 +424,9 @@ namespace SunnyRides.Services.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("GradId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Ime")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -456,6 +465,8 @@ namespace SunnyRides.Services.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("GradId");
 
                     b.HasIndex("KorisnickoIme")
                         .IsUnique();
@@ -1579,10 +1590,17 @@ namespace SunnyRides.Services.Migrations
 
             modelBuilder.Entity("SunnyRides.Services.Database.Entities.Korisnik", b =>
                 {
+                    b.HasOne("SunnyRides.Services.Database.Entities.Grad", "Grad")
+                        .WithMany()
+                        .HasForeignKey("GradId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SunnyRides.Services.Database.Entities.Poslovnica", "Poslovnica")
                         .WithMany()
                         .HasForeignKey("PoslovnicaId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Grad");
 
                     b.Navigation("Poslovnica");
                 });

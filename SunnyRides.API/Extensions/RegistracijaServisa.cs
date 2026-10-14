@@ -16,6 +16,7 @@ using SunnyRides.Services.Primopredaje;
 using SunnyRides.Services.Izvjestaji;
 using SunnyRides.Services.Kalendar;
 using SunnyRides.Services.Korisnici;
+using SunnyRides.Services.Lokacija;
 using SunnyRides.Services.Obavijesti;
 using SunnyRides.Services.Recenzije;
 using SunnyRides.Services.Sifrarnici;
@@ -47,6 +48,7 @@ public static class RegistracijaServisa
         // CurrentUserService cita iskljucivo iz ClaimsPrincipal-a trenutnog zahtjeva.
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IOpsegPoslovnice, OpsegPoslovnice>();
+        services.AddScoped<ILokacijaKlijenta, LokacijaKlijenta>();
 
         services.AddScoped<IAuthService, AuthService>();
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
@@ -7,6 +8,7 @@ import '../../modeli/definicija_sifrarnika.dart';
 import '../../modeli/stavka_sifrarnika.dart';
 import '../../servisi/sifrarnik_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
+import 'birac_lokacije.dart';
 
 /// Forma bilo kojeg sifrarnika, sastavljena iz njegove definicije.
 ///
@@ -30,6 +32,7 @@ class _SifrarnikFormaStanje extends State<SifrarnikForma> {
   final _kontroleri = <String, TextEditingController>{};
   final _zastavice = <String, bool>{};
   final _veze = <String, int?>{};
+  final _lokacije = <String, LatLng?>{};
   final _ucitaneVeze = <String, List<StavkaSifrarnika>>{};
 
   late final SifrarnikCrudServis _servis;
@@ -57,6 +60,12 @@ class _SifrarnikFormaStanje extends State<SifrarnikForma> {
           _zastavice[polje.kljuc] = citajBool(vrijednost);
         case VrstaPolja.veza:
           _veze[polje.kljuc] = vrijednost == null ? null : citajInt(vrijednost);
+        case VrstaPolja.lokacija:
+          final sirina = citajDoubleIliNista(widget.zapis?['latituda']);
+          final duzina = citajDoubleIliNista(widget.zapis?['longituda']);
+          _lokacije[polje.kljuc] = sirina == null || duzina == null
+              ? null
+              : LatLng(sirina, duzina);
         default:
           _kontroleri[polje.kljuc] = TextEditingController(
             text: vrijednost?.toString() ?? '',
@@ -109,6 +118,10 @@ class _SifrarnikFormaStanje extends State<SifrarnikForma> {
           zahtjev[polje.kljuc] = _zastavice[polje.kljuc] ?? false;
         case VrstaPolja.veza:
           zahtjev[polje.kljuc] = _veze[polje.kljuc];
+        case VrstaPolja.lokacija:
+          final tacka = _lokacije[polje.kljuc];
+          zahtjev['latituda'] = tacka?.latitude;
+          zahtjev['longituda'] = tacka?.longitude;
         case VrstaPolja.cijelBroj:
           final tekst = _kontroleri[polje.kljuc]!.text.trim();
           zahtjev[polje.kljuc] = tekst.isEmpty ? null : int.tryParse(tekst);
@@ -131,6 +144,24 @@ class _SifrarnikFormaStanje extends State<SifrarnikForma> {
 
   Future<void> _sacuvaj() async {
     if (!_forma.currentState!.validate()) {
+      return;
+    }
+
+    // Karta nije polje forme, pa se obavezna lokacija provjerava ovdje.
+    final bezLokacije = widget.definicija.polja.where(
+      (x) =>
+          x.vrsta == VrstaPolja.lokacija &&
+          x.obavezno &&
+          _lokacije[x.kljuc] == null,
+    );
+
+    if (bezLokacije.isNotEmpty) {
+      setState(
+        () => _greska =
+            'Kliknite na kartu da postavite: '
+            '${bezLokacije.first.natpis.toLowerCase()}.',
+      );
+
       return;
     }
 
@@ -262,6 +293,33 @@ class _SifrarnikFormaStanje extends State<SifrarnikForma> {
           validator: (vrijednost) => polje.obavezno && vrijednost == null
               ? 'Odaberite ${polje.natpis.toLowerCase()}.'
               : null,
+        );
+
+      case VrstaPolja.lokacija:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              polje.obavezno ? polje.natpis : '${polje.natpis} (opciono)',
+              style: const TextStyle(fontSize: 12.5, color: Boje.tekstBlazi),
+            ),
+            const SizedBox(height: Razmaci.s),
+            BiracLokacije(
+              pocetna: _lokacije[polje.kljuc],
+              visina: 220,
+              naOdabir: (tacka) => _lokacije[polje.kljuc] = tacka,
+            ),
+            if (polje.pojasnjenje != null) ...[
+              const SizedBox(height: Razmaci.xs),
+              Text(
+                polje.pojasnjenje!,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Boje.tekstPrigusen,
+                ),
+              ),
+            ],
+          ],
         );
 
       default:

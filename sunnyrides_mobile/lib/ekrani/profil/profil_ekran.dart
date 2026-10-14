@@ -216,7 +216,7 @@ class _ProfilEkranStanje extends State<ProfilEkran> {
                         _Stavka(
                           ikona: Icons.person_outline,
                           naslov: 'Moji podaci',
-                          opis: 'Ime, email, telefon i datum rođenja',
+                          opis: 'Ime, email, telefon, datum rođenja i grad',
                           naDodir: () =>
                               _otvori(IzmjenaProfilaEkran(korisnik: korisnik)),
                         ),
@@ -374,6 +374,14 @@ class _Zaglavlje extends StatelessWidget {
                 if (korisnik.telefon != null && korisnik.telefon!.isNotEmpty)
                   Text(
                     korisnik.telefon!,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Boje.tekstPrigusen,
+                    ),
+                  ),
+                if (korisnik.gradNaziv != null)
+                  Text(
+                    korisnik.gradNaziv!,
                     style: const TextStyle(
                       fontSize: 12.5,
                       color: Boje.tekstPrigusen,

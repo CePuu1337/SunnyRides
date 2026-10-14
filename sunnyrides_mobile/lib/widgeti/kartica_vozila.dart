@@ -137,7 +137,12 @@ class KarticaVozila extends StatelessWidget {
                           const SizedBox(width: 3),
                           Expanded(
                             child: Text(
-                              vozilo.lokacija,
+                              // Udaljenost stoji uz poslovnicu kad se zna odakle
+                              // mjeriti - tako je jasno zasto je vozilo tu u listi.
+                              vozilo.udaljenostKm == null
+                                  ? vozilo.lokacija
+                                  : '${vozilo.lokacija} · '
+                                        '${Formati.udaljenost(vozilo.udaljenostKm!)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(

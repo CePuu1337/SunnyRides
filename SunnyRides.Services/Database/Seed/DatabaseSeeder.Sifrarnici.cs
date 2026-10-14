@@ -36,12 +36,14 @@ public partial class DatabaseSeeder
         var crnaGora = new Drzava { Naziv = "Crna Gora", Skracenica = "MNE" };
         _context.Drzave.AddRange(bih, hrvatska, crnaGora);
 
-        var neum = new Grad { Drzava = bih, Naziv = "Neum", PostanskiBroj = "88390" };
-        var mostar = new Grad { Drzava = bih, Naziv = "Mostar", PostanskiBroj = "88000" };
-        var sarajevo = new Grad { Drzava = bih, Naziv = "Sarajevo", PostanskiBroj = "71000" };
-        var split = new Grad { Drzava = hrvatska, Naziv = "Split", PostanskiBroj = "21000" };
-        var dubrovnik = new Grad { Drzava = hrvatska, Naziv = "Dubrovnik", PostanskiBroj = "20000" };
-        var budva = new Grad { Drzava = crnaGora, Naziv = "Budva", PostanskiBroj = "85310" };
+        // Koordinate su sredina grada. Sarajevo i Budva nemaju poslovnicu, ali klijent
+        // odande i dalje dobije najblizu - zato i oni imaju koordinate.
+        var neum = new Grad { Drzava = bih, Naziv = "Neum", PostanskiBroj = "88390", Latituda = 42.9237, Longituda = 17.6155 };
+        var mostar = new Grad { Drzava = bih, Naziv = "Mostar", PostanskiBroj = "88000", Latituda = 43.3438, Longituda = 17.8078 };
+        var sarajevo = new Grad { Drzava = bih, Naziv = "Sarajevo", PostanskiBroj = "71000", Latituda = 43.8563, Longituda = 18.4131 };
+        var split = new Grad { Drzava = hrvatska, Naziv = "Split", PostanskiBroj = "21000", Latituda = 43.5081, Longituda = 16.4402 };
+        var dubrovnik = new Grad { Drzava = hrvatska, Naziv = "Dubrovnik", PostanskiBroj = "20000", Latituda = 42.6507, Longituda = 18.0944 };
+        var budva = new Grad { Drzava = crnaGora, Naziv = "Budva", PostanskiBroj = "85310", Latituda = 42.2911, Longituda = 18.8403 };
         _gradovi = new List<Grad> { neum, mostar, sarajevo, split, dubrovnik, budva };
         _context.Gradovi.AddRange(_gradovi);
 

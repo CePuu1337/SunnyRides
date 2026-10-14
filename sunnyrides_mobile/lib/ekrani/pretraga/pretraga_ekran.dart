@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../../modeli/tacka.dart';
 import '../../modeli/vozilo.dart';
 import '../../servisi/katalog_servis.dart';
+import '../../stanje/lokacija.dart';
 import '../../stanje/navigacija.dart';
+import '../../stanje/sesija.dart';
 import '../../widgeti/kartica_vozila.dart';
 import '../../widgeti/obavjestenje.dart';
+import '../../widgeti/polaziste_udaljenosti.dart';
 import '../vozila/detalji_vozila_ekran.dart';
 import 'filteri.dart';
 
@@ -25,6 +29,10 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
 
   late final KatalogServis _katalog;
   late final Navigacija _navigacija;
+  late final Lokacija _lokacija;
+  late final Sesija _sesija;
+  Tacka? _zadnjaTacka;
+  int? _zadnjiGrad;
 
   final _polje = TextEditingController();
   final _skrol = ScrollController();
@@ -54,6 +62,9 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
 
     _katalog = KatalogServis(context.read<ApiKlijent>());
     _navigacija = context.read<Navigacija>()..addListener(_naZahtjev);
+    _lokacija = context.read<Lokacija>()..addListener(_naPromjenuPolazista);
+    _sesija = context.read<Sesija>()..addListener(_naPromjenuPolazista);
+    _zadnjiGrad = _sesija.korisnik?.gradId;
 
     _skrol.addListener(_naSkrol);
 
@@ -71,12 +82,28 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
     _odgoda?.cancel();
     _odlukaODozvoli?.cancel();
     _navigacija.removeListener(_naZahtjev);
+    _lokacija.removeListener(_naPromjenuPolazista);
+    _sesija.removeListener(_naPromjenuPolazista);
     _skrol.dispose();
     _polje.dispose();
     super.dispose();
   }
 
-  /// Zahtjev sa pocetnog ekrana - tekst ili odabrani tip vozila.
+  /// Klijent je ukljucio ili iskljucio lokaciju telefona, ili promijenio grad u
+  /// profilu, pa se udaljenosti i poredak racunaju od druge tacke.
+  void _naPromjenuPolazista() {
+    final grad = _sesija.korisnik?.gradId;
+
+    if (_lokacija.tacka == _zadnjaTacka && grad == _zadnjiGrad) {
+      return;
+    }
+
+    _zadnjaTacka = _lokacija.tacka;
+    _zadnjiGrad = grad;
+    _trazi();
+  }
+
+  /// Zahtjev sa pocetnog ekrana - tekst, tip vozila ili najbliza poslovnica.
   void _naZahtjev() {
     final zahtjev = _navigacija.preuzmiZahtjev();
 
@@ -90,6 +117,10 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
       _filteri = _filteri.kopija(
         tekst: zahtjev.tekst,
         tipVozilaId: zahtjev.tipVozilaId,
+        poslovnicaId: zahtjev.poslovnicaId,
+        // Poslovnica sa pocetnog ekrana moze biti u drugom gradu od ranije
+        // odabranog, a ta dva uslova zajedno bi dala praznu listu.
+        gradId: zahtjev.poslovnicaId == null ? _filteri.gradId : null,
       );
     });
 
@@ -173,6 +204,7 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
       cijenaDo: _filteri.cijenaDo,
       slobodnoOd: _filteri.imaTermin ? _filteri.datumOd : null,
       slobodnoDo: _filteri.imaTermin ? _filteri.datumDo : null,
+      lokacija: _lokacija.tacka,
     );
   }
 
@@ -357,6 +389,11 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
               _trazi();
             },
           ),
+          if (_filteri.poredak == Poredak.najblize)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(Razmaci.l, 0, Razmaci.s, Razmaci.s),
+              child: PolazisteUdaljenosti(),
+            ),
           Expanded(
             child: Sadrzaj(
               ucitavanje: _ucitavanje,

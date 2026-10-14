@@ -13,6 +13,7 @@ using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Fajlovi;
+using SunnyRides.Services.Lokacija;
 using SunnyRides.Services.Preporuke;
 
 namespace SunnyRides.Services.Flota;
@@ -29,6 +30,7 @@ public class VoziloService
     private readonly IRecommenderService _recommender;
     private readonly IPricingService _pricing;
     private readonly IOpsegPoslovnice _opseg;
+    private readonly ILokacijaKlijenta _lokacija;
 
     /// <summary>Poslovnica uposlenika; lista vozila se suzava na nju.</summary>
     private int? _ogranicenjeNaPoslovnicu;
@@ -65,7 +67,8 @@ public class VoziloService
         IHistorijaPretrageService historijaPretrage,
         IRecommenderService recommender,
         IPricingService pricing,
-        IOpsegPoslovnice opseg)
+        IOpsegPoslovnice opseg,
+        ILokacijaKlijenta lokacija)
         : base(context)
     {
         _pohrana = pohrana;
@@ -76,6 +79,7 @@ public class VoziloService
         _recommender = recommender;
         _pricing = pricing;
         _opseg = opseg;
+        _lokacija = lokacija;
     }
 
     /// <summary>
@@ -104,14 +108,39 @@ public class VoziloService
         // mjesta koja je pozivaju.
         await _historijaPretrage.ZabiljeziAsync(search, ct);
 
-        var rezultat = JePoredakPoPreporuci(search)
-            ? await PoPreporuciAsync(search, ct)
+        // Udaljenost se mjeri od lokacije telefona ili od grada iz profila. Za osoblje
+        // nije poznato ni jedno, pa ostaje prazna i ne kosta upit.
+        var polaziste = await _lokacija.PolazisteAsync(search.Latituda, search.Longituda, ct);
+        var udaljenosti = polaziste is null
+            ? null
+            : await _lokacija.UdaljenostiPoslovnicaAsync(polaziste, ct);
+
+        var rezultat = JePoredakPoPreporuci(search) || JePoredakPoUdaljenosti(search)
+            ? await PoPreporuciAsync(search, JePoredakPoUdaljenosti(search) ? udaljenosti : null, ct)
             : await base.GetAsync(search, ct);
 
         await DodajOcjeneAsync(rezultat.Items, ct);
         await DodajCijeneZaPeriodAsync(rezultat.Items, search, ct);
+        DodajUdaljenosti(rezultat.Items, udaljenosti);
 
         return rezultat;
+    }
+
+    private static void DodajUdaljenosti(
+        IEnumerable<VoziloDto> vozila, IReadOnlyDictionary<int, double>? udaljenosti)
+    {
+        if (udaljenosti is null)
+        {
+            return;
+        }
+
+        foreach (var vozilo in vozila)
+        {
+            if (udaljenosti.TryGetValue(vozilo.PoslovnicaId, out var km))
+            {
+                vozilo.UdaljenostKm = Math.Round(km, 1);
+            }
+        }
     }
 
     /// <summary>
@@ -155,27 +184,37 @@ public class VoziloService
     }
 
     /// <summary>
-    /// Pretraga poredana po relevantnosti za prijavljenog korisnika.
+    /// Pretraga poredana po relevantnosti za prijavljenog korisnika, a kad su zadane
+    /// udaljenosti - prvo po blizini poslovnice, pa po relevantnosti unutar nje.
     ///
     /// Svi uslovi pretrage - kategorije dozvole, dostupnost, grad, tip, cijena - idu
     /// kroz isti <see cref="AddFilter"/> i ostaju na bazi. Samo se poredak racuna u
-    /// memoriji, jer skor nije kolona nego rezultat sistema preporuke; zato se iz baze
-    /// za rangiranje vuku samo identifikatori, a puni zapisi tek za trazenu stranicu.
+    /// memoriji, jer ni skor ni udaljenost nisu kolone; zato se iz baze za rangiranje
+    /// vuku samo identifikatori, a puni zapisi tek za trazenu stranicu.
     /// </summary>
     private async Task<PagedResult<VoziloDto>> PoPreporuciAsync(
-        VoziloSearchObject search, CancellationToken ct)
+        VoziloSearchObject search,
+        IReadOnlyDictionary<int, double>? udaljenosti,
+        CancellationToken ct)
     {
         var upit = AddFilter(search, Context.Vozila.AsQueryable());
 
         int? ukupno = search.IncludeTotalCount ? await upit.CountAsync(ct) : null;
 
-        var ids = await upit
+        var redovi = await upit
             .OrderBy(x => x.Id)
             .Take(MaksimalnoZaRangiranje)
-            .Select(x => x.Id)
+            .Select(x => new { x.Id, x.PoslovnicaId })
             .ToListAsync(ct);
 
-        var poredak = PoredakPoPreporuci.Poredaj(await _recommender.RangirajAsync(ids, ct));
+        var rangirana = await _recommender.RangirajAsync(redovi.Select(x => x.Id).ToList(), ct);
+
+        // Bez poznatog polazista "Najblize meni" nema od cega mjeriti, pa ostaje
+        // obican poredak po preporuci.
+        var poredak = udaljenosti is null
+            ? PoredakPoPreporuci.Poredaj(rangirana)
+            : PoredakPoUdaljenosti.Poredaj(
+                rangirana, redovi.ToDictionary(x => x.Id, x => x.PoslovnicaId), udaljenosti);
 
         var stranica = Math.Max(search.Page ?? 0, 0);
         var velicina = Math.Clamp(
@@ -201,6 +240,10 @@ public class VoziloService
     private static bool JePoredakPoPreporuci(VoziloSearchObject search) =>
         search.OrderBy is not null
         && search.OrderBy.StartsWith(PoredakRelevantnost, StringComparison.OrdinalIgnoreCase);
+
+    private static bool JePoredakPoUdaljenosti(VoziloSearchObject search) =>
+        search.OrderBy is not null
+        && search.OrderBy.StartsWith(PoredakBlizina, StringComparison.OrdinalIgnoreCase);
 
     public override async Task<VoziloDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
@@ -246,10 +289,17 @@ public class VoziloService
     public const string PoredakPoOcjeni = "ProsjecnaOcjena";
 
     /// <summary>
-    /// Vrijednost za poredak po relevantnosti - podrazumijevani poredak pretrage u
-    /// mobilnoj aplikaciji.
+    /// Vrijednost za poredak po relevantnosti - "Preporuceno za vas" u mobilnoj
+    /// aplikaciji.
     /// </summary>
     public const string PoredakRelevantnost = "Preporuka";
+
+    /// <summary>
+    /// Vrijednost za poredak "Najblize meni" - podrazumijevani poredak pretrage u
+    /// mobilnoj aplikaciji. Poslovnice idu od najblize, a vozila unutar iste
+    /// poslovnice po preporuci.
+    /// </summary>
+    public const string PoredakBlizina = "Udaljenost";
 
     protected override string NazivEntiteta => "Vozilo";
 

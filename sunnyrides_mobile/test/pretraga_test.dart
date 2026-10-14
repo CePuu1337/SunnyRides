@@ -59,8 +59,9 @@ void main() {
       },
     );
 
-    test('pretraga pocinje poretkom po preporuci, ne po cijeni', () {
-      expect(const Filteri().poredak, Poredak.preporuka);
+    test('pretraga pocinje poretkom po blizini, ne po cijeni', () {
+      expect(const Filteri().poredak, Poredak.najblize);
+      expect(Poredak.najblize.vrijednost, 'Udaljenost');
       expect(Poredak.preporuka.vrijednost, 'Preporuka');
     });
 

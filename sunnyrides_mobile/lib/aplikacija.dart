@@ -4,6 +4,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import 'ekrani/prijava/prijava_ekran.dart';
 import 'ekrani/ljuska/ljuska.dart';
+import 'ekrani/profil/odabir_grada_ekran.dart';
 import 'stanje/sesija.dart';
 
 class MobilnaAplikacija extends StatelessWidget {
@@ -25,7 +26,8 @@ class _Korijen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stanje = context.watch<Sesija>().stanje;
+    final sesija = context.watch<Sesija>();
+    final stanje = sesija.stanje;
 
     // Promjena sesije zatvara i sve otvoreno preko pocetnog ekrana: registraciju,
     // dijaloge, detalje.
@@ -36,7 +38,12 @@ class _Korijen extends StatelessWidget {
           body: Center(child: CircularProgressIndicator()),
         ),
         StanjeSesije.neprijavljen => const PrijavaEkran(),
-        StanjeSesije.prijavljen => const Ljuska(),
+        // Klijent bez grada ga prvo bira. Tek tada aplikacija zna koje su mu
+        // poslovnice najblize.
+        StanjeSesije.prijavljen =>
+          sesija.korisnik?.trebaOdabratiGrad ?? false
+              ? const OdabirGradaEkran()
+              : const Ljuska(),
       },
     );
   }

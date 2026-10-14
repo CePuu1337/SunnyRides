@@ -44,4 +44,12 @@ public class VoziloSearchObject : BaseSearchObject
     /// poslao bi one koje mu odgovaraju; ovako ih server izvodi iz njegove dozvole.
     /// </summary>
     public bool SamoDozvoljenaZaMene { get; set; }
+
+    /// <summary>
+    /// Trenutna lokacija telefona, kad je klijent dozvoli. Udaljenost do poslovnica se
+    /// tada racuna od nje, a bez nje od grada iz profila. Lokacija se nigdje ne cuva,
+    /// sluzi samo ovom upitu.
+    /// </summary>
+    public double? Latituda { get; set; }
+    public double? Longituda { get; set; }
 }

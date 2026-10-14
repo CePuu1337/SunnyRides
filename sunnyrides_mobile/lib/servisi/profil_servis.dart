@@ -23,6 +23,7 @@ class ProfilServis {
     required String email,
     required String telefon,
     required DateTime datumRodjenja,
+    required int gradId,
   }) async {
     final odgovor = await _klijent.put(
       '/api/profil',
@@ -32,7 +33,18 @@ class ProfilServis {
         'email': email,
         'telefon': telefon.isEmpty ? null : telefon,
         'datumRodjenja': datumRodjenja.toUtc().toIso8601String(),
+        'gradId': gradId,
       },
+    );
+
+    return Korisnik.izJsona(odgovor as Map<String, dynamic>);
+  }
+
+  /// Samo grad - za izbor odmah poslije registracije.
+  Future<Korisnik> postaviGrad(int gradId) async {
+    final odgovor = await _klijent.put(
+      '/api/profil/grad',
+      tijelo: {'gradId': gradId},
     );
 
     return Korisnik.izJsona(odgovor as Map<String, dynamic>);

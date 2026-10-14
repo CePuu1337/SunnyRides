@@ -37,6 +37,12 @@ class Formati {
 
   static String postotak(num vrijednost) => '${_decimala.format(vrijednost)} %';
 
+  /// Udaljenost u kilometrima. Blizu sa jednom decimalom ("4,2 km"), dalje bez
+  /// nje ("75 km") - na sedamdeset kilometara decimala ne govori nista.
+  static String udaljenost(num km) => km < 10
+      ? '${_decimala.format(km)} km'
+      : '${_cijelBroj.format(km)} km';
+
   /// Promjena u odnosu na raniji period, sa predznakom.
   static String promjena(num vrijednost) {
     final znak = vrijednost > 0 ? '+' : '';

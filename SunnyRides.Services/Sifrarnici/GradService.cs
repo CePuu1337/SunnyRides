@@ -6,6 +6,7 @@ using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Lokacija;
 
 namespace SunnyRides.Services.Sifrarnici;
 
@@ -58,12 +59,14 @@ public class GradService
         GradInsertRequest request, Grad entitet, CancellationToken ct)
     {
         await ObaveznoPostojiAsync<Drzava>(request.DrzavaId, "Drzava", ct);
+        Koordinate.ProvjeriPar(request.Latituda, request.Longituda);
     }
 
     protected override async Task BeforeUpdateAsync(
         GradUpdateRequest request, Grad entitet, CancellationToken ct)
     {
         await ObaveznoPostojiAsync<Drzava>(request.DrzavaId, "Drzava", ct);
+        Koordinate.ProvjeriPar(request.Latituda, request.Longituda);
     }
 
     protected override async Task BeforeDeleteAsync(Grad entitet, CancellationToken ct)
@@ -74,6 +77,14 @@ public class GradService
         {
             throw new BusinessException(
                 $"Grad \"{entitet.Naziv}\" se ne moze obrisati jer u njemu postoje poslovnice ({brojPoslovnica}).");
+        }
+
+        var brojKlijenata = await Context.Korisnici.CountAsync(x => x.GradId == entitet.Id, ct);
+
+        if (brojKlijenata > 0)
+        {
+            throw new BusinessException(
+                $"Grad \"{entitet.Naziv}\" se ne moze obrisati jer su ga klijenti odabrali kao svoj grad ({brojKlijenata}).");
         }
     }
 }

@@ -474,8 +474,11 @@ Svaka stavka nosi `metoda`, `skor`, i — zavisno od puta — `predvidjenaOcjena
 
 ### Poredak „Preporučeno za vas" u pretrazi
 
-Pretraga vozila (`GET /api/vozila?orderBy=Preporuka`) koristi isti skor kao i preporuke,
-i to je njen podrazumijevani poredak u mobilnoj aplikaciji. Pretraga prvo suzi ponudu
+Pretraga vozila (`GET /api/vozila?orderBy=Preporuka`) koristi isti skor kao i preporuke.
+Isti skor određuje i redoslijed unutar svake poslovnice u poretku „Najbliže meni"
+(`orderBy=Udaljenost`), koji je početni poredak pretrage u mobilnoj aplikaciji: tamo
+poslovnice idu od najbliže klijentu, a vozila u njima po skoru. Udaljenost ne ulazi u
+sam skor i ne mijenja model. Pretraga prvo suzi ponudu
 svim svojim uslovima na bazi (dozvola, dostupnost, grad, tip, cijena), pa
 `RecommenderService.RangirajAsync` za preostala vozila izračuna skor — modelom kad
 korisnika poznaje, rezervnim putem kad ne. Samo se poredak računa u memoriji, jer skor

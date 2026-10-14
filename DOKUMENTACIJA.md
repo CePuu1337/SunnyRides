@@ -62,7 +62,7 @@ ne ispadne:
 | Pregled poslovanja (četiri kartice, raspored za danas, iskorištenost) | jedan agregatni endpoint, `GroupBy` na bazi | ✅ |
 | Kalendar flote i ručni unos rezervacije klikom na slobodan raspon | endpoint za sedmicu po vozilima; kreiranje rezervacije od strane osoblja za navedenog klijenta | ✅ |
 | Blokada: zamjena vozila za pogođenu rezervaciju | `ZamjenaVozilaService`: lista zamjenskih vozila i prebacivanje rezervacije, uz zaključavanje i ponovnu provjeru dostupnosti i dozvole | ✅ |
-| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | grupni obračun cijene za stranicu rezultata (`IPricingService.IzracunajZaVozilaAsync`), poredak po preporuci, cijeni i ocjeni | ✅ |
+| Pretraga sa ukupnom cijenom za cijeli period i sortiranjem po cijeni, ocjeni i preporuci | grupni obračun cijene za stranicu rezultata (`IPricingService.IzracunajZaVozilaAsync`), poredak po blizini, preporuci, cijeni i ocjeni | ✅ |
 | Historija pretrage kao ulaz za preporuke | upis u `HistorijaPretrage` pri svakoj pretrazi koja nosi filter, iz `VoziloService.GetAsync` | ✅ faza 16 |
 | Detalji vozila: recenzije i slična vozila | `/api/preporuke/slicna/{id}` i `/api/recenzije?voziloId=` | ✅ |
 | Otkazivanje: „korisnik bira razlog iz padajuće liste" | šifrarnik `RazlogOtkazivanja`, padajuća lista se puni iz baze | ✅ |
@@ -2720,6 +2720,75 @@ rezervaciju iz ruku. Administrator i dalje bira iz cijelog grada.
 
 ---
 
+## Grad klijenta i najbliža poslovnica
+
+Klijent je ranije vidio cijelu ponudu bez obzira na to gdje je, pa je onaj iz Sarajeva
+na vrhu pretrage mogao dobiti skuter u Dubrovniku. Sada svaki klijent ima grad
+(`Korisnik.GradId`), gradovi imaju koordinate (`Grad.Latituda`, `Grad.Longituda`), a
+pretraga i početni ekran kreću od najbliže poslovnice.
+
+**Grad se bira odmah poslije registracije, ne na samoj formi.** Forma registracije je
+anonimna, a lista gradova je iza prijave. Pravilo dozvoljava `[AllowAnonymous]` samo na
+prijavi i registraciji, pa se za listu gradova nije otvarala nova anonimna ruta.
+Aplikacija poslije registracije sama prijavi korisnika i odmah otvori ekran „Gdje ste?",
+koji se ne može preskočiti. Isti ekran dobije svaki klijent bez grada
+(`Korisnik.trebaOdabratiGrad`). Grad se šalje na `PUT /api/profil/grad`, a kasnije se
+mijenja u izmjeni profila, gdje je za klijenta obavezan. Osoblje grad nema: uposlenik
+već ima svoju poslovnicu.
+
+**Koordinate grada** su sredina grada. Administrator ih bira klikom na kartu u
+šifarniku gradova, istim biračem kao kod poslovnica. Generička forma šifarnika za to
+ima vrstu polja `lokacija`, koja u zahtjev upisuje latitudu i longitudu. Koordinate su
+opcione, ali idu u paru (`Koordinate.ProvjeriPar`). Sarajevo i Budva nemaju poslovnicu,
+ali imaju koordinate, pa i klijent odande dobije najbližu. Grad koji klijenti koriste
+ne može se obrisati.
+
+**Od čega se mjeri.** O tome odlučuje jedan servis, `ILokacijaKlijenta`, da pretraga i
+kartica najbliže poslovnice ne bi mjerile od različitih tačaka:
+
+1. lokacija telefona, ako ju je klijent poslao;
+2. inače sredina grada iz profila;
+3. inače ništa. Tako je za osoblje, a i za grad bez koordinata. Udaljenost tada ostaje
+   prazna, a za osoblje se baza i ne pita.
+
+Udaljenost je zračna, po haversine formuli (`Udaljenost.Km`). Za izbor bliže
+poslovnice daje isti odgovor kao put, a ne treba vanjski servis za rute. Poslovnica
+ima nekoliko, pa se čitaju samo njihove koordinate i udaljenost se računa u kodu koji
+pokrivaju testovi (`UdaljenostTests`).
+
+**Poredak „Najbliže meni"** (`orderBy=Udaljenost`) je početni poredak pretrage.
+Poslovnice idu od najbliže prema daljoj, a vozila unutar iste poslovnice po
+preporuci, sa istim pravilom da se primjerci istog modela ne slažu jedan do drugog
+(`PoredakPoUdaljenosti`, testovi u `PoredakPoUdaljenostiTests`). Uslovi pretrage i
+dalje idu na bazi, a u memoriji se računa samo redoslijed, kao i kod poretka po
+preporuci. Kad se ne zna odakle mjeriti, ovaj poredak postaje obični poredak po
+preporuci. „Preporučeno za vas" ostaje kao zasebna opcija.
+
+U rezultatima pretrage svako vozilo nosi `UdaljenostKm` kad je polazište poznato, i to
+u svakom poretku. Kartica ga piše uz poslovnicu, npr. „SunnyRides Mostar, Mostar ·
+75 km".
+
+**Najbliža poslovnica** (`GET /api/poslovnice/najbliza`) vraća jednu poslovnicu sa
+udaljenošću i podatkom od čega je mjereno. Kad se polazište ne zna, odgovor je prazan
+(204). Na početnom ekranu je kartica „Vaša najbliža poslovnica" sa adresom, radnim
+vremenom i udaljenošću. Dodir na nju otvara pretragu ograničenu na tu poslovnicu.
+
+**Lokacija telefona** je dodatak, ne osnova. Ispod kartice i iznad rezultata pretrage
+stoji red „Mjereno od: grad Sarajevo" sa dugmetom „Moja lokacija". Tek na taj dodir
+aplikacija traži dozvolu i čita položaj kroz paket `geolocator`. U manifestu su i
+približna i precizna dozvola, pa Android klijentu nudi izbor. Precizna je tu jer
+aplikaciji sa samo približnom dozvolom Android novu poziciju javlja najviše jednom u
+deset minuta, pa bi klijent koji se pomjerio dobijao najbližu poslovnicu od mjesta
+gdje je bio. Za izbor poslovnice dovoljno je i jedno i drugo.
+Položaj se šalje kao `latituda` i `longituda` uz pretragu i ne čuva se nigdje: ni na
+serveru, ni na telefonu, a nestaje sa odjavom. Ako klijent odbije dozvolu ili je
+lokacija isključena, dobije poruku, a udaljenost se i dalje mjeri od grada.
+
+Sistem preporuke se ovim ne mijenja. Grad poslovnice je i dalje jedan od signala u
+profilu korisnika, a udaljenost određuje samo redoslijed poslovnica u pretrazi.
+
+---
+
 ## Pregled poslovanja i kalendar flote
 
 > ✅ Urađeno nakon faze 16, kao priprema za desktop aplikaciju.
@@ -3408,13 +3477,15 @@ zanemari. Svi filteri idu serveru kao parametri `VoziloSearchObject` i izvršava
 bazi. Marka se upisuje i u `HistorijaPretrage`, a poslovnica kroz svoj grad, pa oboje
 ulazi u profil za preporuke.
 
-### Pretraga počinje poretkom po preporuci
+### Pretraga počinje poretkom po blizini
 
-Podrazumijevani poredak pretrage je „Preporučeno za vas" (`orderBy=Preporuka`), a ne
-cijena. Uslovi pretrage ostaju na bazi, a skor za preostala vozila daje isti sistem
-preporuke kao na početnom ekranu. Primjerci istog modela iz različitih poslovnica ne
-stoje jedan do drugog: prvo ide najbolji primjerak svakog modela, pa ponovljeni. Detalji
-su u `recommender-dokumentacija.md`, u dijelu o endpointima.
+Podrazumijevani poredak pretrage je „Najbliže meni" (`orderBy=Udaljenost`), a ne
+cijena. Poslovnice idu od najbliže klijentu, a unutar svake poslovnice vozila idu po
+preporuci. Uslovi pretrage ostaju na bazi, a skor za preostala vozila daje isti sistem
+preporuke kao na početnom ekranu. Primjerci istog modela ne stoje jedan do drugog: prvo
+ide najbolji primjerak svakog modela, pa ponovljeni. „Preporučeno za vas"
+(`orderBy=Preporuka`) je i dalje ponuđeno, bez obzira na udaljenost. Detalji su u
+sekciji „Grad klijenta i najbliža poslovnica" i u `recommender-dokumentacija.md`.
 
 ### Poredak mora biti potpun da bi stranice imale smisla
 

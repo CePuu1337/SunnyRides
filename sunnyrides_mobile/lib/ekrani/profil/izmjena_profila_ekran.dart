@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../../modeli/vozilo.dart';
+import '../../servisi/katalog_servis.dart';
 import '../../servisi/profil_servis.dart';
 import '../../stanje/sesija.dart';
 import '../../widgeti/obavjestenje.dart';
@@ -27,6 +29,9 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
 
   late DateTime _datumRodjenja;
 
+  List<Stavka> _gradovi = const [];
+  int? _gradId;
+
   bool _slanje = false;
   String? _greska;
 
@@ -41,6 +46,23 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
     _email = TextEditingController(text: widget.korisnik.email);
     _telefon = TextEditingController(text: widget.korisnik.telefon ?? '');
     _datumRodjenja = widget.korisnik.datumRodjenja.toLocal();
+    _gradId = widget.korisnik.gradId;
+
+    _ucitajGradove();
+  }
+
+  Future<void> _ucitajGradove() async {
+    try {
+      final gradovi = await KatalogServis(context.read<ApiKlijent>()).gradovi();
+
+      if (mounted) {
+        setState(() => _gradovi = gradovi);
+      }
+    } on ApiGreska catch (greska) {
+      if (mounted) {
+        setState(() => _greska = greska.poruka);
+      }
+    }
   }
 
   @override
@@ -75,6 +97,12 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
       return;
     }
 
+    final gradId = _gradId;
+
+    if (gradId == null) {
+      return;
+    }
+
     setState(() {
       _slanje = true;
       _greska = null;
@@ -87,6 +115,7 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
         email: _email.text.trim(),
         telefon: _telefon.text.trim(),
         datumRodjenja: _datumRodjenja,
+        gradId: gradId,
       );
 
       if (!mounted) {
@@ -162,6 +191,27 @@ class _IzmjenaProfilaEkranStanje extends State<IzmjenaProfilaEkran> {
                 decoration: const InputDecoration(labelText: 'Datum rođenja'),
                 child: Text(Formati.datum(_datumRodjenja)),
               ),
+            ),
+            const SizedBox(height: Razmaci.m),
+            DropdownButtonFormField<int>(
+              // Kljuc prati ucitane gradove: lista stize poslije prvog crtanja, a
+              // polje pocetnu vrijednost cita samo jednom.
+              key: ValueKey('grad-${_gradovi.length}'),
+              initialValue: _gradovi.any((x) => x.id == _gradId)
+                  ? _gradId
+                  : null,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Grad',
+                helperText: 'Po gradu vam prvo nudimo najbliže poslovnice.',
+              ),
+              items: [
+                for (final grad in _gradovi)
+                  DropdownMenuItem(value: grad.id, child: Text(grad.naziv)),
+              ],
+              onChanged: (vrijednost) => setState(() => _gradId = vrijednost),
+              validator: (vrijednost) =>
+                  vrijednost == null ? 'Odaberite grad u kojem ste.' : null,
             ),
             const SizedBox(height: Razmaci.xl),
             FilledButton(

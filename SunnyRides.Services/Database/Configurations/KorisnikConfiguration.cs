@@ -27,5 +27,11 @@ public class KorisnikConfiguration : IEntityTypeConfiguration<Korisnik>
                .WithMany()
                .HasForeignKey(x => x.PoslovnicaId)
                .OnDelete(DeleteBehavior.Restrict);
+
+        // Grad klijenta se isto ne brise dok neko u njemu zivi.
+        builder.HasOne(x => x.Grad)
+               .WithMany()
+               .HasForeignKey(x => x.GradId)
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }

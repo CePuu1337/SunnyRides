@@ -11,7 +11,20 @@ namespace SunnyRides.API.Controllers;
 public class PoslovnicaController
     : SifrarnikController<PoslovnicaDto, PoslovnicaSearchObject, PoslovnicaInsertRequest, PoslovnicaUpdateRequest>
 {
+    private readonly IPoslovnicaService _poslovnice;
+
     public PoslovnicaController(IPoslovnicaService service) : base(service)
     {
+        _poslovnice = service;
     }
+
+    /// <summary>
+    /// Poslovnica najbliza prijavljenom klijentu. Lokacija telefona je opciona i
+    /// sluzi samo ovom upitu; bez nje se mjeri od grada iz profila. Kad se ne zna
+    /// odakle mjeriti, odgovor je prazan (204).
+    /// </summary>
+    [HttpGet("najbliza")]
+    public Task<NajblizaPoslovnicaDto?> NajblizaAsync(
+        [FromQuery] double? latituda, [FromQuery] double? longituda, CancellationToken ct)
+        => _poslovnice.NajblizaAsync(latituda, longituda, ct);
 }

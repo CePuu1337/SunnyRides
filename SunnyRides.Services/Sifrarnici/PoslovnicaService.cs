@@ -6,6 +6,7 @@ using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Lokacija;
 
 namespace SunnyRides.Services.Sifrarnici;
 
@@ -14,8 +15,11 @@ public class PoslovnicaService
                       PoslovnicaInsertRequest, PoslovnicaUpdateRequest>,
       IPoslovnicaService
 {
-    public PoslovnicaService(SunnyRidesDbContext context) : base(context)
+    private readonly ILokacijaKlijenta _lokacija;
+
+    public PoslovnicaService(SunnyRidesDbContext context, ILokacijaKlijenta lokacija) : base(context)
     {
+        _lokacija = lokacija;
     }
 
     protected override string NazivEntiteta => "Poslovnica";
@@ -64,14 +68,14 @@ public class PoslovnicaService
         PoslovnicaInsertRequest request, Poslovnica entitet, CancellationToken ct)
     {
         await ObaveznoPostojiAsync<Grad>(request.GradId, "Grad", ct);
-        ProvjeriKoordinate(request.Latituda, request.Longituda);
+        Koordinate.ProvjeriPar(request.Latituda, request.Longituda);
     }
 
     protected override async Task BeforeUpdateAsync(
         PoslovnicaUpdateRequest request, Poslovnica entitet, CancellationToken ct)
     {
         await ObaveznoPostojiAsync<Grad>(request.GradId, "Grad", ct);
-        ProvjeriKoordinate(request.Latituda, request.Longituda);
+        Koordinate.ProvjeriPar(request.Latituda, request.Longituda);
     }
 
     protected override async Task BeforeDeleteAsync(Poslovnica entitet, CancellationToken ct)
@@ -105,16 +109,47 @@ public class PoslovnicaService
         }
     }
 
-    /// <summary>
-    /// Koordinate su opcione, ali idu u paru - poslovnica sa samo jednom koordinatom
-    /// se na mapi ne moze prikazati, a podatak izgleda kao da postoji.
-    /// </summary>
-    private static void ProvjeriKoordinate(double? latituda, double? longituda)
+    public async Task<NajblizaPoslovnicaDto?> NajblizaAsync(
+        double? latituda, double? longituda, CancellationToken ct = default)
     {
-        if (latituda.HasValue != longituda.HasValue)
+        var polaziste = await _lokacija.PolazisteAsync(latituda, longituda, ct);
+
+        if (polaziste is null)
         {
-            throw new BusinessException(
-                "Koordinate se unose zajedno - potrebne su i latituda i longituda, ili nijedna.");
+            return null;
         }
+
+        var udaljenosti = await _lokacija.UdaljenostiPoslovnicaAsync(polaziste, ct);
+
+        if (udaljenosti.Count == 0)
+        {
+            return null;
+        }
+
+        var (poslovnicaId, km) = udaljenosti
+            .OrderBy(x => x.Value)
+            .ThenBy(x => x.Key)
+            .Select(x => (x.Key, x.Value))
+            .First();
+
+        var zaokruzeno = Math.Round(km, 1);
+        var poLokaciji = polaziste.PoLokaciji;
+        var polazniGrad = polaziste.GradNaziv;
+
+        return await Context.Poslovnice
+            .AsNoTracking()
+            .Where(x => x.Id == poslovnicaId)
+            .Select(x => new NajblizaPoslovnicaDto
+            {
+                Id = x.Id,
+                Naziv = x.Naziv,
+                Adresa = x.Adresa,
+                GradNaziv = x.Grad.Naziv,
+                RadnoVrijeme = x.RadnoVrijeme,
+                UdaljenostKm = zaokruzeno,
+                PoLokaciji = poLokaciji,
+                PolazniGrad = polazniGrad
+            })
+            .FirstOrDefaultAsync(ct);
     }
 }

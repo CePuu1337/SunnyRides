@@ -1,7 +1,9 @@
 import '../servisi/sifrarnik_servis.dart';
 
 /// Vrsta polja u formi sifrarnika. Po njoj se bira kontrola i nacin provjere.
-enum VrstaPolja { tekst, cijelBroj, decimalniBroj, prekidac, veza }
+///
+/// Lokacija je tacka na karti i u zahtjevu postaje dva polja, latituda i longituda.
+enum VrstaPolja { tekst, cijelBroj, decimalniBroj, prekidac, veza, lokacija }
 
 /// Jedno polje u formi sifrarnika.
 class PoljeSifrarnika {
@@ -120,7 +122,7 @@ class DefinicijaSifrarnika {
       naziv: 'Gradovi',
       jednina: 'grad',
       putanja: SifrarnikServis.gradovi,
-      opis: 'Gradovi u kojima se nalaze poslovnice',
+      opis: 'Gradovi poslovnica i klijenata, sa sredinom grada na karti',
       kolone: [
         KolonaSifrarnika(kljuc: 'naziv', natpis: 'NAZIV'),
         KolonaSifrarnika(kljuc: 'drzavaNaziv', natpis: 'DRŽAVA', sirina: 180),
@@ -148,6 +150,15 @@ class DefinicijaSifrarnika {
           natpis: 'Poštanski broj',
           obavezno: false,
           najvise: 20,
+        ),
+        PoljeSifrarnika(
+          kljuc: 'lokacija',
+          natpis: 'Sredina grada',
+          vrsta: VrstaPolja.lokacija,
+          obavezno: false,
+          pojasnjenje:
+              'Od ove tačke se klijentu iz grada mjeri udaljenost do poslovnica. '
+              'Bez nje mu se poslovnice ne mogu poredati po blizini.',
         ),
       ],
     ),

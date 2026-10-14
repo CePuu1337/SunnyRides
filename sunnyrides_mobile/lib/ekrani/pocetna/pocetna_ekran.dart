@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../../modeli/tacka.dart';
 import '../../modeli/vozilo.dart';
 import '../../servisi/katalog_servis.dart';
+import '../../stanje/lokacija.dart';
 import '../../stanje/navigacija.dart';
 import '../../stanje/sesija.dart';
 import '../../widgeti/kartica_vozila.dart';
 import '../../widgeti/obavjestenje.dart';
+import '../../widgeti/polaziste_udaljenosti.dart';
 import '../../widgeti/slika.dart';
 import '../../widgeti/zvono.dart';
 import '../vozila/detalji_vozila_ekran.dart';
@@ -24,8 +27,13 @@ class PocetnaEkran extends StatefulWidget {
 
 class _PocetnaEkranStanje extends State<PocetnaEkran> {
   late final KatalogServis _katalog;
+  late final Lokacija _lokacija;
+  late final Sesija _sesija;
+  Tacka? _zadnjaTacka;
+  int? _zadnjiGrad;
 
   List<Preporuka> _preporuke = const [];
+  NajblizaPoslovnica? _najbliza;
   List<Obavijest> _obavijesti = const [];
   List<Stavka> _tipovi = const [];
   DozvoljeneKategorije? _kategorije;
@@ -39,6 +47,9 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
     super.initState();
 
     _katalog = KatalogServis(context.read<ApiKlijent>());
+    _lokacija = context.read<Lokacija>()..addListener(_naPromjenuPolazista);
+    _sesija = context.read<Sesija>()..addListener(_naPromjenuPolazista);
+    _zadnjiGrad = _sesija.korisnik?.gradId;
 
     // Kad uposlenik odluci o dozvoli, mijenja se sta klijent smije rezervisati.
     // Ekran se tada sam osvjezi, bez odjave i ponovne prijave.
@@ -52,23 +63,54 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
   @override
   void dispose() {
     _odlukaODozvoli?.cancel();
+    _lokacija.removeListener(_naPromjenuPolazista);
+    _sesija.removeListener(_naPromjenuPolazista);
     super.dispose();
   }
 
-  Future<void> _ucitaj() async {
+  /// Najbliza poslovnica se mijenja kad klijent ukljuci lokaciju telefona ili
+  /// promijeni grad u profilu. Ostatak ekrana od toga ne zavisi, pa se osvjezava
+  /// samo kartica.
+  Future<void> _naPromjenuPolazista() async {
+    final grad = _sesija.korisnik?.gradId;
+
+    if (_lokacija.tacka == _zadnjaTacka && grad == _zadnjiGrad) {
+      return;
+    }
+
+    _zadnjaTacka = _lokacija.tacka;
+    _zadnjiGrad = grad;
+
+    try {
+      final najbliza = await _katalog.najblizaPoslovnica(
+        lokacija: _lokacija.tacka,
+      );
+
+      if (mounted) {
+        setState(() => _najbliza = najbliza);
+      }
+    } on ApiGreska {
+      // Kartica ostaje kakva je bila; ostatak ekrana radi i bez nje.
+    }
+  }
+
+  /// Povlacenje za osvjezavanje ucitava tiho: sadrzaj ostaje na ekranu dok ne
+  /// stigne novi, umjesto da ga zamijeni kruzic.
+  Future<void> _ucitaj({bool tiho = false}) async {
     setState(() {
-      _ucitavanje = true;
+      _ucitavanje = !tiho;
       _greska = null;
     });
 
     try {
-      // Cetiri nezavisna upita idu paralelno - jedan po jedan bi ekran drzao
-      // prazan duze nego sto treba.
-      final rezultati = await Future.wait([
+      // Nezavisni upiti idu paralelno - jedan po jedan bi ekran drzao prazan duze
+      // nego sto treba.
+      final rezultati = await Future.wait<Object?>([
         _katalog.preporuke(),
         _katalog.obavijesti(koliko: 3),
         _katalog.tipoviVozila(),
         _katalog.mojeKategorije(),
+        _katalog.najblizaPoslovnica(lokacija: _lokacija.tacka),
       ]);
 
       if (!mounted) {
@@ -80,6 +122,7 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
         _obavijesti = rezultati[1] as List<Obavijest>;
         _tipovi = rezultati[2] as List<Stavka>;
         _kategorije = rezultati[3] as DozvoljeneKategorije;
+        _najbliza = rezultati[4] as NajblizaPoslovnica?;
         _ucitavanje = false;
       });
 
@@ -117,7 +160,7 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
           greska: _greska,
           naPonovniPokusaj: _ucitaj,
           dijete: RefreshIndicator(
-            onRefresh: _ucitaj,
+            onRefresh: () => _ucitaj(tiho: true),
             child: ListView(
               padding: const EdgeInsets.only(bottom: Razmaci.xxl),
               children: [
@@ -136,6 +179,18 @@ class _PocetnaEkranStanje extends State<PocetnaEkran> {
                     child: Obavjestenje.upozorenje(
                       _kategorije!.obrazlozenje,
                       naslov: 'Vozačka dozvola nije spremna',
+                    ),
+                  ),
+                ],
+                if (_najbliza != null) ...[
+                  const SizedBox(height: Razmaci.l),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Razmaci.l),
+                    child: _NajblizaPoslovnica(
+                      poslovnica: _najbliza!,
+                      naDodir: () => context.read<Navigacija>().otvoriPretragu(
+                        poslovnicaId: _najbliza!.id,
+                      ),
                     ),
                   ),
                 ],
@@ -276,6 +331,129 @@ class _PoljePretrage extends StatelessWidget {
                 'Pronađi vozilo za svoj termin',
                 style: TextStyle(color: Boje.tekstPrigusen, fontSize: 13.5),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Kartica "Vasa najbliza poslovnica". Dodir otvara pretragu ogranicenu na nju.
+class _NajblizaPoslovnica extends StatelessWidget {
+  const _NajblizaPoslovnica({required this.poslovnica, required this.naDodir});
+
+  final NajblizaPoslovnica poslovnica;
+  final VoidCallback naDodir;
+
+  @override
+  Widget build(BuildContext context) {
+    final adresa = [
+      poslovnica.adresa,
+      poslovnica.gradNaziv,
+    ].where((x) => x != null && x.isNotEmpty).join(', ');
+
+    return Material(
+      color: Boje.povrsina,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Zaobljenja.kartica),
+        side: const BorderSide(color: Boje.ivica),
+      ),
+      child: InkWell(
+        onTap: naDodir,
+        borderRadius: BorderRadius.circular(Zaobljenja.kartica),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Razmaci.m,
+            Razmaci.m,
+            Razmaci.s,
+            Razmaci.xs,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Boje.primarnaSvijetla,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.storefront_outlined,
+                      size: 20,
+                      color: Boje.primarnaTamnija,
+                    ),
+                  ),
+                  const SizedBox(width: Razmaci.m),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Vaša najbliža poslovnica',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: Boje.tekstPrigusen,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          poslovnica.naziv,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          adresa,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Boje.tekstBlazi,
+                          ),
+                        ),
+                        if (poslovnica.radnoVrijeme != null &&
+                            poslovnica.radnoVrijeme!.isNotEmpty)
+                          Text(
+                            'Radno vrijeme ${poslovnica.radnoVrijeme}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Boje.tekstPrigusen,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: Razmaci.s),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        Formati.udaljenost(poslovnica.udaljenostKm),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Text(
+                        'zračno',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Boje.tekstPrigusen,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Icon(Icons.chevron_right, color: Boje.tekstPrigusen),
+                ],
+              ),
+              const SizedBox(height: Razmaci.xs),
+              const PolazisteUdaljenosti(),
             ],
           ),
         ),

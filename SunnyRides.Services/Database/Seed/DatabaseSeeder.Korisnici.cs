@@ -115,6 +115,21 @@ public partial class DatabaseSeeder
             brojac++;
         }
 
+        // Svaki klijent ima grad, kao da ga je odabrao poslije registracije. Raspored
+        // ide redom kroz gradove, bez slucajnih brojeva - tako ostatak seeda dobija
+        // iste slucajne vrijednosti kao i prije. Nalog "mobile" je u Sarajevu, gradu
+        // bez poslovnice, da se vidi kako mu se nudi najbliza.
+        mobile.Grad = _gradovi.Single(x => x.Naziv == "Sarajevo");
+
+        var redGradova = new[] { "Mostar", "Sarajevo", "Neum", "Split", "Dubrovnik", "Budva" }
+            .Select(naziv => _gradovi.Single(x => x.Naziv == naziv))
+            .ToList();
+
+        for (var i = 1; i < _klijenti.Count; i++)
+        {
+            _klijenti[i].Grad = redGradova[(i - 1) % redGradova.Count];
+        }
+
         await _context.SaveChangesAsync(ct);
 
         // --- vozacke dozvole ---

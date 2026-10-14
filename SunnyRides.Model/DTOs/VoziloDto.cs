@@ -38,6 +38,13 @@ public class VoziloDto
     public string? PoslovnicaNaziv { get; set; }
     public string? GradNaziv { get; set; }
 
+    /// <summary>
+    /// Zracna udaljenost poslovnice vozila od klijenta, u kilometrima. Popunjena samo u
+    /// pretrazi i samo kad je poznato odakle se mjeri - od lokacije telefona ili od
+    /// grada iz profila.
+    /// </summary>
+    public double? UdaljenostKm { get; set; }
+
     /// <summary>URL male slike, nikad sadrzaj slike. Prazno ako vozilo nema glavnu fotografiju.</summary>
     public string? ThumbnailUrl { get; set; }
 

@@ -25,4 +25,8 @@ public class KorisnikDto
     /// <summary>Poslovnica uposlenika. Prazno za administratora i klijenta.</summary>
     public int? PoslovnicaId { get; set; }
     public string? PoslovnicaNaziv { get; set; }
+
+    /// <summary>Grad klijenta. Prazno za osoblje.</summary>
+    public int? GradId { get; set; }
+    public string? GradNaziv { get; set; }
 }

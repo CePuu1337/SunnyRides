@@ -14,6 +14,9 @@ dependencies:
   flutter_stripe: ^14.0.0
   image_picker: ^1.2.3
 
+  # Priblizna lokacija telefona za "Najblize meni", samo na zahtjev klijenta.
+  geolocator: ^14.0.2
+
   # Zajednicki sloj: API klijent, modeli, tokeni, SignalR veza i dizajn. Lokalni
   # paket u istom repozitoriju, pa se vuce po putanji umjesto sa pub.dev-a.
   sunnyrides_core:
