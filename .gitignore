@@ -29,6 +29,9 @@ privatno/
 # Generisani PDF izvjestaji
 *.pdf
 
+# Licne biljeske o razvoju, ne idu uz rad
+DOKUMENTACIJA.md
+
 # IDE
 .vs/
 .idea/

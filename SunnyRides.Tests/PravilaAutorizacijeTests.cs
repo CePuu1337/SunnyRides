@@ -74,6 +74,34 @@ public class PravilaAutorizacijeTests
         Assert.Equal(new[] { Model.Konstante.Uloge.Administrator }, uloge.ToArray());
     }
 
+    /// <summary>
+    /// Bez tokena se moze samo uci u sistem: prijava, registracija i dva koraka
+    /// reseta zaboravljene lozinke. Svaki novi anonimni endpoint obara ovaj test, pa
+    /// otvaranje API-ja ne moze proci neprimijeceno.
+    /// </summary>
+    [Fact]
+    public void Bez_prijave_su_dostupni_samo_ulaz_u_sistem_i_reset_lozinke()
+    {
+        var anonimne = Kontroleri()
+            .SelectMany(kontroler => Akcije(kontroler)
+                .Where(metoda =>
+                    kontroler.GetCustomAttributes<AllowAnonymousAttribute>(inherit: true).Any()
+                    || metoda.GetCustomAttributes<AllowAnonymousAttribute>(inherit: true).Any())
+                .Select(metoda => $"{kontroler.Name}.{metoda.Name}"))
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            new[]
+            {
+                "AuthController.PotvrdiResetAsync",
+                "AuthController.PrijaviAsync",
+                "AuthController.RegistrujAsync",
+                "AuthController.ZatraziResetAsync"
+            },
+            anonimne);
+    }
+
     // --- pomocne ----------------------------------------------------------
 
     private static IEnumerable<Type> Kontroleri() =>
