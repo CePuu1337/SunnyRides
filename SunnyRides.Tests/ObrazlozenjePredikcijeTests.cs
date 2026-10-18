@@ -4,58 +4,56 @@ using Xunit;
 namespace SunnyRides.Tests;
 
 /// <summary>
-/// Obrazlozenje uz preporuku iz modela: procjena se nikad ne prikazuje bez prosjeka
-/// vozila, a uz nju stoji na cemu je model za korisnika ucio.
+/// Obrazlozenje uz preporuku iz modela: kratko kaze iz cega je model za korisnika
+/// ucio, i ne navodi nesto cega u njegovoj historiji nema.
 /// </summary>
 public class ObrazlozenjePredikcijeTests
 {
     [Fact]
-    public void Procjena_stoji_uz_prosjek_vozila()
+    public void Navodi_najmove_i_ocjene_kad_ih_korisnik_ima()
     {
         var tekst = RecommenderService.ObrazloziPredikciju(
-            4.8, 4.3, new RecommenderService.HistorijaKorisnika(4, 3));
+            new RecommenderService.HistorijaKorisnika(4, 3));
 
-        Assert.StartsWith("Za vas 4,8 od 5 (prosjek vozila 4,3).", tekst);
+        Assert.Equal("Odabrano prema vašim najmovima i ocjenama, uz ocjene drugih korisnika.", tekst);
     }
 
     [Fact]
-    public void Navodi_historiju_korisnika()
+    public void Bez_ocjena_ne_spominje_vlastite_ocjene()
     {
         var tekst = RecommenderService.ObrazloziPredikciju(
-            4.8, 4.3, new RecommenderService.HistorijaKorisnika(4, 3));
+            new RecommenderService.HistorijaKorisnika(2, 0));
 
-        Assert.Contains("vasih 4 najma i 3 ocjene", tekst);
+        Assert.Equal("Odabrano prema vašim najmovima, uz ocjene drugih korisnika.", tekst);
+    }
+
+    [Fact]
+    public void Bez_najmova_ne_spominje_vlastite_najmove()
+    {
+        var tekst = RecommenderService.ObrazloziPredikciju(
+            new RecommenderService.HistorijaKorisnika(0, 2));
+
+        Assert.Equal("Odabrano prema vašim ocjenama, uz ocjene drugih korisnika.", tekst);
     }
 
     [Theory]
-    [InlineData(1, "1 najma")]
-    [InlineData(3, "3 najma")]
-    [InlineData(5, "5 najmova")]
-    [InlineData(11, "11 najmova")]
-    [InlineData(21, "21 najma")]
-    public void Broj_najmova_je_u_ispravnom_obliku(int najmova, string ocekivano)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Bez_vlastite_historije_navodi_slicne_korisnike(bool prazanZapis)
     {
-        var tekst = RecommenderService.ObrazloziPredikciju(
-            4.0, 4.0, new RecommenderService.HistorijaKorisnika(najmova, 0));
+        var historija = prazanZapis ? new RecommenderService.HistorijaKorisnika(0, 0) : null;
 
-        Assert.Contains(ocekivano, tekst);
+        var tekst = RecommenderService.ObrazloziPredikciju(historija);
+
+        Assert.Equal("Odabrano prema ocjenama korisnika sličnog ukusa.", tekst);
     }
 
     [Fact]
-    public void Vozilo_bez_recenzija_to_i_kaze()
-    {
-        var tekst = RecommenderService.ObrazloziPredikciju(4.1, null, null);
-
-        Assert.Contains("vozilo jos nema recenzija", tekst);
-        Assert.DoesNotContain("prosjek vozila", tekst);
-    }
-
-    [Fact]
-    public void Tekst_je_dovoljno_kratak_za_karticu()
+    public void Tekst_je_kratak_za_karticu()
     {
         var tekst = RecommenderService.ObrazloziPredikciju(
-            4.9, 4.1, new RecommenderService.HistorijaKorisnika(62, 54));
+            new RecommenderService.HistorijaKorisnika(62, 54));
 
-        Assert.True(tekst.Length <= 115, $"Obrazlozenje ima {tekst.Length} znakova.");
+        Assert.True(tekst.Length <= 80, $"Obrazlozenje ima {tekst.Length} znakova.");
     }
 }

@@ -170,7 +170,9 @@ Novi klijent grad bira odmah poslije registracije.
 
 Nalozi se kreiraju seedom pri prvom pokretanju API-ja nad praznom bazom.
 
-Plaćanje ide kroz Stripe sandbox. Testna kartica je `4242 4242 4242 4242`, bilo koji
+Plaćanje ide kroz Stripe sandbox, u testnom režimu, pa se nijedna kartica stvarno ne
+tereti. Aplikacija to ne ispisuje na ekranu plaćanja, jer je ekran pisan kao za pravu
+naplatu. Testna kartica je `4242 4242 4242 4242`, bilo koji
 budući datum isteka i bilo koji CVC (npr. `123`). Kartica `4000 0000 0000 9995` se
 odbija, pa se na njoj vidi i neuspjelo plaćanje.
 

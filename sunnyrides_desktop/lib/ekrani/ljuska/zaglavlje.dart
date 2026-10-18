@@ -6,16 +6,14 @@ import '../../stanje/sesija.dart';
 import 'meni.dart';
 import 'promjena_lozinke_dijalog.dart';
 
-/// Gornja traka: naslov ekrana lijevo, zvono i nalog desno.
+/// Gornja traka: naslov ekrana lijevo, nalog desno.
+///
+/// Zvona za obavjestenja ovdje nema. Obavjestenja dobijaju klijenti, u mobilnoj
+/// aplikaciji; osoblju je ono sto ceka obradu na Pregledu poslovanja.
 class Zaglavlje extends StatelessWidget {
-  const Zaglavlje({
-    super.key,
-    required this.stavka,
-    required this.naNotifikacije,
-  });
+  const Zaglavlje({super.key, required this.stavka});
 
   final StavkaMenija stavka;
-  final VoidCallback naNotifikacije;
 
   static const visina = 76.0;
 
@@ -56,69 +54,8 @@ class Zaglavlje extends StatelessWidget {
               ],
             ),
           ),
-          _Zvono(naPritisak: naNotifikacije),
-          const SizedBox(width: Razmaci.l),
-          Container(width: 1, height: 32, color: Boje.ivica),
-          const SizedBox(width: Razmaci.l),
           if (korisnik != null) _Nalog(korisnik: korisnik),
         ],
-      ),
-    );
-  }
-}
-
-class _Zvono extends StatelessWidget {
-  const _Zvono({required this.naPritisak});
-
-  final VoidCallback naPritisak;
-
-  @override
-  Widget build(BuildContext context) {
-    final neprocitanih = context.watch<NotifikacijeStanje>().neprocitanih;
-
-    return Tooltip(
-      message: 'Obavještenja',
-      child: InkWell(
-        onTap: naPritisak,
-        borderRadius: BorderRadius.circular(Zaobljenja.dugme),
-        child: Padding(
-          padding: const EdgeInsets.all(Razmaci.s),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const Icon(
-                Icons.notifications_none,
-                size: 22,
-                color: Boje.tekstBlazi,
-              ),
-              if (neprocitanih > 0)
-                Positioned(
-                  right: -6,
-                  top: -4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 1,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 17),
-                    decoration: BoxDecoration(
-                      color: Boje.greska,
-                      borderRadius: BorderRadius.circular(Zaobljenja.pilula),
-                    ),
-                    child: Text(
-                      neprocitanih > 99 ? '99+' : '$neprocitanih',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }

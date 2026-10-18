@@ -402,13 +402,6 @@ class _Cijene extends StatelessWidget {
             vrijednost: Formati.novac(vozilo.iznosDepozita),
             napomena: 'vraća se nakon povrata vozila',
           ),
-          if (sezona != null && sezona.mnozilac != 1) ...[
-            const SizedBox(height: Razmaci.s),
-            Obavjestenje.info(
-              'U periodu "${sezona.naziv}" cijena se množi sa '
-              '${sezona.mnozilac.toStringAsFixed(2)}.',
-            ),
-          ],
           if (sezona != null && sezona.popustPrag1 > 0) ...[
             const SizedBox(height: Razmaci.m),
             const Text(

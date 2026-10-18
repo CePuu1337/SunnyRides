@@ -3403,8 +3403,13 @@ javlja samo promjene — obavještenja nastala prije povezivanja se inače ne bi
 Nakon toga hub gura i novo obavještenje i novi broj, pa aplikacija zbog oznake na zvonu
 ne radi još jedan zahtjev.
 
-`NotifikacijeStanje` i veza sa hubom su u `sunnyrides_core`, jer desktop i mobilna imaju
-isti posao. Token se čita pri svakom uspostavljanju veze, ne jednom pri gradnji —
+`NotifikacijeStanje` i veza sa hubom su u `sunnyrides_core`, uz API klijent i čuvanje
+tokena, jer su dio istog sloja komunikacije sa serverom. Koristi ih samo mobilna
+aplikacija. Desktop je ranije imao zvono u zaglavlju, ali osoblje obavještenja ne dobija
+— worker ih šalje klijentima — pa je zvono uvijek stajalo prazno i dodir na njega nije
+radio ništa. Uklonjeno je, jer pravilnik traži da se kontrola bez funkcionalnosti
+ukloni. Ono što osoblje čeka (dozvole na verifikaciji, neplaćene rezervacije) je na
+Pregledu poslovanja. Token se čita pri svakom uspostavljanju veze, ne jednom pri gradnji —
 ponovno povezivanje nakon prekida inače bi poslalo stari token. Ako se veza ne uspostavi,
 aplikacija radi bez nje i broj se osvježava zahtjevom; korisniku se to ne prikazuje kao
 greška, jer za njega nije.

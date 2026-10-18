@@ -1,4 +1,3 @@
-using System.Globalization;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model;
@@ -82,7 +81,7 @@ public class RecommenderService : IRecommenderService
             ? PredvidiModelom(kandidati, korisnikId)
             : await RezervnimPutemAsync(kandidati, korisnikId, ct);
 
-        // Obrazlozenje predikcije navodi i na cemu je model ucio za ovog korisnika.
+        // Obrazlozenje predikcije kaze iz cega je model za ovog korisnika ucio.
         var historija = krozModel ? await HistorijaAsync(korisnikId, ct) : null;
 
         // Jedan primjerak po modelu vozila. Flota ima po nekoliko vozila istog modela, a
@@ -514,61 +513,34 @@ public class RecommenderService : IRecommenderService
     {
         if (bodovano.Heuristika is null)
         {
-            var ocjena = bodovano.PredvidjenaOcjena ?? BodovanjePreporuke.NeutralnaOcjena;
-
-            return ObrazloziPredikciju(ocjena, vozilo.ProsjecnaOcjena, historija);
+            return ObrazloziPredikciju(historija);
         }
 
         return ObrazloziHeuristiku(bodovano.Heuristika, vozilo);
     }
 
     /// <summary>
-    /// Predikcija se uvijek prikazuje uz prosjek vozila, jer su to dvije razlicite
-    /// stvari: prosjek je sta su o vozilu rekli svi, a predikcija je procjena za ovog
-    /// korisnika. Uz to se navodi na cemu je model za njega ucio - njegovi zavrseni
-    /// najmovi i ocjene - pa korisnik vidi da procjena dolazi iz njegove historije, a
-    /// ne samo iz tudjih ocjena.
+    /// Kratka recenica o tome iz cega je model za korisnika ucio: njegovi zavrseni
+    /// najmovi i ocjene, i ocjene ostalih korisnika. Brojevi se ne pisu - procjena
+    /// modela je u polju <c>PredvidjenaOcjena</c>, a prosjek vozila stoji uz zvjezdicu
+    /// na kartici, pa bi ih recenica samo ponavljala na uskom prostoru.
     /// </summary>
-    public static string ObrazloziPredikciju(
-        double predikcija, double? prosjekVozila, HistorijaKorisnika? historija)
+    public static string ObrazloziPredikciju(HistorijaKorisnika? historija)
     {
-        // Tekst stoji na uskoj kartici, pa je namjerno kratak: tri reda na telefonu.
-        var prosjek = prosjekVozila is null
-            ? "vozilo jos nema recenzija"
-            : $"prosjek vozila {Decimalno(prosjekVozila.Value)}";
+        var imaNajmova = historija is { Najmova: > 0 };
+        var imaOcjena = historija is { Ocjena: > 0 };
 
-        var osnova = historija is null
-            ? "Model uci iz ocjena slicnih korisnika."
-            : $"Model uci iz vasih {historija.Najmova} {Oblik(historija.Najmova, "najma", "najma", "najmova")} " +
-              $"i {historija.Ocjena} {Oblik(historija.Ocjena, "ocjene", "ocjene", "ocjena")}, " +
-              "te iz ocjena slicnih korisnika.";
-
-        return $"Za vas {Decimalno(predikcija)} od 5 ({prosjek}). {osnova}";
-    }
-
-    /// <summary>
-    /// Jedna decimala sa zarezom, kako se broj pise u recenici na bosanskom - i isto na
-    /// svakoj masini, bez obzira na jezicke postavke servera.
-    /// </summary>
-    private static string Decimalno(double broj) =>
-        broj.ToString("0.0", CultureInfo.InvariantCulture).Replace('.', ',');
-
-    /// <summary>1 ocjena, 2-4 ocjene, 5 i vise ocjena - uz izuzetak 11-14.</summary>
-    private static string Oblik(int broj, string jedan, string dvaDoCetiri, string pet)
-    {
-        var desetica = broj % 100;
-
-        if (desetica is >= 11 and <= 14)
+        var vlastito = (imaNajmova, imaOcjena) switch
         {
-            return pet;
-        }
-
-        return (broj % 10) switch
-        {
-            1 => jedan,
-            >= 2 and <= 4 => dvaDoCetiri,
-            _ => pet
+            (true, true) => "vašim najmovima i ocjenama",
+            (true, false) => "vašim najmovima",
+            (false, true) => "vašim ocjenama",
+            _ => null
         };
+
+        return vlastito is null
+            ? "Odabrano prema ocjenama korisnika sličnog ukusa."
+            : $"Odabrano prema {vlastito}, uz ocjene drugih korisnika.";
     }
 
     /// <summary>Koliko korisnik ima zavrsenih najmova i neskrivenih recenzija.</summary>
@@ -587,19 +559,19 @@ public class RecommenderService : IRecommenderService
         rezultat.Signal switch
         {
             SignalPreporuke.Tip =>
-                $"Najcesce birate {(vozilo.TipVozilaNaziv ?? "ovaj tip vozila").ToLowerInvariant()}.",
+                $"Najčešće birate {(vozilo.TipVozilaNaziv ?? "ovaj tip vozila").ToLowerInvariant()}.",
 
             SignalPreporuke.Cijena =>
-                $"Cijena {vozilo.DnevnaTarifa:0.00} EUR po danu je u rangu koji obicno trazite.",
+                $"Cijena {vozilo.DnevnaTarifa:0.00} EUR po danu je u rangu koji obično tražite.",
 
             SignalPreporuke.Lokacija =>
-                $"Vozilo je u poslovnici {vozilo.PoslovnicaNaziv}, u gradu u kojem najcesce trazite.",
+                $"Vozilo je u poslovnici {vozilo.PoslovnicaNaziv}, u gradu u kojem najčešće tražite.",
 
             SignalPreporuke.Marka =>
-                $"Marku {vozilo.MarkaNaziv} ste vec birali.",
+                $"Marku {vozilo.MarkaNaziv} ste već birali.",
 
             SignalPreporuke.Kubikaza =>
-                $"Kubikaza {vozilo.Kubikaza} cm3 odgovara vozilima koja ste ranije iznajmljivali.",
+                $"Kubikaža {vozilo.Kubikaza} cm3 odgovara vozilima koja ste ranije iznajmljivali.",
 
             SignalPreporuke.Ocjena =>
                 rezultat.BrojOcjena > 0
@@ -607,8 +579,8 @@ public class RecommenderService : IRecommenderService
                     : "Jedno od bolje ocijenjenih vozila u floti.",
 
             _ => rezultat.BrojNajmova > 0
-                ? $"Jedno od najtrazenijih vozila: {rezultat.BrojNajmova} najmova u zadnja tri mjeseca."
-                : "Preporuceno prema popularnosti u floti."
+                ? $"Jedno od najtraženijih vozila: {rezultat.BrojNajmova} najmova u zadnja tri mjeseca."
+                : "Preporučeno prema popularnosti u floti."
         };
 
     // --- pomocno -----------------------------------------------------------

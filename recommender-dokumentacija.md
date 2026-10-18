@@ -305,20 +305,22 @@ više niti.
 Model vozila o kojem u podacima za učenje nema traga dobija prosjek flote: trener za
 nepoznat ključ vraća `NaN`, a neutralna vrijednost je poštenija od nasumične.
 
-Obrazloženje uz stavku je ono što model zaista tvrdi, uvijek uz prosjek vozila i uz ono
-iz čega je model za tog korisnika učio:
+Obrazloženje uz stavku kaže iz čega je model za tog korisnika učio — njegovi završeni
+najmovi i ocjene, i ocjene ostalih korisnika:
 
-> „Za vas 4,8 od 5 (prosjek vozila 4,3). Model uči iz vaših 4 najma i 3 ocjene, te iz
-> ocjena sličnih korisnika."
+> „Odabrano prema vašim najmovima i ocjenama, uz ocjene drugih korisnika."
 
-Procjena i prosjek su dvije različite stvari: prosjek je šta su o vozilu rekli svi, a
-procjena je šta model misli da bi rekao baš ovaj korisnik. Prva verzija aplikacije je
-na kartici, na mjestu zvjezdice, prikazivala procjenu, pa su broj uz zvjezdicu i broj u
-rečenici uvijek bili isti i izgledalo je kao da model samo prepisuje prosjek. Sada
-zvjezdica svuda (pretraga, detalji, početna) prikazuje prosjek recenzija, a procjena
-stoji samo u obrazloženju, jasno odvojena od njega. Brojevi najmova i ocjena se čitaju
-iz baze pri zahtjevu (`Rezervacija` u statusu `Completed`, neskrivene `Recenzija`) —
-to su isti izvori iz kojih se puni matrica za učenje.
+Navodi se samo ono što korisnik stvarno ima: bez ocjena piše „prema vašim najmovima",
+bez najmova „prema vašim ocjenama", a bez ijednog od toga „prema ocjenama korisnika
+sličnog ukusa" (pokriveno u `ObrazlozenjePredikcijeTests`). Da li korisnik ima najmove i
+ocjene čita se iz baze pri zahtjevu (`Rezervacija` u statusu `Completed`, neskrivene
+`Recenzija`) — to su isti izvori iz kojih se puni matrica za učenje.
+
+Brojevi namjerno nisu u rečenici. Procjena modela za korisnika je u polju
+`predvidjenaOcjena`, a prosjek recenzija vozila stoji uz zvjezdicu na kartici. Ranija
+verzija je oboje pisala i u obrazloženju („Za vas 4,8 od 5, prosjek vozila 4,3…"), ali
+na uskoj kartici je to bila rečenica od tri reda koja ponavlja ono što zvjezdica već
+pokazuje.
 
 ---
 

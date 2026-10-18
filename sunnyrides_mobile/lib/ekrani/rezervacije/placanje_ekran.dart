@@ -301,9 +301,11 @@ class _PlacanjeEkranStanje extends State<PlacanjeEkran> {
             ],
             if (!_placeno) ...[
               const SizedBox(height: Razmaci.l),
+              // Prijava rada trazi ovu napomenu: uspjeh u PaymentSheet-u jos nije
+              // naplata, dok je server ne potvrdi kod Stripe-a.
               Obavjestenje.info(
-                'Naplata ide preko Stripe-a, u testnom režimu. Za probu se koristi '
-                'kartica 4242 4242 4242 4242, bilo koji budući datum i CVC 123.',
+                'Naplatu potvrđuje server kod Stripe-a. Rezervacija postaje '
+                'potvrđena tek nakon te provjere.',
               ),
             ],
             const SizedBox(height: Razmaci.xl),
