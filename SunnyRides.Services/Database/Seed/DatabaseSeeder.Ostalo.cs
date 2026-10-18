@@ -68,21 +68,38 @@ public partial class DatabaseSeeder
     }
 
     /// <summary>
-    /// Dodjeljuje svakom klijentu po jedan omiljeni tip vozila, u krug. Raspodjela je
-    /// namjerno pravilna, ne nasumicna: tako svaki tip ima priblizno jednako pristalica
-    /// i nijedan ne ostane bez ijedne dobre ocjene.
+    /// Dodjeljuje svakom klijentu po jedan omiljeni tip vozila, u krug, ali samo medju
+    /// tipovima koje smije voziti. Raspodjela je namjerno pravilna, ne nasumicna, i ne
+    /// trosi slucajne brojeve.
+    ///
+    /// Omiljeni tip koji klijent po dozvoli ne smije voziti ne bi nikad iznajmio, pa
+    /// bi sve njegove ocjene bile sum bez obrasca. Ranija verzija je tipove dijelila
+    /// bez obzira na dozvolu, pa je to koliko model preporuke ima sta nauciti zavisilo
+    /// od slucajnosti. Poslije izmjene seeda koja je pomjerila slucajne brojeve (novi
+    /// uposlenici), R kvadrat modela je pao sa 0,47 na nulu.
     /// </summary>
     private Dictionary<int, int> OmiljeniTipoviKlijenata()
     {
-        var tipovi = _vozila
-            .Select(v => v.ModelVozila.TipVozilaId)
-            .Distinct()
-            .OrderBy(x => x)
-            .ToList();
+        var omiljeni = new Dictionary<int, int>();
 
-        return _klijenti
-            .Select((klijent, redniBroj) => (klijent, tip: tipovi[redniBroj % tipovi.Count]))
-            .ToDictionary(x => x.klijent.Id, x => x.tip);
+        for (var redniBroj = 0; redniBroj < _klijenti.Count; redniBroj++)
+        {
+            var klijent = _klijenti[redniBroj];
+
+            var dostupniTipovi = _vozila
+                .Where(v => v.Aktivno && SmijeVoziti(klijent, v))
+                .Select(v => v.ModelVozila.TipVozilaId)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+            if (dostupniTipovi.Count > 0)
+            {
+                omiljeni[klijent.Id] = dostupniTipovi[redniBroj % dostupniTipovi.Count];
+            }
+        }
+
+        return omiljeni;
     }
 
     /// <summary>

@@ -58,6 +58,21 @@ ocjena(korisnik, model) ≈ p(korisnik) · q(model)
 Vektori `p` i `q` nisu zadati — dobijaju se minimizacijom greške nad poznatim ocjenama.
 Tu je razlika u odnosu na heuristiku: težine niko nije upisao, model ih je naučio.
 
+**Model uči odstupanje od prosjeka, a ne samu ocjenu.** Matrična faktorizacija u ML.NET-u
+nema slobodan član, pa bi latentni faktori morali sami nositi i prosječnu ocjenu od oko
+3,8, a regularizacija bi svaku predikciju vukla prema nuli — prema ocjeni koje nema. Zato
+se prije učenja od svake ocjene oduzme prosjek skupa za učenje, a pri predikciji se
+prosjek vrati:
+
+```
+ocjena(korisnik, model) ≈ μ + p(korisnik) · q(model)
+```
+
+`μ` je prosjek ocjena iz kojih je model učio i čuva se uz model. Regularizacija sada vuče
+prema prosjeku, a faktori opisuju samo ono po čemu se korisnici i vozila razlikuju. Bez
+ovoga je model na istim podacima bio jedva bolji od pogađanja prosjeka (R² 0,085), a sa
+njim objašnjava oko dvije trećine odstupanja (sekcija 4).
+
 **Parametri učenja se biraju mjerenjem, ne pogađanjem**
 
 Broj latentnih faktora i jačina regularizacije nisu upisani u kod kao odluka — traže se
@@ -91,7 +106,7 @@ Rang 8 nad dvanaest korisnika i deset modela vozila znači blizu dvjesta paramet
 se uče iz pedesetak redova — zato su u mreži i rang 1 i rang 2, koji na ovoj količini
 podataka najčešće i pobijede.
 
-Kad podataka nema ni za unakrsnu provjeru, uzimaju se umjerene vrijednosti (rang 4,
+Kad podataka nema ni za unakrsnu provjeru, uzimaju se umjerene vrijednosti (rang 2,
 lambda 0,1) — na malo podataka je to sigurniji izbor. Odabrani par se vidi u
 `/api/preporuke/model`.
 
@@ -203,20 +218,20 @@ Rezultat se čita kroz `GET /api/preporuke/model` i tu se vidi i na čemu je mod
 ```json
 {
   "treniran": true,
-  "treniranUtc": "2026-09-18T10:59:32Z",
+  "treniranUtc": "2026-10-18T22:48:12Z",
   "brojInterakcija": 74,
   "brojStvarnihOcjena": 74,
   "brojProcijenjenih": 0,
   "brojKorisnika": 12,
   "brojModelaVozila": 10,
   "brojIteracija": 100,
-  "rang": 4,
+  "rang": 2,
   "lambda": 0.01,
-  "rmseOdabira": 0.707,
-  "rmse": 0.711,
-  "mae": 0.514,
-  "rKvadrat": 0.475,
-  "rmseOsnovni": 0.981,
+  "rmseOdabira": 0.470,
+  "rmse": 0.577,
+  "mae": 0.428,
+  "rKvadrat": 0.676,
+  "rmseOsnovni": 1.013,
   "brojMjerenja": 74
 }
 ```
@@ -224,14 +239,15 @@ Rezultat se čita kroz `GET /api/preporuke/model` i tu se vidi i na čemu je mod
 > Ovo je stvarno izmjereno nad seed podacima, ne primjer. Vrijednosti se mijenjaju kako
 > pristižu nove ocjene i čitaju se sa tog endpointa.
 
-**Kako se ovaj rezultat čita.** Model griješi 0,711, a pogađanje prosjeka 0,981 — dakle
-objašnjava oko 48% odstupanja u ocjenama (R² 0,475) i prosječno promašuje nešto preko pola
-zvjezdice (MAE 0,514).
+**Kako se ovaj rezultat čita.** Model griješi 0,577, a pogađanje prosjeka 1,013 — dakle
+objašnjava oko dvije trećine odstupanja u ocjenama (R² 0,676) i prosječno promašuje za
+manje od pola zvjezdice (MAE 0,428).
 
-Najvažniji je odnos `rmseOdabira` (0,707) i `rmse` (0,711). Razmak između ta dva broja je
+Važan je i odnos `rmseOdabira` (0,470) i `rmse` (0,577). Razmak između ta dva broja je
 mjera učenja napamet: model koji je zapamtio skup za učenje ima nisku grešku pri odabiru i
-visoku pri provjeri. Ovdje razmaka nema, pa rezultat nije slučajnost. U jednoj ranijoj
-verziji taj odnos je bio 0,64 prema 1,48 i to je bio jasan znak da nešto ne valja.
+visoku pri provjeri. Ovdje je razmak mali, a dio njega je očekivan, jer se pri odabiru od
+šesnaest parova uzima onaj kojem je greška slučajno najmanja. U jednoj ranijoj verziji
+taj odnos je bio 0,64 prema 1,48 i to je bio jasan znak da nešto ne valja.
 
 **Kako se čita R².** Vrijednost 0 znači da model radi tačno kao da uvijek pogađa prosjek
 svih ocjena; pozitivna znači da je bolji od toga, negativna da je lošiji. Zato se uz
@@ -257,6 +273,12 @@ demo klijent ima tip vozila koji mu leži i ocjene to prate, sa namjerno ostavlj
 preklapanjem: i omiljeni tip ponekad razočara, a tuđi ponekad prijatno iznenadi. Stvarni
 korisnici imaju ukus, pa ga demo podaci moraju imati — inače se ne testira model nego
 šum.
+
+Omiljeni tip se bira samo među tipovima koje klijent po svojoj dozvoli smije voziti. Ranije
+se dijelio u krug bez obzira na dozvolu, pa je klijent sa A1 mogao dobiti quad, koji nikad
+ne iznajmi — i sve njegove ocjene su bile šum. Koliko je takvih klijenata bilo zavisilo je
+od slučajnih brojeva u seedu, pa je jedna nevezana izmjena seeda (novi uposlenici) spustila
+R² sa 0,475 na nulu. Sada izbor ne zavisi od slučajnosti.
 
 ---
 

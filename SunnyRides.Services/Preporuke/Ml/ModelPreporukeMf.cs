@@ -45,7 +45,7 @@ public class ModelPreporukeMf : IModelPreporuke
     private readonly SemaphoreSlim _brava = new(1, 1);
     private readonly MLContext _ml;
 
-    private ITransformer? _model;
+    private NaucenModel? _model;
     private HashSet<int> _korisnici = new();
     private HashSet<int> _modeli = new();
     private double _prosjekFlote = BodovanjePreporuke.NeutralnaOcjena;
@@ -293,7 +293,7 @@ public class ModelPreporukeMf : IModelPreporuke
         return (najboljiRang, najboljaLambda, najmanjaGreska);
     }
 
-    private double? GreskaNa(ITransformer model, IReadOnlyList<InterakcijaZapis> skup)
+    private double? GreskaNa(NaucenModel model, IReadOnlyList<InterakcijaZapis> skup)
     {
         if (skup.Count == 0)
         {
@@ -312,9 +312,17 @@ public class ModelPreporukeMf : IModelPreporuke
     // --- ucenje i predikcija -----------------------------------------------
 
     /// <summary>Jedno treniranje sa zadatim parametrima.</summary>
-    private ITransformer Nauci(IReadOnlyList<InterakcijaZapis> redovi, int rang, double lambda)
+    private NaucenModel Nauci(IReadOnlyList<InterakcijaZapis> redovi, int rang, double lambda)
     {
-        var podaci = _ml.Data.LoadFromEnumerable(redovi.Select(Pretvori).ToList());
+        // Model uci odstupanje od prosjecne ocjene, a ne samu ocjenu. Matricna
+        // faktorizacija nema slobodan clan, pa bi inace latentni faktori morali sami
+        // nositi i prosjek od oko 3,8, a regularizacija bi svaku predikciju vukla prema
+        // nuli, dakle prema ocjeni koje nema. Ovako regularizacija vuce prema prosjeku,
+        // a faktori opisuju samo ono po cemu se korisnici i vozila razlikuju.
+        var sredina = redovi.Average(x => x.Ocjena);
+
+        var podaci = _ml.Data.LoadFromEnumerable(
+            redovi.Select(x => Pretvori(x, sredina)).ToList());
 
         var opcije = new MatrixFactorizationTrainer.Options
         {
@@ -340,7 +348,7 @@ public class ModelPreporukeMf : IModelPreporuke
             .Append(_ml.Transforms.Conversion.MapValueToKey("ModelKljuc", nameof(Interakcija.ModelVozilaId)))
             .Append(_ml.Recommendation().Trainers.MatrixFactorization(opcije));
 
-        return postupak.Fit(podaci);
+        return new NaucenModel(postupak.Fit(podaci), sredina);
     }
 
     /// <summary>
@@ -355,16 +363,21 @@ public class ModelPreporukeMf : IModelPreporuke
     /// Predikcija ide kroz Transform nad cijelim skupom odjednom. PredictionEngine nije
     /// siguran za istovremeno koristenje iz vise niti, a ovaj put jeste.
     /// </summary>
-    private List<double> Predvidi(ITransformer model, IReadOnlyList<InterakcijaZapis> redovi)
+    private List<double> Predvidi(NaucenModel model, IReadOnlyList<InterakcijaZapis> redovi)
     {
-        var podaci = _ml.Data.LoadFromEnumerable(redovi.Select(Pretvori).ToList());
-        var bodovano = model.Transform(podaci);
+        var podaci = _ml.Data.LoadFromEnumerable(
+            redovi.Select(x => Pretvori(x, model.Sredina)).ToList());
+        var bodovano = model.Transformer.Transform(podaci);
 
+        // Model vraca odstupanje od prosjeka, pa se prosjek ovdje vraca nazad.
         return _ml.Data
             .CreateEnumerable<PredikcijaOcjene>(bodovano, reuseRowObject: false)
             .Select(x => float.IsNaN(x.Score)
                 ? _prosjekFlote
-                : Math.Clamp((double)x.Score, BodovanjePreporuke.NajmanjaOcjena, BodovanjePreporuke.NajvecaOcjena))
+                : Math.Clamp(
+                    model.Sredina + x.Score,
+                    BodovanjePreporuke.NajmanjaOcjena,
+                    BodovanjePreporuke.NajvecaOcjena))
             .ToList();
     }
 
@@ -402,10 +415,13 @@ public class ModelPreporukeMf : IModelPreporuke
         Napomena = napomena
     };
 
-    private static Interakcija Pretvori(InterakcijaZapis zapis) => new()
+    private static Interakcija Pretvori(InterakcijaZapis zapis, double sredina) => new()
     {
         KorisnikId = zapis.KorisnikId,
         ModelVozilaId = zapis.ModelVozilaId,
-        Ocjena = (float)zapis.Ocjena
+        Ocjena = (float)(zapis.Ocjena - sredina)
     };
+
+    /// <summary>Istrenirani postupak, zajedno sa prosjekom ocjena iz kojeg je ucio.</summary>
+    private sealed record NaucenModel(ITransformer Transformer, double Sredina);
 }

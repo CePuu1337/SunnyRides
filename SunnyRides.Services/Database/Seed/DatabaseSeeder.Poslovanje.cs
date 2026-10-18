@@ -76,26 +76,29 @@ public partial class DatabaseSeeder
     /// </summary>
     private Korisnik? IzaberiKlijentaZa(Vozilo vozilo)
     {
-        var potrebna = vozilo.ModelVozila.KategorijaDozvole.Oznaka;
-
-        var podobni = _klijenti.Where(k =>
-        {
-            if (k.Blokiran)
-            {
-                return false;
-            }
-
-            var kategorije = _kategorijeKlijenta[k.Id];
-            if (kategorije.Count == 0)
-            {
-                return false;
-            }
-
-            return kategorije.Contains(potrebna)
-                || (potrebna == "A1" && kategorije.Contains("A"));
-        }).ToList();
+        var podobni = _klijenti.Where(k => SmijeVoziti(k, vozilo)).ToList();
 
         return podobni.Count == 0 ? null : Izaberi(podobni);
+    }
+
+    /// <summary>Klijent nije blokiran i dozvola mu pokriva kategoriju vozila.</summary>
+    private bool SmijeVoziti(Korisnik klijent, Vozilo vozilo)
+    {
+        if (klijent.Blokiran)
+        {
+            return false;
+        }
+
+        var kategorije = _kategorijeKlijenta[klijent.Id];
+        if (kategorije.Count == 0)
+        {
+            return false;
+        }
+
+        var potrebna = vozilo.ModelVozila.KategorijaDozvole.Oznaka;
+
+        return kategorije.Contains(potrebna)
+            || (potrebna == "A1" && kategorije.Contains("A"));
     }
 
     private Rezervacija NapraviRezervaciju(Vozilo vozilo, Korisnik klijent,
