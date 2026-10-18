@@ -571,7 +571,7 @@ public class RecommenderService : IRecommenderService
                 $"Marku {vozilo.MarkaNaziv} ste već birali.",
 
             SignalPreporuke.Kubikaza =>
-                $"Kubikaža {vozilo.Kubikaza} cm3 odgovara vozilima koja ste ranije iznajmljivali.",
+                $"Kubikaža {vozilo.Kubikaza} cm³ odgovara vozilima koja ste ranije iznajmljivali.",
 
             SignalPreporuke.Ocjena =>
                 rezultat.BrojOcjena > 0
