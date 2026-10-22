@@ -54,7 +54,6 @@ class KatalogServis {
     DateTime? slobodnoOd,
     DateTime? slobodnoDo,
     Tacka? lokacija,
-    bool samoDozvoljenaZaMene = true,
   }) async {
     final odgovor = await _klijent.get(
       '/api/vozila',
@@ -69,8 +68,6 @@ class KatalogServis {
         'cijenaDo': cijenaDo,
         'slobodnoOd': slobodnoOd,
         'slobodnoDo': slobodnoDo,
-        'aktivno': true,
-        'samoDozvoljenaZaMene': samoDozvoljenaZaMene,
         'latituda': lokacija?.latituda,
         'longituda': lokacija?.longituda,
       },

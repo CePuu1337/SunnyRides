@@ -41,6 +41,9 @@ public class AvailabilityService : IAvailabilityService
             .Where(v => !v.Blokade.Any(b => b.DatumDo > datumOd && b.DatumOd < datumDo));
     }
 
+    public IQueryable<Vozilo> DodajUslovBezAktivneBlokade(IQueryable<Vozilo> upit, DateTime trenutak) =>
+        upit.Where(v => !v.Blokade.Any(b => b.DatumOd <= trenutak && b.DatumDo > trenutak));
+
     public async Task<bool> JeSlobodnoAsync(
         int voziloId, DateTime datumOd, DateTime datumDo,
         int? ignorisiRezervacijuId = null, CancellationToken ct = default)

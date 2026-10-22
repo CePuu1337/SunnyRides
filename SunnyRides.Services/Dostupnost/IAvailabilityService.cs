@@ -23,6 +23,16 @@ public interface IAvailabilityService
     /// </summary>
     IQueryable<Vozilo> DodajUslovSlobodno(IQueryable<Vozilo> upit, DateTime datumOd, DateTime datumDo);
 
+    /// <summary>
+    /// Odbacuje vozila koja su u zadatom trenutku pod blokadom (servis, kvar).
+    ///
+    /// Koristi se kad pretraga nema termin: tada se ne zna za koji period provjeriti
+    /// rezervacije, ali vozilo koje je upravo na servisu sigurno nije u ponudi.
+    /// Rezervacije se ovdje namjerno ne gledaju - vozilo koje je danas kod drugog
+    /// klijenta je i dalje dio ponude za neki drugi termin.
+    /// </summary>
+    IQueryable<Vozilo> DodajUslovBezAktivneBlokade(IQueryable<Vozilo> upit, DateTime trenutak);
+
     Task<bool> JeSlobodnoAsync(
         int voziloId, DateTime datumOd, DateTime datumDo,
         int? ignorisiRezervacijuId = null, CancellationToken ct = default);

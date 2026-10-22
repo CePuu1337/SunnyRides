@@ -23,7 +23,10 @@ public class VoziloSearchObject : BaseSearchObject
     public decimal? CijenaOd { get; set; }
     public decimal? CijenaDo { get; set; }
 
-    /// <summary>Prazno vraca i aktivna i deaktivirana vozila. Klijentska aplikacija salje true.</summary>
+    /// <summary>
+    /// Filter osoblja u administraciji flote; prazno vraca i aktivna i deaktivirana.
+    /// Klijentu server uvijek prikazuje samo aktivna, bez obzira na ovu vrijednost.
+    /// </summary>
     public bool? Aktivno { get; set; }
 
     /// <summary>
@@ -35,15 +38,6 @@ public class VoziloSearchObject : BaseSearchObject
     /// </summary>
     public DateTime? SlobodnoOd { get; set; }
     public DateTime? SlobodnoDo { get; set; }
-
-    /// <summary>
-    /// Vraca samo vozila koja prijavljeni korisnik smije voziti prema svojoj dozvoli.
-    /// Mobilna aplikacija ovo salje uvijek.
-    ///
-    /// Namjerno je zastavica, a ne lista kategorija. Da klijent salje kategorije,
-    /// poslao bi one koje mu odgovaraju; ovako ih server izvodi iz njegove dozvole.
-    /// </summary>
-    public bool SamoDozvoljenaZaMene { get; set; }
 
     /// <summary>
     /// Trenutna lokacija telefona, kad je klijent dozvoli. Udaljenost do poslovnica se

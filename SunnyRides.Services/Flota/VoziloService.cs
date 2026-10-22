@@ -2,6 +2,7 @@ using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model;
 using SunnyRides.Model.DTOs;
+using SunnyRides.Model.Konstante;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
@@ -49,7 +50,7 @@ public class VoziloService
     private const int NajviseRijeciPretrage = 5;
 
     /// <summary>
-    /// Kategorije koje prijavljeni korisnik smije voziti, razrijesene na pocetku
+    /// Kategorije koje prijavljeni klijent smije voziti, razrijesene na pocetku
     /// pretrage.
     ///
     /// Drzi se u polju, a ne u search objektu, i to je sigurnosna odluka: search
@@ -57,6 +58,12 @@ public class VoziloService
     /// sto klijent moze sam poslati. Servis je Scoped, dakle traje jedan zahtjev.
     /// </summary>
     private List<int>? _dozvoljeneKategorije;
+
+    /// <summary>
+    /// True kad pretragu radi klijent. Tada server sam dodaje uslove koje klijent ne
+    /// moze iskljuciti: samo aktivna vozila i samo kategorije koje pokriva dozvola.
+    /// </summary>
+    private bool _pretragaKlijenta;
 
     public VoziloService(
         SunnyRidesDbContext context,
@@ -93,7 +100,13 @@ public class VoziloService
         _dozvoljeneKategorije = null;
         _ogranicenjeNaPoslovnicu = await _opseg.OgranicenjeAsync(ct);
 
-        if (search.SamoDozvoljenaZaMene)
+        // Klijentu filter po dozvoli nije opcija koju ukljucuje aplikacija nego pravilo
+        // servera. Da zavisi od parametra u upitu, direktan poziv API-ja bez njega vratio
+        // bi i vozila koja klijent ne smije voziti. Uslov je "nije osoblje", a ne "jeste
+        // klijent", da nalog bez prepoznate uloge dobije strozi, a ne blazi rezultat.
+        _pretragaKlijenta = !JeOsoblje();
+
+        if (_pretragaKlijenta)
         {
             var korisnikId = _trenutniKorisnik.ObaveznoKorisnikId();
 
@@ -353,8 +366,8 @@ public class VoziloService
             upit = upit.Where(x => x.ModelVozila.TipGorivaId == search.TipGorivaId.Value);
         }
 
-        // Filtriranje po kategoriji dozvole je isti uslov koji ce faza 10 koristiti
-        // za skrivanje vozila koja klijent ne smije voziti.
+        // Filter osoblja po potrebnoj kategoriji. Klijenta ogranicava njegova dozvola,
+        // nize, bez obzira na ovaj parametar.
         if (search.KategorijaDozvoleId.HasValue)
         {
             upit = upit.Where(x => x.ModelVozila.KategorijaDozvoleId == search.KategorijaDozvoleId.Value);
@@ -385,26 +398,44 @@ public class VoziloService
             upit = upit.Where(x => x.Aktivno == search.Aktivno.Value);
         }
 
-        // Filtriranje po dozvoli ide na serveru, ne skrivanjem stavki u interfejsu.
-        // Prazna lista znaci da korisnik nema upotrebljivu dozvolu - tada se ne
-        // prikazuje nijedno vozilo, jer nijedno ne smije voziti.
-        if (_dozvoljeneKategorije is not null)
+        if (_pretragaKlijenta)
         {
-            var kategorije = _dozvoljeneKategorije;
+            // Deaktivirano vozilo je povuceno iz ponude i klijent ga ne vidi, sta god
+            // poslao u parametru Aktivno.
+            upit = upit.Where(x => x.Aktivno);
+
+            // Filtriranje po dozvoli ide na serveru, ne skrivanjem stavki u interfejsu.
+            // Prazna lista znaci da klijent nema upotrebljivu dozvolu - tada se ne
+            // prikazuje nijedno vozilo, jer nijedno ne smije voziti.
+            var kategorije = _dozvoljeneKategorije ?? new List<int>();
             upit = upit.Where(x => kategorije.Contains(x.ModelVozila.KategorijaDozvoleId));
+
+            // Bez termina se dostupnost ne moze provjeriti, ali vozilo koje je upravo
+            // na servisu ne smije izgledati kao da je u ponudi.
+            if (!ImaTermin(search))
+            {
+                upit = _dostupnost.DodajUslovBezAktivneBlokade(upit, DateTime.UtcNow);
+            }
         }
 
         // Uslov slobodnog termina se ne pise ovdje nego se trazi od servisa koji ga
         // jedini poznaje. Vraca se kao dio istog upita, pa baza odbacuje zauzeta
         // vozila prije nego ijedan red stigne u memoriju.
-        if (search.SlobodnoOd.HasValue && search.SlobodnoDo.HasValue
-            && search.SlobodnoDo.Value > search.SlobodnoOd.Value)
+        if (ImaTermin(search))
         {
-            upit = _dostupnost.DodajUslovSlobodno(upit, search.SlobodnoOd.Value, search.SlobodnoDo.Value);
+            upit = _dostupnost.DodajUslovSlobodno(upit, search.SlobodnoOd!.Value, search.SlobodnoDo!.Value);
         }
 
         return upit;
     }
+
+    /// <summary>Termin vazi samo kad su zadana oba datuma, i to pravim redoslijedom.</summary>
+    private static bool ImaTermin(VoziloSearchObject search) =>
+        search.SlobodnoOd.HasValue && search.SlobodnoDo.HasValue
+        && search.SlobodnoDo.Value > search.SlobodnoOd.Value;
+
+    private bool JeOsoblje() =>
+        _trenutniKorisnik.JeUUlozi(Uloge.Administrator) || _trenutniKorisnik.JeUUlozi(Uloge.Uposlenik);
 
     // Lista vuce samo glavnu sliku, i to filtriranim Include-om - ostale fotografije
     // ostaju na serveru dok ih neko stvarno ne zatrazi kroz /api/vozila/{id}/slike.
