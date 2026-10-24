@@ -41,8 +41,6 @@ class MrezaKalendara extends StatelessWidget {
     'Ned',
   ];
 
-  DateTime get _kraj => pocetak.add(Duration(days: brojDana));
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -87,7 +85,7 @@ class MrezaKalendara extends StatelessWidget {
             Expanded(
               child: Builder(
                 builder: (context) {
-                  final dan = pocetak.add(Duration(days: i));
+                  final dan = KalendarskiDani.pomjeri(pocetak, i);
                   final jeDanas =
                       dan.year == danas.year &&
                       dan.month == danas.month &&
@@ -178,16 +176,13 @@ class MrezaKalendara extends StatelessWidget {
   }
 
   Widget _vremenskaTraka(RedKalendara red, double sirina) {
-    final ukupnoMinuta = _kraj.difference(pocetak).inMinutes.toDouble();
-
+    // Polozaj se racuna po danima, ne po satima od pocetka sedmice. Kolone su iste
+    // sirine, a dan promjene sata ima 23 ili 25 sati - sa satima bi se blokovi od
+    // tog dana nadalje pomjerili za sat u odnosu na kolone.
     double x(DateTime trenutak) {
-      final minuta = trenutak
-          .toLocal()
-          .difference(pocetak)
-          .inMinutes
-          .toDouble();
+      final polozaj = KalendarskiDani.polozaj(pocetak, trenutak);
 
-      return (minuta / ukupnoMinuta * sirina).clamp(0, sirina);
+      return (polozaj / brojDana * sirina).clamp(0, sirina);
     }
 
     final sirinaDana = sirina / brojDana;
@@ -201,7 +196,7 @@ class MrezaKalendara extends StatelessWidget {
             .floor()
             .clamp(0, brojDana - 1);
 
-        naSlobodanDan(red, pocetak.add(Duration(days: indeksDana)));
+        naSlobodanDan(red, KalendarskiDani.pomjeri(pocetak, indeksDana));
       },
       child: Stack(
         children: [

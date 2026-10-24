@@ -47,17 +47,10 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
     _servis = KalendarServis(klijent);
     _sifrarnici = SifrarnikServis(klijent);
 
-    _pocetak = _ponedjeljak(DateTime.now());
+    _pocetak = KalendarskiDani.ponedjeljak(DateTime.now());
 
     _ucitajSifrarnike();
     _ucitaj();
-  }
-
-  /// Ponoc ponedjeljka u sedmici kojoj pripada zadani dan, po lokalnom vremenu.
-  static DateTime _ponedjeljak(DateTime dan) {
-    final ponoc = DateTime(dan.year, dan.month, dan.day);
-
-    return ponoc.subtract(Duration(days: ponoc.weekday - 1));
   }
 
   Future<void> _ucitajSifrarnike() async {
@@ -87,7 +80,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
       // ponedjeljak u kalendaru pocinje u ponoc ovdje, a ne u dva ujutro.
       final kalendar = await _servis.zauzetost(
         od: _pocetak,
-        doDatuma: _pocetak.add(const Duration(days: _brojDana)),
+        doDatuma: KalendarskiDani.pomjeri(_pocetak, _brojDana),
         poslovnicaId: _poslovnicaId,
         tipVozilaId: _tipVozilaId,
         vozilo: _vozilo.isEmpty ? null : _vozilo,
@@ -114,12 +107,12 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
   }
 
   void _pomjeri(int sedmica) {
-    setState(() => _pocetak = _pocetak.add(Duration(days: 7 * sedmica)));
+    setState(() => _pocetak = KalendarskiDani.pomjeri(_pocetak, 7 * sedmica));
     _ucitaj();
   }
 
   void _ovaSedmica() {
-    setState(() => _pocetak = _ponedjeljak(DateTime.now()));
+    setState(() => _pocetak = KalendarskiDani.ponedjeljak(DateTime.now()));
     _ucitaj();
   }
 
@@ -183,7 +176,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
 
   @override
   Widget build(BuildContext context) {
-    final kraj = _pocetak.add(const Duration(days: _brojDana - 1));
+    final kraj = KalendarskiDani.pomjeri(_pocetak, _brojDana - 1);
 
     return Scaffold(
       body: Padding(

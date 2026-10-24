@@ -43,8 +43,7 @@ class _PrimopredajaEkranStanje extends State<PrimopredajaEkran> {
     _servis = PrimopredajaServis(klijent);
     _sifrarnici = SifrarnikServis(klijent);
 
-    final sada = DateTime.now();
-    _dan = DateTime(sada.year, sada.month, sada.day);
+    _dan = KalendarskiDani.ponoc(DateTime.now());
 
     _ucitajPoslovnice();
     _ucitaj();
@@ -71,7 +70,7 @@ class _PrimopredajaEkranStanje extends State<PrimopredajaEkran> {
     try {
       final strana = await _servis.raspored(
         od: _dan,
-        doDatuma: _dan.add(const Duration(days: 1)),
+        doDatuma: KalendarskiDani.pomjeri(_dan, 1),
         poslovnicaId: _poslovnicaId,
       );
 
@@ -96,7 +95,8 @@ class _PrimopredajaEkranStanje extends State<PrimopredajaEkran> {
   }
 
   void _pomjeri(int dana) {
-    setState(() => _dan = _dan.add(Duration(days: dana)));
+    // Po kalendarskim danima: na dan promjene sata "+24 h" bi ostalo na istom datumu.
+    setState(() => _dan = KalendarskiDani.pomjeri(_dan, dana));
     _ucitaj();
   }
 

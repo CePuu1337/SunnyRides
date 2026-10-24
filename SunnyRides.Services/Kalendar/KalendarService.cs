@@ -61,11 +61,16 @@ public class KalendarService : IKalendarService
     /// <summary>
     /// Bez zadatog perioda kalendar pokazuje tekucu sedmicu, od ponedjeljka. To je
     /// podrazumijevani pogled na ekranu, pa ga server i vraca bez pitanja.
+    ///
+    /// Zadane granice se ne rezu na datum. Desktop salje lokalnu ponoc pretvorenu u
+    /// UTC - za Sarajevo 22:00 ili 23:00 prethodnog dana. <c>.Date</c> bi kraj sedmice
+    /// spustio na ponoc UTC-a i odsjekao skoro cijeli zadnji dan, pa se rezervacija koja
+    /// pocinje u nedjelju ujutro ne bi ni ucitala.
     /// </summary>
     private static (DateTime Od, DateTime Do) Period(KalendarSearchObject search)
     {
-        var od = (search.Od ?? PocetakSedmice(DateTime.UtcNow)).Date;
-        var doDatuma = (search.Do ?? od.AddDays(7)).Date;
+        var od = search.Od ?? PocetakSedmice(DateTime.UtcNow);
+        var doDatuma = search.Do ?? od.AddDays(7);
 
         if (doDatuma <= od)
         {
