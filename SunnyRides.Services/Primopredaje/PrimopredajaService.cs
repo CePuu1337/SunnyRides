@@ -11,6 +11,7 @@ using SunnyRides.Services.Base;
 using SunnyRides.Services.Cijene;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Fajlovi;
 using SunnyRides.Model.Poruke;
@@ -52,6 +53,7 @@ public class PrimopredajaService
     private readonly IObjavljivacPoruka _objavljivac;
     private readonly ILogger<PrimopredajaService> _logger;
     private readonly IOpsegPoslovnice _opseg;
+    private readonly IDozvolaService _dozvolaService;
 
     private int? _ogranicenjeNaKorisnika;
 
@@ -67,7 +69,8 @@ public class PrimopredajaService
         IIzvrsilacPovrata izvrsilacPovrata,
         IObjavljivacPoruka objavljivac,
         ILogger<PrimopredajaService> logger,
-        IOpsegPoslovnice opseg)
+        IOpsegPoslovnice opseg,
+        IDozvolaService dozvolaService)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -78,6 +81,7 @@ public class PrimopredajaService
         _objavljivac = objavljivac;
         _logger = logger;
         _opseg = opseg;
+        _dozvolaService = dozvolaService;
     }
 
     protected override string NazivEntiteta => "Primopredaja";
@@ -383,6 +387,13 @@ public class PrimopredajaService
             throw new BusinessException(
                 $"Kilometraza ne moze biti manja od zadnje evidentirane ({rezervacija.Vozilo.Kilometraza} km).");
         }
+
+        // Dozvola je provjerena pri rezervaciji, ali do preuzimanja se moze promijeniti:
+        // uposlenik je moze odbiti, a klijent ponovo prijaviti sa drugim kategorijama,
+        // cime se vraca na cekanje. Vozilo se predaje prema stanju dozvole u trenutku
+        // predaje, pa se ista provjera ponavlja ovdje, na datum izdavanja.
+        await _dozvolaService.ObaveznoSmijeVozitiAsync(
+            rezervacija.KorisnikId, rezervacija.VoziloId, izdatoU, ct);
 
         var izdavanje = new Primopredaja
         {

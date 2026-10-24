@@ -314,8 +314,21 @@ public class DozvolaService
 
     // --- kategorije --------------------------------------------------------
 
-    public async Task<DozvoljeneKategorijeDto> DozvoljeneKategorijeAsync(
-        int korisnikId, DateTime? naDan = null, CancellationToken ct = default)
+    public Task<DozvoljeneKategorijeDto> DozvoljeneKategorijeAsync(
+        int korisnikId, DateTime? naDan = null, CancellationToken ct = default) =>
+        RazrijesiAsync(korisnikId, naDan, zaKlijenta: true, ct);
+
+    /// <summary>
+    /// Kategorije koje korisnik smije voziti na dati dan, sa obrazlozenjem napisanim za
+    /// onoga ko ga cita.
+    ///
+    /// Isto stanje dozvole cita i klijent (pretraga, rezervacija) i osoblje (izdavanje
+    /// vozila, zamjena, rucni unos iz kalendara). Pravilo je jedno; mijenja se samo kome
+    /// se recenica obraca. "Do odobrenja mozete pretrazivati" uposleniku u dijalogu
+    /// izdavanja ne govori nista.
+    /// </summary>
+    private async Task<DozvoljeneKategorijeDto> RazrijesiAsync(
+        int korisnikId, DateTime? naDan, bool zaKlijenta, CancellationToken ct)
     {
         var datum = naDan ?? DateTime.UtcNow;
 
@@ -333,7 +346,9 @@ public class DozvolaService
 
         if (dozvola is null)
         {
-            rezultat.Obrazlozenje = "Niste prijavili vozacku dozvolu, pa rezervacija jos nije moguca.";
+            rezultat.Obrazlozenje = zaKlijenta
+                ? "Niste prijavili vozacku dozvolu, pa rezervacija jos nije moguca."
+                : "Klijent nije prijavio vozacku dozvolu.";
             return rezultat;
         }
 
@@ -344,9 +359,13 @@ public class DozvolaService
 
         if (dozvola.Status != StatusDozvole.Odobrena)
         {
-            rezultat.Obrazlozenje = dozvola.Status == StatusDozvole.Odbijena
-                ? $"Dozvola je odbijena: {dozvola.RazlogOdbijanja}"
-                : "Dozvola ceka verifikaciju. Do odobrenja mozete pretrazivati, ali ne i rezervisati.";
+            rezultat.Obrazlozenje = (dozvola.Status, zaKlijenta) switch
+            {
+                (StatusDozvole.Odbijena, true) => $"Dozvola je odbijena: {dozvola.RazlogOdbijanja}",
+                (StatusDozvole.Odbijena, false) => $"Dozvola klijenta je odbijena: {dozvola.RazlogOdbijanja}",
+                (_, true) => "Dozvola ceka verifikaciju. Do odobrenja mozete pretrazivati, ali ne i rezervisati.",
+                _ => "Dozvola klijenta jos nije verifikovana. Prvo je treba odobriti u modulu Vozacke dozvole."
+            };
             return rezultat;
         }
 
@@ -354,8 +373,9 @@ public class DozvolaService
         // vazi danas a istice prije termina ne pokriva taj najam.
         if (dozvola.DatumIsteka <= datum)
         {
-            rezultat.Obrazlozenje =
-                $"Dozvola istice {dozvola.DatumIsteka:dd.MM.yyyy.}, prije trazenog termina.";
+            rezultat.Obrazlozenje = zaKlijenta
+                ? $"Dozvola istice {dozvola.DatumIsteka:dd.MM.yyyy.}, prije trazenog termina."
+                : $"Dozvola klijenta vazi samo do {dozvola.DatumIsteka:dd.MM.yyyy.}, a to ne pokriva ovaj termin.";
             return rezultat;
         }
 
@@ -364,10 +384,14 @@ public class DozvolaService
 
         rezultat.MozeRezervisati = rezultat.DozvoljeneKategorijeIds.Count > 0;
 
-        rezultat.Obrazlozenje = rezultat.DozvoljeneKategorijeIds.Count == 0
-            ? $"Sa {godine} godina jos ne ispunjavate uslove nijedne kategorije sa svoje dozvole."
-            : $"Prikazuju se samo vozila kategorija {string.Join(", ", rezultat.DozvoljeneKategorije)}, " +
-              $"koja pokriva vasa dozvola ({string.Join(", ", rezultat.PosjedovaneKategorije)}).";
+        rezultat.Obrazlozenje = (rezultat.DozvoljeneKategorijeIds.Count == 0, zaKlijenta) switch
+        {
+            (true, true) => $"Sa {godine} godina jos ne ispunjavate uslove nijedne kategorije sa svoje dozvole.",
+            (true, false) => $"Klijent sa {godine} godina ne ispunjava uslove nijedne kategorije sa svoje dozvole.",
+            (false, true) => $"Prikazuju se samo vozila kategorija {string.Join(", ", rezultat.DozvoljeneKategorije)}, " +
+                             $"koja pokriva vasa dozvola ({string.Join(", ", rezultat.PosjedovaneKategorije)}).",
+            _ => $"Dozvola klijenta pokriva kategorije {string.Join(", ", rezultat.DozvoljeneKategorije)}."
+        };
 
         return rezultat;
     }
@@ -447,9 +471,9 @@ public class DozvolaService
     public async Task ObaveznoSmijeVozitiAsync(
         int korisnikId, int voziloId, DateTime datumPreuzimanja, CancellationToken ct = default)
     {
-        // Ista provjera sluzi na dva mjesta: klijentu koji rezervise za sebe i uposleniku
-        // koji unosi rezervaciju za klijenta. Poruku zato treba obratiti pravoj osobi -
-        // "vasa dozvola" uposleniku ne znaci nista.
+        // Ista provjera sluzi klijentu koji rezervise za sebe i osoblju: pri rucnom unosu
+        // rezervacije, zamjeni vozila i izdavanju. Poruku zato treba obratiti pravoj
+        // osobi - "vasa dozvola" uposleniku ne znaci nista.
         var zaSebe = _trenutniKorisnik.KorisnikId == korisnikId;
 
         var vozilo = await Context.Vozila
@@ -458,7 +482,7 @@ public class DozvolaService
             .FirstOrDefaultAsync(x => x.Id == voziloId, ct)
             ?? throw NotFoundException.Za("Vozilo", voziloId);
 
-        var dozvoljene = await DozvoljeneKategorijeAsync(korisnikId, datumPreuzimanja, ct);
+        var dozvoljene = await RazrijesiAsync(korisnikId, datumPreuzimanja, zaKlijenta: zaSebe, ct);
 
         if (dozvoljene.DozvoljeneKategorijeIds.Contains(vozilo.ModelVozila.KategorijaDozvoleId))
         {

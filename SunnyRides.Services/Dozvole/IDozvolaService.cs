@@ -63,7 +63,9 @@ public interface IDozvolaService : IService<VozackaDozvolaDto, VozackaDozvolaSea
 
     /// <summary>
     /// Baca <c>BusinessException</c> sa konkretnom porukom ako klijent ne smije voziti
-    /// to vozilo na taj datum. Poziva se prije upisa rezervacije.
+    /// to vozilo na taj datum. Poziva se pri kreiranju rezervacije, pri zamjeni vozila i
+    /// pri izdavanju vozila - stanje dozvole se moze promijeniti izmedju ta tri trenutka.
+    /// Poruka se obraca klijentu kad provjerava sebe, a osoblju kad provjerava klijenta.
     /// </summary>
     Task ObaveznoSmijeVozitiAsync(
         int korisnikId, int voziloId, DateTime datumPreuzimanja, CancellationToken ct = default);
