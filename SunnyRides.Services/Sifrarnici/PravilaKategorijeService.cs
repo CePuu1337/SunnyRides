@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Requests;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Dozvole;
 
 namespace SunnyRides.Services.Sifrarnici;
 
@@ -12,15 +14,26 @@ namespace SunnyRides.Services.Sifrarnici;
 /// Pravila o tome koja kategorija dozvole pokriva koja vozila. Ovo je podatak u
 /// tabeli, a ne "if" grane u kodu - kad se propis promijeni, ispravka je unos
 /// zapisa kroz ovaj sifrarnik, bez ijedne izmjene koda.
+///
+/// Pravila se kesiraju u <see cref="DozvolaService"/>, jer se citaju pri svakoj
+/// pretrazi. Svaka izmjena ovdje taj kes brise, inace bi nova pravila u pretrazi,
+/// verifikaciji i rezervaciji vazila tek kad kes istekne.
 /// </summary>
 public class PravilaKategorijeService
     : BaseCRUDService<PravilaKategorijeDto, PravilaKategorijeSearchObject, PravilaKategorije,
                       PravilaKategorijeInsertRequest, PravilaKategorijeUpdateRequest>,
       IPravilaKategorijeService
 {
-    public PravilaKategorijeService(SunnyRidesDbContext context) : base(context)
+    private readonly IMemoryCache _kes;
+
+    public PravilaKategorijeService(SunnyRidesDbContext context, IMemoryCache kes) : base(context)
     {
+        _kes = kes;
     }
+
+    /// <summary>Isto za dodavanje, izmjenu i brisanje - poslije potvrde u bazi.</summary>
+    protected override void NakonPotvrde(PravilaKategorije entitet) =>
+        KesPravilaKategorija.Ponisti(_kes);
 
     protected override string NazivEntiteta => "Pravilo kategorije";
 

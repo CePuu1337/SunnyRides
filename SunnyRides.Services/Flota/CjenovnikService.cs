@@ -30,6 +30,12 @@ public class CjenovnikService
 
     private readonly IMemoryCache _kes;
 
+    /// <summary>
+    /// Model za koji je zapis vazio prije izmjene. Kad se tarifa prebaci na drugi
+    /// model, kes treba obrisati i za stari - on bi inace i dalje dobijao tu tarifu.
+    /// </summary>
+    private int? _prethodniModelVozilaId;
+
     public CjenovnikService(SunnyRidesDbContext context, IMemoryCache kes) : base(context)
     {
         _kes = kes;
@@ -96,6 +102,11 @@ public class CjenovnikService
     protected override async Task BeforeUpdateAsync(
         CjenovnikUpdateRequest request, Cjenovnik entitet, CancellationToken ct)
     {
+        // Zahtjev je vec prepisan preko entiteta, pa je stari model jos samo u
+        // originalnoj vrijednosti koju EF pamti. Poslije snimanja i ona postaje nova,
+        // zato se cita ovdje.
+        _prethodniModelVozilaId = Context.Entry(entitet).Property(x => x.ModelVozilaId).OriginalValue;
+
         await ObaveznoPostojiAsync<ModelVozila>(request.ModelVozilaId, "Model vozila", ct);
         ProvjeriPeriodIPragove(request.DatumOd, request.DatumDo,
             request.PopustPrag1, request.PopustProcenat1, request.PopustPrag2, request.PopustProcenat2);
@@ -104,28 +115,26 @@ public class CjenovnikService
             request.ModelVozilaId, request.DatumOd, request.DatumDo, entitet.Id, ct);
     }
 
-    protected override Task AfterInsertAsync(
-        CjenovnikInsertRequest request, Cjenovnik entitet, CancellationToken ct)
+    /// <summary>
+    /// Kes se brise tek kad je izmjena potvrdjena u bazi, za dodavanje, izmjenu i
+    /// brisanje. Brise se za model zapisa i, ako je izmjena promijenila model, i za
+    /// model na kojem je zapis bio prije.
+    /// </summary>
+    protected override void NakonPotvrde(Cjenovnik entitet)
     {
-        PonistiKes(entitet.ModelVozilaId);
-        return Task.CompletedTask;
+        foreach (var kljuc in KljuceviZaPonistavanje(entitet.ModelVozilaId, _prethodniModelVozilaId))
+        {
+            _kes.Remove(kljuc);
+        }
+
+        _prethodniModelVozilaId = null;
     }
 
-    protected override Task AfterUpdateAsync(
-        CjenovnikUpdateRequest request, Cjenovnik entitet, CancellationToken ct)
-    {
-        PonistiKes(entitet.ModelVozilaId);
-        return Task.CompletedTask;
-    }
-
-    protected override Task BeforeDeleteAsync(Cjenovnik entitet, CancellationToken ct)
-    {
-        // Kes se ponistava i kad brisanje na kraju ne uspije. Hladan kes je samo
-        // jedan upit vise; nesto sto je ostalo u kesu a vise ne postoji u bazi je
-        // pogresna cijena.
-        PonistiKes(entitet.ModelVozilaId);
-        return Task.CompletedTask;
-    }
+    /// <summary>Kljucevi kesa koje izmjena zapisa cjenovnika cini zastarjelim.</summary>
+    public static IReadOnlyList<string> KljuceviZaPonistavanje(int modelVozilaId, int? prethodniModelVozilaId) =>
+        prethodniModelVozilaId is { } prethodni && prethodni != modelVozilaId
+            ? new[] { KljucKesa(modelVozilaId), KljucKesa(prethodni) }
+            : new[] { KljucKesa(modelVozilaId) };
 
     private async Task<List<Cjenovnik>> TarifeModelaAsync(int modelVozilaId, CancellationToken ct)
     {
@@ -142,15 +151,13 @@ public class CjenovnikService
             .AsNoTracking()
             .ToListAsync(ct);
 
-        // Kes ima i rok trajanja, ne samo rucno ponistavanje. Rok je mreza za slucaj
-        // da se podatak promijeni mimo ovog servisa - na primjer migracijom ili
+        // Kes ima i rok trajanja, ne samo ponistavanje pri izmjeni. Rok je mreza za
+        // slucaj da se podatak promijeni mimo ovog servisa - na primjer migracijom ili
         // rucnim upitom u bazi.
         _kes.Set(kljuc, tarife, TrajanjeKesa);
 
         return tarife;
     }
-
-    private void PonistiKes(int modelVozilaId) => _kes.Remove(KljucKesa(modelVozilaId));
 
     private static string KljucKesa(int modelVozilaId) => $"cjenovnik:model:{modelVozilaId}";
 

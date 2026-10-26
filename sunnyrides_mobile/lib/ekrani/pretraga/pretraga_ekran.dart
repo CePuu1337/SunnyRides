@@ -134,7 +134,6 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
         _katalog.marke(),
         _katalog.gradovi(),
         _katalog.poslovnice(),
-        _katalog.mojeKategorije(),
       ]);
 
       if (!mounted) {
@@ -142,11 +141,10 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
       }
 
       setState(() {
-        _tipovi = rezultati[0] as List<Stavka>;
-        _marke = rezultati[1] as List<Stavka>;
-        _gradovi = rezultati[2] as List<Stavka>;
-        _poslovnice = rezultati[3] as List<Stavka>;
-        _kategorije = rezultati[4] as DozvoljeneKategorije;
+        _tipovi = rezultati[0];
+        _marke = rezultati[1];
+        _gradovi = rezultati[2];
+        _poslovnice = rezultati[3];
       });
     } on ApiGreska {
       // Sifarnici su pomoc pri filtriranju. Ako ne stignu, pretraga radi i bez njih.
@@ -169,8 +167,19 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
       _stranica = 0;
     });
 
+    // Obrazlozenje iznad rezultata se trazi uz svaku pretragu, za isti datum
+    // preuzimanja. Ucitano jednom, pri otvaranju ekrana, ostajalo bi staro: poslije
+    // odluke o dozvoli ili izmjene pravila lista bi se promijenila, a tekst iznad nje
+    // bi i dalje tvrdio ono sto vise ne vazi. Ako ne stigne, ostaje prethodni tekst -
+    // to je objasnjenje, ne uslov pretrage.
+    final kategorije = _katalog
+        .mojeKategorije(naDan: _filteri.imaTermin ? _filteri.datumOd : null)
+        .then<DozvoljeneKategorije?>((x) => x)
+        .onError<ApiGreska>((_, _) => null);
+
     try {
       final strana = await _upit(0);
+      final obrazlozenje = await kategorije;
 
       if (!mounted || broj != _brojPretrage) {
         return;
@@ -181,6 +190,7 @@ class _PretragaEkranStanje extends State<PretragaEkran> {
           ..clear()
           ..addAll(strana.stavke);
         _ukupno = strana.ukupno;
+        _kategorije = obrazlozenje ?? _kategorije;
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {

@@ -12,6 +12,8 @@ namespace SunnyRides.Services.Base;
 /// Hookovi <see cref="BeforeInsertAsync"/>, <see cref="AfterInsertAsync"/>,
 /// <see cref="BeforeUpdateAsync"/> i <see cref="BeforeDeleteAsync"/> su mjesta gdje
 /// konkretni servisi dodaju poslovna pravila, bez prepisivanja cijele metode.
+/// <see cref="NakonPotvrde"/> je mjesto za ono sto smije tek kad je izmjena trajno
+/// upisana, na primjer ponistavanje kesa.
 /// </summary>
 public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate>
     : BaseService<TModel, TSearch, TEntity>, ICRUDService<TModel, TSearch, TInsert, TUpdate>
@@ -24,9 +26,10 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
 
     public virtual async Task<TModel> InsertAsync(TInsert request, CancellationToken ct = default)
     {
-        return await UTransakcijiAsync(async () =>
+        var entitet = new TEntity();
+
+        var rezultat = await UTransakcijiAsync(async () =>
         {
-            var entitet = new TEntity();
             request.Adapt(entitet);
 
             await BeforeInsertAsync(request, entitet, ct);
@@ -38,11 +41,17 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
 
             return await PonovoUcitajAsync(entitet, ct);
         }, ct);
+
+        NakonPotvrde(entitet);
+
+        return rezultat;
     }
 
     public virtual async Task<TModel> UpdateAsync(int id, TUpdate request, CancellationToken ct = default)
     {
-        return await UTransakcijiAsync(async () =>
+        TEntity? izmijenjen = null;
+
+        var rezultat = await UTransakcijiAsync(async () =>
         {
             var entitet = await Context.Set<TEntity>().FirstOrDefaultAsync(NadjiPoId(id), ct)
                           ?? throw NotFoundException.Za(NazivEntiteta, id);
@@ -53,16 +62,26 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
             await SacuvajAsync(ct);
             await AfterUpdateAsync(request, entitet, ct);
 
+            izmijenjen = entitet;
+
             return await PonovoUcitajAsync(entitet, ct);
         }, ct);
+
+        NakonPotvrde(izmijenjen!);
+
+        return rezultat;
     }
 
     public virtual async Task DeleteAsync(int id, CancellationToken ct = default)
     {
+        TEntity? obrisan = null;
+
         await UTransakcijiAsync<object?>(async () =>
         {
             var entitet = await Context.Set<TEntity>().FirstOrDefaultAsync(NadjiPoId(id), ct)
                           ?? throw NotFoundException.Za(NazivEntiteta, id);
+
+            obrisan = entitet;
 
             // Ovdje konkretni servis odbija brisanje zapisa koji se koristi, i to
             // porukom koju korisnik moze razumjeti - a ne EF izuzetkom.
@@ -82,6 +101,8 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
 
             return null;
         }, ct);
+
+        NakonPotvrde(obrisan!);
     }
 
     /// <summary>
@@ -120,6 +141,19 @@ public abstract class BaseCRUDService<TModel, TSearch, TEntity, TInsert, TUpdate
 
     protected virtual Task BeforeDeleteAsync(TEntity entitet, CancellationToken ct)
         => Task.CompletedTask;
+
+    /// <summary>
+    /// Poziva se poslije uspjesnog upisa, izmjene ili brisanja, kad je transakcija vec
+    /// potvrdjena. Ne poziva se kad operacija baci izuzetak.
+    ///
+    /// Ovo je mjesto za ponistavanje kesa. Da se kes brise ranije, prije potvrde,
+    /// istovremeni zahtjev bi u tom trenutku procitao jos staru verziju iz baze i
+    /// vratio je u kes, gdje bi ostala do isteka roka. Kad je operacija dio tudje
+    /// transakcije, potvrdu radi pozivalac, pa se ovo poziva na kraju operacije.
+    /// </summary>
+    protected virtual void NakonPotvrde(TEntity entitet)
+    {
+    }
 
     // --- interno ----------------------------------------------------------
 

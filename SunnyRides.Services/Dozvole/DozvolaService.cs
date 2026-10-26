@@ -20,7 +20,6 @@ namespace SunnyRides.Services.Dozvole;
 public class DozvolaService
     : BaseService<VozackaDozvolaDto, VozackaDozvolaSearchObject, VozackaDozvola>, IDozvolaService
 {
-    private const string KljucPravila = "pravila-kategorija";
     private static readonly TimeSpan TrajanjeKesa = TimeSpan.FromMinutes(15);
 
     private readonly ICurrentUserService _trenutniKorisnik;
@@ -515,7 +514,7 @@ public class DozvolaService
     /// </summary>
     private async Task<List<PraviloUlaz>> PravilaAsync(CancellationToken ct)
     {
-        if (_kes.TryGetValue(KljucPravila, out List<PraviloUlaz>? izKesa) && izKesa is not null)
+        if (_kes.TryGetValue(KesPravilaKategorija.Kljuc, out List<PraviloUlaz>? izKesa) && izKesa is not null)
         {
             return izKesa;
         }
@@ -526,7 +525,9 @@ public class DozvolaService
             .AsNoTracking()
             .ToListAsync(ct);
 
-        _kes.Set(KljucPravila, pravila, TrajanjeKesa);
+        // Sifarnik pravila brise ovaj kes cim se pravilo promijeni. Rok trajanja je
+        // samo mreza za izmjenu mimo aplikacije, npr. rucnim upitom u bazi.
+        _kes.Set(KesPravilaKategorija.Kljuc, pravila, TrajanjeKesa);
 
         return pravila;
     }

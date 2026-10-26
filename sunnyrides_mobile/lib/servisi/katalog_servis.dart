@@ -125,8 +125,13 @@ class KatalogServis {
 
   /// Sta prijavljeni korisnik smije voziti. Stoji iznad rezultata pretrage, da mu
   /// bude jasno zasto pojedina vozila nisu ponudjena.
-  Future<DozvoljeneKategorije> mojeKategorije() async {
-    final odgovor = await _klijent.get('/api/dozvole/moje-kategorije');
+  /// Sta klijent smije voziti, sa obrazlozenjem. [naDan] je datum preuzimanja:
+  /// dozvola koja danas vazi, a istice prije termina, taj najam ne pokriva.
+  Future<DozvoljeneKategorije> mojeKategorije({DateTime? naDan}) async {
+    final odgovor = await _klijent.get(
+      '/api/dozvole/moje-kategorije',
+      upit: {'naDan': naDan},
+    );
 
     return DozvoljeneKategorije.izJsona(_mapa(odgovor));
   }
