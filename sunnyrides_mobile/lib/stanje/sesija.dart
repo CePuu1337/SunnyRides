@@ -5,19 +5,42 @@ enum StanjeSesije { provjera, neprijavljen, prijavljen }
 
 /// Ko je prijavljen u mobilnoj aplikaciji.
 class Sesija extends ChangeNotifier {
-  Sesija({required AuthServis authServis, required PohranaTokena pohranaTokena})
-    : _auth = authServis,
-      _pohrana = pohranaTokena;
+  Sesija({
+    required AuthServis authServis,
+    required PohranaTokena pohranaTokena,
+    required this._mojaDozvola,
+  }) : _auth = authServis,
+       _pohrana = pohranaTokena;
 
   final AuthServis _auth;
   final PohranaTokena _pohrana;
+  final Future<VozackaDozvola?> Function() _mojaDozvola;
 
   StanjeSesije _stanje = StanjeSesije.provjera;
   Korisnik? _korisnik;
   String? _porukaOdjave;
 
+  /// Da li je klijent prijavio dozvolu sa obje fotografije. Null znaci da se ne zna
+  /// (provjera nije uspjela) - tada se korak ne namece, jer bez dozvole ionako nema
+  /// rezervacije: to pravilo provjerava server, a ovo je samo vodjenje kroz unos.
+  bool? _dozvolaPrijavljena;
+
   StanjeSesije get stanje => _stanje;
   Korisnik? get korisnik => _korisnik;
+
+  /// Klijent koji jos nije prijavio dozvolu prolazi kroz nju odmah poslije grada,
+  /// prije ulaska u aplikaciju. Prijava teme dozvolu stavlja u registraciju, a ne
+  /// kao nesto sto se moze, ali i ne mora, uraditi kasnije u profilu.
+  bool get trebaPrijavitiDozvolu =>
+      _stanje == StanjeSesije.prijavljen &&
+      (_korisnik?.jeKlijent ?? false) &&
+      _dozvolaPrijavljena == false;
+
+  /// Pravilo kada je dozvola "prijavljena": postoje podaci i obje fotografije.
+  /// Status se ne gleda - odbijena ili dozvola na cekanju je prijavljena, a njenu
+  /// izmjenu klijent radi iz profila, ne kroz ovaj korak.
+  static bool jePrijavljena(VozackaDozvola? dozvola) =>
+      dozvola != null && dozvola.imaObjeStrane;
 
   String? preuzmiPorukuOdjave() {
     final poruka = _porukaOdjave;
@@ -46,6 +69,7 @@ class Sesija extends ChangeNotifier {
         return;
       }
 
+      await _provjeriDozvolu();
       _postavi(StanjeSesije.prijavljen, korisnik);
     } on ApiGreska {
       await _pohrana.obrisi();
@@ -68,6 +92,7 @@ class Sesija extends ChangeNotifier {
       );
     }
 
+    await _provjeriDozvolu();
     _postavi(StanjeSesije.prijavljen, korisnik);
   }
 
@@ -92,6 +117,8 @@ class Sesija extends ChangeNotifier {
       potvrdaLozinke: potvrdaLozinke,
     );
 
+    // Nov nalog nema dozvolu, pa je ne treba ni pitati server.
+    _dozvolaPrijavljena = false;
     _postavi(StanjeSesije.prijavljen, korisnik);
   }
 
@@ -114,9 +141,29 @@ class Sesija extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Zove ga korak dozvole kad su podaci i obje fotografije poslani. Korijen
+  /// aplikacije tada sam prelazi na pocetni ekran.
+  void dozvolaPoslana(VozackaDozvola dozvola) {
+    _dozvolaPrijavljena = jePrijavljena(dozvola);
+    notifyListeners();
+  }
+
+  Future<void> _provjeriDozvolu() async {
+    try {
+      _dozvolaPrijavljena = jePrijavljena(await _mojaDozvola());
+    } on ApiGreska {
+      _dozvolaPrijavljena = null;
+    }
+  }
+
   void _postavi(StanjeSesije stanje, Korisnik? korisnik) {
     _stanje = stanje;
     _korisnik = korisnik;
+
+    if (stanje != StanjeSesije.prijavljen) {
+      _dozvolaPrijavljena = null;
+    }
+
     notifyListeners();
   }
 

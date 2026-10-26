@@ -94,12 +94,12 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
       );
 
       // Uspjesna registracija odmah prijavljuje. Korijen aplikacije tada zatvara
-      // ovaj ekran i prikazuje pocetnu stranu.
+      // ovaj ekran i vodi kroz preostala dva koraka: grad i vozacku dozvolu.
       poruke.showSnackBar(
         SnackBar(
           content: Text(
-            'Dobro došli, $ime! Nalog je otvoren. Dodajte vozačku dozvolu u '
-            'profilu da biste mogli rezervisati.',
+            'Dobro došli, $ime! Nalog je otvoren. Još grad i vozačka dozvola i '
+            'spremni ste.',
           ),
           duration: const Duration(seconds: 6),
         ),
@@ -220,8 +220,9 @@ class _RegistracijaEkranStanje extends State<RegistracijaEkran> {
                 ),
                 const SizedBox(height: Razmaci.xl),
                 Obavjestenje.info(
-                  'Za rezervaciju vozila trebaće vam i verifikovana vozačka dozvola. '
-                  'Nju dodajete u profilu nakon registracije.',
+                  'Odmah poslije otvaranja naloga birate grad i prijavljujete '
+                  'vozačku dozvolu: broj, kategorije, datume i fotografije obje '
+                  'strane. Bez verifikovane dozvole rezervacija nije moguća.',
                 ),
                 const SizedBox(height: Razmaci.xl),
                 SizedBox(

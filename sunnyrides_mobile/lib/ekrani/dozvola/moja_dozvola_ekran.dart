@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../servisi/profil_servis.dart';
+import '../../stanje/sesija.dart';
 import '../../widgeti/obavjestenje.dart';
 import 'prijava_dozvole_ekran.dart';
 
@@ -13,8 +14,14 @@ import 'prijava_dozvole_ekran.dart';
 ///
 /// Dozvola se ne moze odobriti dok nisu prilozene i prednja i zadnja strana -
 /// kategorije stoje na zadnjoj, pa uposlenik bez nje nema sta provjeriti.
+///
+/// Isti ekran je i drugi korak registracije ([korakRegistracije]). Tada nema
+/// povratka nazad nego dugme "Nastavi", koje postaje aktivno kad su poslani podaci i
+/// obje fotografije. Iz profila se kasnije ulazi u obicnu verziju, za izmjene.
 class MojaDozvolaEkran extends StatefulWidget {
-  const MojaDozvolaEkran({super.key});
+  const MojaDozvolaEkran({super.key, this.korakRegistracije = false});
+
+  final bool korakRegistracije;
 
   @override
   State<MojaDozvolaEkran> createState() => _MojaDozvolaEkranStanje();
@@ -37,10 +44,14 @@ class _MojaDozvolaEkranStanje extends State<MojaDozvolaEkran> {
     _servis = ProfilServis(context.read<ApiKlijent>());
 
     // Status se mijenja kad uposlenik odobri ili odbije dozvolu - ekran ga prikaze
-    // cim obavjestenje stigne.
-    _odlukaODozvoli = context.read<NotifikacijeStanje>().odlukaODozvoli.listen(
-      (_) => _ucitaj(),
-    );
+    // cim obavjestenje stigne. U koraku registracije veza za obavjestenja jos ne
+    // postoji (otvara je tek glavni dio aplikacije), a odluke ionako jos nema.
+    if (!widget.korakRegistracije) {
+      _odlukaODozvoli = context
+          .read<NotifikacijeStanje>()
+          .odlukaODozvoli
+          .listen((_) => _ucitaj());
+    }
 
     _ucitaj();
   }
@@ -162,22 +173,44 @@ class _MojaDozvolaEkranStanje extends State<MojaDozvolaEkran> {
     await _ucitaj();
   }
 
+  /// Kraj koraka registracije. Korijen aplikacije na ovo sam prelazi na pocetnu.
+  void _nastavi() {
+    final dozvola = _dozvola;
+
+    if (dozvola != null) {
+      context.read<Sesija>().dozvolaPoslana(dozvola);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dozvola = _dozvola;
+    final korak = widget.korakRegistracije;
 
     return Scaffold(
       backgroundColor: Boje.platno,
-      appBar: AppBar(title: const Text('Moja dozvola')),
+      appBar: AppBar(
+        title: Text(korak ? 'Vozačka dozvola' : 'Moja dozvola'),
+        automaticallyImplyLeading: !korak,
+      ),
+      bottomNavigationBar: korak
+          ? _KrajKoraka(
+              mozeDalje: Sesija.jePrijavljena(dozvola),
+              naNastavak: _nastavi,
+            )
+          : null,
       body: Sadrzaj(
         ucitavanje: _ucitavanje,
         greska: _greska,
         naPonovniPokusaj: _ucitaj,
         dijete: dozvola == null
             ? PrazanPopis(
-                poruka:
-                    'Dozvola još nije prijavljena. Bez verifikovane dozvole '
-                    'rezervacija nije moguća.',
+                poruka: korak
+                    ? 'Korak 2 od 2. Prijavite vozačku dozvolu: broj, '
+                          'kategorije, datume i fotografije obje strane. Po '
+                          'kategorijama vam nudimo samo vozila koja smijete voziti.'
+                    : 'Dozvola još nije prijavljena. Bez verifikovane dozvole '
+                          'rezervacija nije moguća.',
                 ikona: Icons.badge_outlined,
                 akcija: FilledButton(
                   onPressed: _prijavi,
@@ -187,6 +220,17 @@ class _MojaDozvolaEkranStanje extends State<MojaDozvolaEkran> {
             : ListView(
                 padding: const EdgeInsets.all(Razmaci.l),
                 children: [
+                  if (korak) ...[
+                    const Text(
+                      'Korak 2 od 2',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Boje.tekstPrigusen,
+                      ),
+                    ),
+                    const SizedBox(height: Razmaci.s),
+                  ],
                   _Status(dozvola: dozvola),
                   const SizedBox(height: Razmaci.l),
                   _Okvir(
@@ -257,6 +301,53 @@ class _MojaDozvolaEkranStanje extends State<MojaDozvolaEkran> {
                   ),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+/// Dno ekrana u koraku registracije: nastavak u aplikaciju i odjava.
+///
+/// Dok podaci i obje fotografije nisu poslani, dugme je onemoguceno i ispod pise
+/// sta jos fali - korisnik ne treba pogadjati zasto ne moze dalje.
+class _KrajKoraka extends StatelessWidget {
+  const _KrajKoraka({required this.mozeDalje, required this.naNastavak});
+
+  final bool mozeDalje;
+  final VoidCallback naNastavak;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          Razmaci.l,
+          Razmaci.s,
+          Razmaci.l,
+          Razmaci.l,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FilledButton(
+              onPressed: mozeDalje ? naNastavak : null,
+              child: const Text('Nastavi'),
+            ),
+            if (!mozeDalje) ...[
+              const SizedBox(height: Razmaci.xs),
+              const Text(
+                'Prijavite podatke dozvole i dodajte fotografije obje strane.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11.5, color: Boje.tekstPrigusen),
+              ),
+            ],
+            TextButton(
+              onPressed: () => context.read<Sesija>().odjava(),
+              child: const Text('Odjavi se'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import 'aplikacija.dart';
+import 'servisi/profil_servis.dart';
 import 'stanje/sesija.dart';
 
 void main() {
@@ -23,7 +24,11 @@ void main() {
     pohranaTokena: pohranaTokena,
   );
   final authServis = AuthServis(klijent: apiKlijent, pohrana: pohranaTokena);
-  final sesija = Sesija(authServis: authServis, pohranaTokena: pohranaTokena);
+  final sesija = Sesija(
+    authServis: authServis,
+    pohranaTokena: pohranaTokena,
+    mojaDozvola: ProfilServis(apiKlijent).mojaDozvola,
+  );
 
   apiKlijent.naIstekSesije = sesija.sesijaIstekla;
 
