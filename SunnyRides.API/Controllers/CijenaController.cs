@@ -34,4 +34,16 @@ public class CijenaController : ControllerBase
             request.VoziloId, request.DatumOd, request.DatumDo,
             request.Oprema, request.PaketOsiguranjaId, ct);
     }
+
+    /// <summary>
+    /// Cijena po satu i po danu i popusti koji vaze za vozilo na dati dan. Ekran sa
+    /// detaljima vozila prikazuje ovo, a ne tarifu upisanu na vozilu - u sezoni se one
+    /// razlikuju, a klijent mora vidjeti ono sto ce platiti.
+    /// </summary>
+    [HttpGet("vozilo/{voziloId:int}")]
+    public async Task<TarifaNaDanDto> TarifaAsync(
+        int voziloId, [FromQuery] DateTime? naDan, CancellationToken ct)
+    {
+        return await _pricingService.TarifaNaDanAsync(voziloId, naDan ?? DateTime.UtcNow, ct);
+    }
 }

@@ -56,9 +56,17 @@ public class VoziloDto
 
     /// <summary>
     /// Cijena za termin iz pretrage. Popunjena samo kad pretraga ima termin - bez
-    /// njega nema perioda za koji bi se cijena racunala, pa vazi dnevna tarifa.
+    /// njega nema perioda za koji bi se cijena racunala, pa vazi dnevna cijena.
     /// </summary>
     public CijenaPeriodaDto? CijenaZaPeriod { get; set; }
+
+    /// <summary>
+    /// Cijena po satu i po danu koju klijent placa na dan preuzimanja (ili danas, bez
+    /// termina), sa sezonom iz cjenovnika. <see cref="DnevnaTarifa"/> je osnovna tarifa
+    /// upisana na vozilu i nju vidi osoblje; klijentu se prikazuje ova. Popunjena u
+    /// pretrazi i preporukama.
+    /// </summary>
+    public TarifaNaDanDto? Tarifa { get; set; }
 
     /// <summary>Broj recenzija iza prosjeka. Bez njega ocjena 5,0 iz jedne recenzije izgleda isto kao iz pedeset.</summary>
     public int BrojRecenzija { get; set; }

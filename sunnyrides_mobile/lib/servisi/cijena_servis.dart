@@ -1,41 +1,6 @@
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
-/// Tarifa koja vazi za jedan model u zadatom periodu, sa pragovima popusta.
-class Cjenovnik {
-  const Cjenovnik({
-    required this.naziv,
-    required this.mnozilac,
-    required this.popustPrag1,
-    required this.popustProcenat1,
-    required this.popustPrag2,
-    required this.popustProcenat2,
-    this.satnaTarifa,
-    this.dnevnaTarifa,
-  });
-
-  final String naziv;
-  final double mnozilac;
-  final double? satnaTarifa;
-  final double? dnevnaTarifa;
-
-  final int popustPrag1;
-  final double popustProcenat1;
-  final int popustPrag2;
-  final double popustProcenat2;
-
-  factory Cjenovnik.izJsona(Map<String, dynamic> json) {
-    return Cjenovnik(
-      naziv: json['naziv']?.toString() ?? '',
-      mnozilac: citajDouble(json['mnozilac'], podrazumijevano: 1),
-      satnaTarifa: citajDoubleIliNista(json['satnaTarifa']),
-      dnevnaTarifa: citajDoubleIliNista(json['dnevnaTarifa']),
-      popustPrag1: citajInt(json['popustPrag1']),
-      popustProcenat1: citajDouble(json['popustProcenat1']),
-      popustPrag2: citajInt(json['popustPrag2']),
-      popustProcenat2: citajDouble(json['popustProcenat2']),
-    );
-  }
-}
+import '../modeli/vozilo.dart';
 
 /// Je li vozilo slobodno u zadatom terminu, i ako nije - zasto.
 class Dostupnost {
@@ -70,16 +35,15 @@ class CijenaServis {
     return CijenaRezervacije.izJsona(odgovor as Map<String, dynamic>);
   }
 
-  Future<Cjenovnik?> vazeciCjenovnik(
-    int modelVozilaId, {
-    DateTime? datum,
-  }) async {
+  /// Cijena po satu i po danu i popusti koji vaze za vozilo na dan [naDan] (bez
+  /// njega: danas), izracunati na serveru.
+  Future<TarifaNaDan> tarifa(int voziloId, {DateTime? naDan}) async {
     final odgovor = await _klijent.get(
-      '/api/cjenovnici/vazeci',
-      upit: {'modelVozilaId': modelVozilaId, 'datum': datum},
+      '/api/cijene/vozilo/$voziloId',
+      upit: {'naDan': naDan},
     );
 
-    return odgovor is Map<String, dynamic> ? Cjenovnik.izJsona(odgovor) : null;
+    return TarifaNaDan.izJsona(odgovor as Map<String, dynamic>);
   }
 
   Future<Dostupnost> provjeriTermin({

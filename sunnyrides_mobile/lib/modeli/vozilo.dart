@@ -20,6 +20,7 @@ class Vozilo {
     this.prosjecnaOcjena,
     this.brojRecenzija = 0,
     this.cijenaZaPeriod,
+    this.tarifa,
     this.modelNaziv,
     this.markaNaziv,
     this.tipVozilaNaziv,
@@ -56,6 +57,14 @@ class Vozilo {
   /// Cijena za termin iz pretrage, izracunata na serveru. Prazna kad pretraga
   /// nema termin.
   final CijenaPerioda? cijenaZaPeriod;
+
+  /// Cijena koju klijent placa na dan preuzimanja, sa sezonom, izracunata na
+  /// serveru. [dnevnaTarifa] je osnovna tarifa upisana na vozilu i u sezoni se od
+  /// ove razlikuje.
+  final TarifaNaDan? tarifa;
+
+  /// Cijena po danu za prikaz. Ista ona po kojoj server filtrira i sortira pretragu.
+  double get cijenaPoDanu => tarifa?.dnevnaCijena ?? dnevnaTarifa;
 
   final String? modelNaziv;
   final String? markaNaziv;
@@ -115,6 +124,9 @@ class Vozilo {
           ? CijenaPerioda.izJsona(
               json['cijenaZaPeriod'] as Map<String, dynamic>,
             )
+          : null,
+      tarifa: json['tarifa'] is Map<String, dynamic>
+          ? TarifaNaDan.izJsona(json['tarifa'] as Map<String, dynamic>)
           : null,
       modelNaziv: json['modelNaziv']?.toString(),
       markaNaziv: json['markaNaziv']?.toString(),
@@ -312,6 +324,41 @@ class SlikaVozila {
       url: json['url']?.toString() ?? '',
       thumbnailUrl: json['thumbnailUrl']?.toString() ?? '',
       jeGlavna: citajBool(json['jeGlavna']),
+    );
+  }
+}
+
+/// Satna i dnevna cijena i popusti koji vaze za vozilo na odredjeni dan, onako kako
+/// ih racuna server - isto pravilo po kojem racuna i rezervaciju.
+class TarifaNaDan {
+  const TarifaNaDan({
+    required this.satnaCijena,
+    required this.dnevnaCijena,
+    required this.popustPrag1,
+    required this.popustProcenat1,
+    required this.popustPrag2,
+    required this.popustProcenat2,
+    this.nazivSezone,
+  });
+
+  final double satnaCijena;
+  final double dnevnaCijena;
+  final String? nazivSezone;
+
+  final int popustPrag1;
+  final double popustProcenat1;
+  final int popustPrag2;
+  final double popustProcenat2;
+
+  factory TarifaNaDan.izJsona(Map<String, dynamic> json) {
+    return TarifaNaDan(
+      satnaCijena: citajDouble(json['satnaCijena']),
+      dnevnaCijena: citajDouble(json['dnevnaCijena']),
+      nazivSezone: json['nazivSezone']?.toString(),
+      popustPrag1: citajInt(json['popustPrag1']),
+      popustProcenat1: citajDouble(json['popustProcenat1']),
+      popustPrag2: citajInt(json['popustPrag2']),
+      popustProcenat2: citajDouble(json['popustProcenat2']),
     );
   }
 }

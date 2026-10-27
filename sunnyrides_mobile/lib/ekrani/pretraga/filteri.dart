@@ -14,8 +14,10 @@ import '../../modeli/vozilo.dart';
 enum Poredak {
   najblize('Najbliže meni', 'Udaljenost'),
   preporuka('Preporučeno za vas', 'Preporuka'),
-  cijenaRastuce('Cijena: niža prvo', 'DnevnaTarifa asc'),
-  cijenaOpadajuce('Cijena: viša prvo', 'DnevnaTarifa desc'),
+  // "Cijena" nije kolona: server sortira po cijeni po danu za dan preuzimanja,
+  // sa sezonom - istoj po kojoj filtrira raspon cijene i koju kartica prikazuje.
+  cijenaRastuce('Cijena: niža prvo', 'Cijena asc'),
+  cijenaOpadajuce('Cijena: viša prvo', 'Cijena desc'),
   ocjena('Najbolje ocijenjeno', 'ProsjecnaOcjena desc'),
   godiste('Novija vozila', 'GodinaProizvodnje desc');
 

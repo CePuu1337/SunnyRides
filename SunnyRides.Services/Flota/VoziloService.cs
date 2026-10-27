@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model;
@@ -65,6 +66,13 @@ public class VoziloService
     /// </summary>
     private bool _pretragaKlijenta;
 
+    /// <summary>
+    /// Dan za koji se racuna cijena u pretrazi: preuzimanje kad je termin zadan, inace
+    /// danas. Isti dan koristi filter, poredak i cijena koja se vraca uz vozilo, pa se
+    /// ne moze desiti da vozilo prodje filter "do 45 EUR" a prikaze 52 EUR.
+    /// </summary>
+    private DateTime _danCijene;
+
     public VoziloService(
         SunnyRidesDbContext context,
         IPohranaSlika pohrana,
@@ -105,6 +113,7 @@ public class VoziloService
         // bi i vozila koja klijent ne smije voziti. Uslov je "nije osoblje", a ne "jeste
         // klijent", da nalog bez prepoznate uloge dobije strozi, a ne blazi rezultat.
         _pretragaKlijenta = !JeOsoblje();
+        _danCijene = ImaTermin(search) ? search.SlobodnoOd!.Value : DateTime.UtcNow;
 
         if (_pretragaKlijenta)
         {
@@ -134,9 +143,66 @@ public class VoziloService
 
         await DodajOcjeneAsync(rezultat.Items, ct);
         await DodajCijeneZaPeriodAsync(rezultat.Items, search, ct);
+        await DodajTarifeAsync(rezultat.Items, _danCijene, ct);
         DodajUdaljenosti(rezultat.Items, udaljenosti);
 
         return rezultat;
+    }
+
+    /// <summary>
+    /// Cijena po danu i satu za vozila na stranici, kroz <see cref="IPricingService"/> -
+    /// isti racun kao pri rezervaciji, sa tarifama sezone iz kesa.
+    /// </summary>
+    private async Task DodajTarifeAsync(
+        IReadOnlyCollection<VoziloDto> vozila, DateTime dan, CancellationToken ct)
+    {
+        if (vozila.Count == 0)
+        {
+            return;
+        }
+
+        var tarife = await _pricing.TarifeNaDanAsync(vozila.Select(x => x.Id).ToList(), dan, ct);
+
+        foreach (var vozilo in vozila)
+        {
+            if (tarife.TryGetValue(vozilo.Id, out var tarifa))
+            {
+                vozilo.Tarifa = tarifa;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Dnevna cijena koju klijent placa na dati dan, kao izraz koji EF prevodi u SQL.
+    ///
+    /// Pravilo je isto kao <see cref="PricingService.EfektivnaTarifa"/>: tarifa iz
+    /// cjenovnika koji vazi za model tog dana, inace tarifa vozila, puta mnozilac,
+    /// zaokruzeno na dvije decimale. Ponovljeno je ovdje jer filter i poredak moraju
+    /// ici kroz <c>Where</c> i <c>OrderBy</c> na bazi (upute 8.2), a baza ne moze
+    /// pozvati C# metodu. Preklapanje sezona je zabranjeno pri unosu, pa za dan postoji
+    /// najvise jedan zapis cjenovnika.
+    /// </summary>
+    private Expression<Func<Vozilo, decimal>> DnevnaCijenaNaDan(DateTime dan) =>
+        v => Math.Round(
+            Context.Cjenovnici
+                .Where(c => c.ModelVozilaId == v.ModelVozilaId && c.DatumOd <= dan && c.DatumDo > dan)
+                .Select(c => (decimal?)((c.DnevnaTarifa ?? v.DnevnaTarifa) * c.Mnozilac))
+                .FirstOrDefault() ?? v.DnevnaTarifa,
+            2);
+
+    /// <summary>"cijena >= granica" ili "cijena <= granica", nad izrazom cijene.</summary>
+    private static Expression<Func<Vozilo, bool>> Uporedi(
+        Expression<Func<Vozilo, decimal>> cijena, decimal granica, bool najmanje)
+    {
+        // Granica ide kroz zatvorenje, a ne kao konstanta, da je EF posalje kao
+        // parametar upita umjesto da je upise u SQL.
+        Expression<Func<decimal>> vrijednost = () => granica;
+
+        var tijelo = najmanje
+            ? Expression.GreaterThanOrEqual(cijena.Body, vrijednost.Body)
+            : Expression.LessThanOrEqual(cijena.Body, vrijednost.Body);
+
+        return Expression.Lambda<Func<Vozilo, bool>>(tijelo, cijena.Parameters);
     }
 
     private static void DodajUdaljenosti(
@@ -277,6 +343,20 @@ public class VoziloService
     /// </summary>
     protected override IQueryable<Vozilo> AddSort(VoziloSearchObject search, IQueryable<Vozilo> upit)
     {
+        // Poredak po cijeni ide po cijeni koju klijent vidi i placa, ne po osnovnoj
+        // tarifi vozila - inace bi "nize prvo" stavilo na vrh vozilo koje je u sezoni
+        // skuplje od onog ispod njega.
+        if (search.OrderBy is not null
+            && search.OrderBy.StartsWith(PoredakPoCijeni, StringComparison.OrdinalIgnoreCase))
+        {
+            var cijena = DnevnaCijenaNaDan(_danCijene);
+            var opadajuce = search.OrderBy.Contains("desc", StringComparison.OrdinalIgnoreCase);
+
+            var poCijeni = opadajuce ? upit.OrderByDescending(cijena) : upit.OrderBy(cijena);
+
+            return poCijeni.ThenBy(x => x.Id);
+        }
+
         if (search.OrderBy is null
             || !search.OrderBy.StartsWith(PoredakPoOcjeni, StringComparison.OrdinalIgnoreCase))
         {
@@ -300,6 +380,12 @@ public class VoziloService
 
     /// <summary>Vrijednost koju mobilna aplikacija salje kad korisnik sortira po ocjeni.</summary>
     public const string PoredakPoOcjeni = "ProsjecnaOcjena";
+
+    /// <summary>
+    /// Poredak po dnevnoj cijeni za dan preuzimanja ("Cijena asc" / "Cijena desc").
+    /// Nije ime kolone: cijena se racuna iz tarife i sezone.
+    /// </summary>
+    public const string PoredakPoCijeni = "Cijena";
 
     /// <summary>
     /// Vrijednost za poredak po relevantnosti - "Preporuceno za vas" u mobilnoj
@@ -383,14 +469,17 @@ public class VoziloService
             upit = upit.Where(x => x.Poslovnica.GradId == search.GradId.Value);
         }
 
+        // Raspon cijene se poredi sa cijenom koju klijent vidi za dan preuzimanja, a ne
+        // sa osnovnom tarifom vozila. Vozilo od 40 EUR u sezoni sa mnoziocem 1,3 kosta
+        // 52 EUR i ne smije proci filter "do 45 EUR".
         if (search.CijenaOd.HasValue)
         {
-            upit = upit.Where(x => x.DnevnaTarifa >= search.CijenaOd.Value);
+            upit = upit.Where(Uporedi(DnevnaCijenaNaDan(_danCijene), search.CijenaOd.Value, najmanje: true));
         }
 
         if (search.CijenaDo.HasValue)
         {
-            upit = upit.Where(x => x.DnevnaTarifa <= search.CijenaDo.Value);
+            upit = upit.Where(Uporedi(DnevnaCijenaNaDan(_danCijene), search.CijenaDo.Value, najmanje: false));
         }
 
         if (search.Aktivno.HasValue)

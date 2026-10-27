@@ -151,15 +151,78 @@ public class PricingService : IPricingService
             .FirstOrDefaultAsync(x => x.Id == voziloId, ct)
             ?? throw NotFoundException.Za("Vozilo", voziloId);
 
-        // Ista pravila kao kod obracuna najma: tarifa iz cjenovnika ako postoji za taj
-        // datum, inace tarifa vozila, pa sezonski mnozilac.
         var sezona = await _cjenovnikService.VazeciAsync(vozilo.ModelVozilaId, datum, ct);
 
-        var tarifa = sezona?.DnevnaTarifa ?? vozilo.DnevnaTarifa;
-        var mnozilac = sezona?.Mnozilac ?? 1m;
-
-        return Math.Round(tarifa * mnozilac, 2, MidpointRounding.AwayFromZero);
+        return EfektivnaTarifa(vozilo.DnevnaTarifa, sezona?.DnevnaTarifa, sezona?.Mnozilac);
     }
+
+    public async Task<Dictionary<int, TarifaNaDanDto>> TarifeNaDanAsync(
+        IReadOnlyCollection<int> voziloIds, DateTime datum, CancellationToken ct = default)
+    {
+        var rezultat = new Dictionary<int, TarifaNaDanDto>();
+
+        if (voziloIds.Count == 0)
+        {
+            return rezultat;
+        }
+
+        var ids = voziloIds.Distinct().ToList();
+
+        var vozila = await _context.Vozila
+            .AsNoTracking()
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.ModelVozilaId, x.SatnaTarifa, x.DnevnaTarifa })
+            .ToListAsync(ct);
+
+        // Sezona po modelu, iz kesa cjenovnika - isto kao u obracunu za pretragu.
+        var sezone = new Dictionary<int, CjenovnikDto?>();
+
+        foreach (var modelId in vozila.Select(x => x.ModelVozilaId).Distinct())
+        {
+            sezone[modelId] = await _cjenovnikService.VazeciAsync(modelId, datum, ct);
+        }
+
+        foreach (var vozilo in vozila)
+        {
+            var sezona = sezone[vozilo.ModelVozilaId];
+
+            rezultat[vozilo.Id] = new TarifaNaDanDto
+            {
+                VoziloId = vozilo.Id,
+                NaDan = datum,
+                SatnaCijena = EfektivnaTarifa(vozilo.SatnaTarifa, sezona?.SatnaTarifa, sezona?.Mnozilac),
+                DnevnaCijena = EfektivnaTarifa(vozilo.DnevnaTarifa, sezona?.DnevnaTarifa, sezona?.Mnozilac),
+                NazivSezone = sezona?.Naziv,
+                PopustPrag1 = sezona?.PopustPrag1 ?? PodrazumijevaniPrag1,
+                PopustProcenat1 = sezona?.PopustProcenat1 ?? PodrazumijevaniProcenat1,
+                PopustPrag2 = sezona?.PopustPrag2 ?? PodrazumijevaniPrag2,
+                PopustProcenat2 = sezona?.PopustProcenat2 ?? PodrazumijevaniProcenat2
+            };
+        }
+
+        return rezultat;
+    }
+
+    public async Task<TarifaNaDanDto> TarifaNaDanAsync(
+        int voziloId, DateTime datum, CancellationToken ct = default)
+    {
+        var tarife = await TarifeNaDanAsync(new[] { voziloId }, datum, ct);
+
+        return tarife.TryGetValue(voziloId, out var tarifa)
+            ? tarifa
+            : throw NotFoundException.Za("Vozilo", voziloId);
+    }
+
+    /// <summary>
+    /// Tarifa koju klijent stvarno placa po satu ili po danu: tarifa iz cjenovnika ako
+    /// je navedena, inace tarifa upisana na vozilu, pa sezonski mnozilac.
+    ///
+    /// Isto pravilo, prevedeno u SQL, filtrira i sortira pretragu po cijeni
+    /// (<c>VoziloService.DnevnaCijenaNaDan</c>) - SQL ne moze pozvati ovu metodu, pa je
+    /// pravilo tamo napisano kao izraz. Ako se mijenja, mijenja se na oba mjesta.
+    /// </summary>
+    public static decimal EfektivnaTarifa(decimal tarifaVozila, decimal? tarifaSezone, decimal? mnozilac) =>
+        Math.Round((tarifaSezone ?? tarifaVozila) * (mnozilac ?? 1m), 2, MidpointRounding.AwayFromZero);
 
     private async Task<List<StavkaOpremeUlaz>> UcitajOpremuAsync(
         IReadOnlyList<StavkaOpremeRequest> trazeno, CancellationToken ct)

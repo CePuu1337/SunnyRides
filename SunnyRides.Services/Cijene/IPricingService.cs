@@ -38,4 +38,15 @@ public interface IPricingService
     /// doplatu kad je vozilo vraceno kasnije od ugovorenog.
     /// </summary>
     Task<decimal> DnevnaCijenaAsync(int voziloId, DateTime datum, CancellationToken ct = default);
+
+    /// <summary>
+    /// Satna i dnevna cijena i popusti koji vaze na dati dan, za vise vozila odjednom.
+    /// To je cijena koju aplikacija prikazuje uz vozilo u pretrazi, preporukama i
+    /// detaljima.
+    /// </summary>
+    Task<Dictionary<int, TarifaNaDanDto>> TarifeNaDanAsync(
+        IReadOnlyCollection<int> voziloIds, DateTime datum, CancellationToken ct = default);
+
+    /// <summary>Isto, za jedno vozilo - za ekran sa detaljima vozila.</summary>
+    Task<TarifaNaDanDto> TarifaNaDanAsync(int voziloId, DateTime datum, CancellationToken ct = default);
 }

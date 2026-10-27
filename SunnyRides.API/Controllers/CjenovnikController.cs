@@ -9,44 +9,20 @@ using SunnyRides.Services.Flota;
 namespace SunnyRides.API.Controllers;
 
 /// <summary>
-/// Sezonske tarife.
+/// Sezonske tarife. Cijeli modul je administratorski - specifikacija kaze da cjenovnik
+/// ne vidi ni uposlenik.
 ///
-/// Citanje je otvoreno svakom prijavljenom korisniku, jer ekran sa detaljima vozila
-/// mora klijentu prikazati pragove popusta koji se stvarno primjenjuju pri obracunu.
-/// Izmjena je iskljucivo administratorska - specifikacija kaze da cjenovnik ne vidi
-/// ni uposlenik.
+/// Klijent tarife ne cita odavde. Cijenu koju placa na dati dan, sa sezonom i
+/// popustima, dobija gotovu kroz <c>/api/cijene/vozilo/{id}</c> i uz vozila u pretrazi,
+/// pa mu sirovi zapisi cjenovnika ne trebaju.
 /// </summary>
 [Route("api/cjenovnici")]
+[Authorize(Roles = Uloge.Administrator)]
 public class CjenovnikController
     : BaseCRUDController<CjenovnikDto, CjenovnikSearchObject,
                          CjenovnikInsertRequest, CjenovnikUpdateRequest>
 {
-    private readonly ICjenovnikService _cjenovnikService;
-
     public CjenovnikController(ICjenovnikService service) : base(service)
     {
-        _cjenovnikService = service;
     }
-
-    /// <summary>Tarifa koja za zadati model vazi na zadati dan.</summary>
-    [HttpGet("vazeci")]
-    public async Task<CjenovnikDto?> VazeciAsync(
-        [FromQuery] int modelVozilaId, [FromQuery] DateTime? datum, CancellationToken ct)
-    {
-        return await _cjenovnikService.VazeciAsync(modelVozilaId, datum ?? DateTime.UtcNow, ct);
-    }
-
-    [Authorize(Roles = Uloge.Administrator)]
-    public override Task<CjenovnikDto> InsertAsync(
-        [FromBody] CjenovnikInsertRequest request, CancellationToken ct)
-        => base.InsertAsync(request, ct);
-
-    [Authorize(Roles = Uloge.Administrator)]
-    public override Task<CjenovnikDto> UpdateAsync(
-        int id, [FromBody] CjenovnikUpdateRequest request, CancellationToken ct)
-        => base.UpdateAsync(id, request, ct);
-
-    [Authorize(Roles = Uloge.Administrator)]
-    public override Task<IActionResult> DeleteAsync(int id, CancellationToken ct)
-        => base.DeleteAsync(id, ct);
 }

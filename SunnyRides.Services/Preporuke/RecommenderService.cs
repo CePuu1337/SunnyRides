@@ -5,6 +5,7 @@ using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Enums;
 using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Auth;
+using SunnyRides.Services.Cijene;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
@@ -44,19 +45,22 @@ public class RecommenderService : IRecommenderService
     private readonly IDozvolaService _dozvolaService;
     private readonly IAvailabilityService _dostupnost;
     private readonly IModelPreporuke _model;
+    private readonly IPricingService _pricing;
 
     public RecommenderService(
         SunnyRidesDbContext context,
         ICurrentUserService trenutniKorisnik,
         IDozvolaService dozvolaService,
         IAvailabilityService dostupnost,
-        IModelPreporuke model)
+        IModelPreporuke model,
+        IPricingService pricing)
     {
         _context = context;
         _trenutniKorisnik = trenutniKorisnik;
         _dozvolaService = dozvolaService;
         _dostupnost = dostupnost;
         _model = model;
+        _pricing = pricing;
     }
 
     // --- preporuke ---------------------------------------------------------
@@ -99,7 +103,7 @@ public class RecommenderService : IRecommenderService
 
         return new PagedResult<PreporukaDto>
         {
-            Items = await SastaviAsync(zaPrikaz, historija, ct),
+            Items = await SastaviAsync(zaPrikaz, historija, search.SlobodnoOd ?? DateTime.UtcNow, ct),
             TotalCount = search.IncludeTotalCount ? poredani.Count : null
         };
     }
@@ -158,7 +162,7 @@ public class RecommenderService : IRecommenderService
 
         var koliko = Math.Clamp(broj ?? PodrazumijevanoSlicnih, 1, MaksimalnoSlicnih);
 
-        return await SastaviAsync(poredani.Take(koliko).ToList(), null, ct);
+        return await SastaviAsync(poredani.Take(koliko).ToList(), null, DateTime.UtcNow, ct);
     }
 
     public async Task<List<RangiranoVozilo>> RangirajAsync(
@@ -454,7 +458,7 @@ public class RecommenderService : IRecommenderService
     /// poznaje.
     /// </summary>
     private async Task<List<PreporukaDto>> SastaviAsync(
-        IReadOnlyList<Bodovano> odabrani, HistorijaKorisnika? historija, CancellationToken ct)
+        IReadOnlyList<Bodovano> odabrani, HistorijaKorisnika? historija, DateTime danCijene, CancellationToken ct)
     {
         if (odabrani.Count == 0)
         {
@@ -477,6 +481,18 @@ public class RecommenderService : IRecommenderService
         // Prosjecna ocjena ide uz vozilo kao i u pretrazi, da kartica prikaze stvarni
         // prosjek recenzija - a ne procjenu modela, koja je nesto drugo.
         await OcjeneVozila.DopuniAsync(_context, parovi.Select(x => x.Dto).ToList(), ct);
+
+        // Cijena na kartici preporuke je ista kao u pretrazi: ono sto klijent placa na
+        // dan preuzimanja, sa sezonom. Racuna je PricingService, ne ovaj servis.
+        var tarife = await _pricing.TarifeNaDanAsync(ids, danCijene, ct);
+
+        foreach (var (_, dto) in parovi)
+        {
+            if (tarife.TryGetValue(dto.Id, out var tarifa))
+            {
+                dto.Tarifa = tarifa;
+            }
+        }
 
         var preporuke = new List<PreporukaDto>(parovi.Count);
 

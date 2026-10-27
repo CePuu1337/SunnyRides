@@ -82,13 +82,14 @@ class KarticaVozila extends StatelessWidget {
                             text: TextSpan(
                               style: const TextStyle(color: Boje.tekst),
                               // Kad pretraga ima termin, prikazuje se ukupna cijena
-                              // za taj period, kako je izracuna server. Bez termina
-                              // nema perioda, pa ostaje dnevna tarifa.
+                              // za taj period, kako je izracuna server, i uz nju cijena
+                              // po danu - po njoj se filtrira i sortira. Bez termina
+                              // nema perioda, pa ostaje samo cijena po danu.
                               children: [
                                 TextSpan(
                                   text: Formati.novac(
                                     vozilo.cijenaZaPeriod?.iznosNajma ??
-                                        vozilo.dnevnaTarifa,
+                                        vozilo.cijenaPoDanu,
                                   ),
                                   style: const TextStyle(
                                     fontSize: 14.5,
@@ -98,7 +99,8 @@ class KarticaVozila extends StatelessWidget {
                                 TextSpan(
                                   text: vozilo.cijenaZaPeriod == null
                                       ? ' / dan'
-                                      : ' ${vozilo.cijenaZaPeriod!.opis}',
+                                      : ' ${vozilo.cijenaZaPeriod!.opis} · '
+                                            '${Formati.novac(vozilo.cijenaPoDanu)}/dan',
                                   style: const TextStyle(
                                     fontSize: 11.5,
                                     color: Boje.tekstPrigusen,

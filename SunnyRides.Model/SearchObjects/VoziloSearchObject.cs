@@ -20,6 +20,10 @@ public class VoziloSearchObject : BaseSearchObject
     /// <summary>Filtriranje po gradu ide kroz poslovnicu, bez dodatne kolone na vozilu.</summary>
     public int? GradId { get; set; }
 
+    /// <summary>
+    /// Raspon dnevne cijene koju klijent placa na dan preuzimanja (bez termina: danas),
+    /// sa sezonom iz cjenovnika - ne osnovne tarife upisane na vozilu.
+    /// </summary>
     public decimal? CijenaOd { get; set; }
     public decimal? CijenaDo { get; set; }
 

@@ -43,7 +43,7 @@ class _DetaljiVozilaEkranStanje extends State<DetaljiVozilaEkran> {
   List<Recenzija> _ocjene = const [];
   int _ukupnoRecenzija = 0;
   List<Preporuka> _slicna = const [];
-  Cjenovnik? _cjenovnik;
+  TarifaNaDan? _tarifa;
 
   bool _ucitavanje = true;
   String? _greska;
@@ -68,15 +68,16 @@ class _DetaljiVozilaEkranStanje extends State<DetaljiVozilaEkran> {
     });
 
     try {
-      // Vozilo prvo, jer cjenovnik trazi njegov model.
-      final vozilo = await _katalog.vozilo(widget.voziloId);
-
+      // Cijena se trazi za dan preuzimanja iz pretrage, ili za danas. U sezoni se
+      // razlikuje od tarife upisane na vozilu, a klijent mora vidjeti ono sto placa.
       final ostalo = await Future.wait([
         _katalog.slike(widget.voziloId),
         _recenzije.zaVozilo(widget.voziloId, koliko: 5),
         _katalog.slicnaVozila(widget.voziloId),
-        _cijene.vazeciCjenovnik(vozilo.modelVozilaId, datum: widget.datumOd),
+        _cijene.tarifa(widget.voziloId, naDan: widget.datumOd),
+        _katalog.vozilo(widget.voziloId),
       ]);
+      final vozilo = ostalo[4] as Vozilo;
 
       if (!mounted) {
         return;
@@ -90,7 +91,7 @@ class _DetaljiVozilaEkranStanje extends State<DetaljiVozilaEkran> {
         _ocjene = strana.stavke;
         _ukupnoRecenzija = strana.ukupno ?? strana.stavke.length;
         _slicna = ostalo[2] as List<Preporuka>;
-        _cjenovnik = ostalo[3] as Cjenovnik?;
+        _tarifa = ostalo[3] as TarifaNaDan;
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {
@@ -182,7 +183,7 @@ class _DetaljiVozilaEkranStanje extends State<DetaljiVozilaEkran> {
                         const SizedBox(height: Razmaci.l),
                         _Podaci(vozilo: vozilo),
                         const SizedBox(height: Razmaci.l),
-                        _Cijene(vozilo: vozilo, cjenovnik: _cjenovnik),
+                        _Cijene(vozilo: vozilo, tarifa: _tarifa),
                         const SizedBox(height: Razmaci.l),
                         _Recenzije(stavke: _ocjene, ukupno: _ukupnoRecenzija),
                         if (_slicna.isNotEmpty) ...[
@@ -235,7 +236,11 @@ class _DetaljiVozilaEkranStanje extends State<DetaljiVozilaEkran> {
       ),
       bottomNavigationBar: vozilo == null || _ucitavanje
           ? null
-          : _DonjaTraka(vozilo: vozilo, naRezervaciju: _rezervisi),
+          : _DonjaTraka(
+              vozilo: vozilo,
+              cijenaPoDanu: _tarifa?.dnevnaCijena ?? vozilo.cijenaPoDanu,
+              naRezervaciju: _rezervisi,
+            ),
     );
   }
 }
@@ -374,15 +379,18 @@ class _Podaci extends StatelessWidget {
   }
 }
 
+/// Cijene koje vaze na dan preuzimanja, onako kako ih racuna server: tarifa iz
+/// cjenovnika i sezonski mnozilac, i popusti koji ce se stvarno primijeniti. Popusti
+/// se prikazuju i kad za taj dan nema sezone, jer i tada vaze podrazumijevani.
 class _Cijene extends StatelessWidget {
-  const _Cijene({required this.vozilo, this.cjenovnik});
+  const _Cijene({required this.vozilo, required this.tarifa});
 
   final Vozilo vozilo;
-  final Cjenovnik? cjenovnik;
+  final TarifaNaDan? tarifa;
 
   @override
   Widget build(BuildContext context) {
-    final sezona = cjenovnik;
+    final cijene = tarifa;
 
     return _Okvir(
       naslov: 'Cijena najma',
@@ -391,18 +399,22 @@ class _Cijene extends StatelessWidget {
         children: [
           _Red(
             oznaka: 'Po satu',
-            vrijednost: Formati.novac(vozilo.satnaTarifa),
+            vrijednost: Formati.novac(
+              cijene?.satnaCijena ?? vozilo.satnaTarifa,
+            ),
           ),
           _Red(
             oznaka: 'Po danu',
-            vrijednost: Formati.novac(vozilo.dnevnaTarifa),
+            vrijednost: Formati.novac(
+              cijene?.dnevnaCijena ?? vozilo.dnevnaTarifa,
+            ),
           ),
           _Red(
             oznaka: 'Depozit',
             vrijednost: Formati.novac(vozilo.iznosDepozita),
             napomena: 'vraća se nakon povrata vozila',
           ),
-          if (sezona != null && sezona.popustPrag1 > 0) ...[
+          if (cijene != null && cijene.popustPrag1 > 0) ...[
             const SizedBox(height: Razmaci.m),
             const Text(
               'Popust na duži najam',
@@ -410,10 +422,10 @@ class _Cijene extends StatelessWidget {
             ),
             const SizedBox(height: Razmaci.xs),
             Text(
-              'Od ${sezona.popustPrag1} dana: '
-              '-${Formati.postotak(sezona.popustProcenat1)}'
-              '${sezona.popustPrag2 > 0 ? '\nOd ${sezona.popustPrag2} dana: '
-                        '-${Formati.postotak(sezona.popustProcenat2)}' : ''}',
+              'Od ${cijene.popustPrag1} dana: '
+              '-${Formati.postotak(cijene.popustProcenat1)}'
+              '${cijene.popustPrag2 > 0 ? '\nOd ${cijene.popustPrag2} dana: '
+                        '-${Formati.postotak(cijene.popustProcenat2)}' : ''}',
               style: const TextStyle(
                 fontSize: 12.5,
                 height: 1.5,
@@ -578,9 +590,14 @@ class _Okvir extends StatelessWidget {
 }
 
 class _DonjaTraka extends StatelessWidget {
-  const _DonjaTraka({required this.vozilo, required this.naRezervaciju});
+  const _DonjaTraka({
+    required this.vozilo,
+    required this.cijenaPoDanu,
+    required this.naRezervaciju,
+  });
 
   final Vozilo vozilo;
+  final double cijenaPoDanu;
   final VoidCallback naRezervaciju;
 
   @override
@@ -604,7 +621,7 @@ class _DonjaTraka extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  Formati.novac(vozilo.dnevnaTarifa),
+                  Formati.novac(cijenaPoDanu),
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
