@@ -7,6 +7,7 @@ using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dozvole;
+using SunnyRides.Services.Exceptions;
 
 namespace SunnyRides.Services.Sifrarnici;
 
@@ -74,6 +75,78 @@ public class PravilaKategorijeService
         PravilaKategorijeUpdateRequest request, PravilaKategorije entitet, CancellationToken ct)
     {
         await ProvjeriVezeAsync(request.KategorijaDozvoleId, request.TipVozilaId, ct);
+
+        // Zahtjev je vec prepisan preko entiteta, pa su kategorija i tip prije izmjene
+        // jos samo u originalnim vrijednostima koje EF pamti.
+        var staraKategorija = Context.Entry(entitet).Property(x => x.KategorijaDozvoleId).OriginalValue;
+        var stariTip = Context.Entry(entitet).Property(x => x.TipVozilaId).OriginalValue;
+
+        // Pravilo prebaceno na drugu kategoriju ili tip vise ne pokriva modele za koje je
+        // vazilo do sada - za njih ono nestaje.
+        if (staraKategorija != entitet.KategorijaDozvoleId || stariTip != entitet.TipVozilaId)
+        {
+            await ObaveznoBezModelaIzvanPravilaAsync(staraKategorija, stariTip, null, ct);
+        }
+
+        await ObaveznoBezModelaIzvanPravilaAsync(entitet.KategorijaDozvoleId, entitet.TipVozilaId, entitet, ct);
+    }
+
+    protected override async Task BeforeDeleteAsync(PravilaKategorije entitet, CancellationToken ct)
+    {
+        await ObaveznoBezModelaIzvanPravilaAsync(entitet.KategorijaDozvoleId, entitet.TipVozilaId, null, ct);
+    }
+
+    /// <summary>
+    /// Izmjena ili brisanje pravila ne smije ostaviti postojece modele izvan njega.
+    ///
+    /// Model nosi kategoriju koja mu treba, a pretraga je cita sa modela. Kad bi se A1
+    /// spustilo na 50 ccm, skuteri od 125 ccm bi i dalje bili A1 i nudili bi se
+    /// klijentima kojima novo pravilo to vise ne dozvoljava. Zato se takva izmjena
+    /// odbija, uz spisak modela kojima prvo treba promijeniti kategoriju.
+    ///
+    /// <paramref name="novo"/> je null kad za ovu kategoriju i tip pravilo nestaje
+    /// (brisanje, ili pravilo prebaceno drugdje) - tada su izvan pravila svi takvi modeli.
+    /// </summary>
+    private async Task ObaveznoBezModelaIzvanPravilaAsync(
+        int kategorijaId, int tipVozilaId, PravilaKategorije? novo, CancellationToken ct)
+    {
+        var upit = Context.ModeliVozila
+            .AsNoTracking()
+            .Where(x => x.KategorijaDozvoleId == kategorijaId && x.TipVozilaId == tipVozilaId);
+
+        if (novo is not null)
+        {
+            var maxKubikaza = novo.MaxKubikaza;
+            var maxSnaga = novo.MaxSnagaKw;
+
+            // Isto pravilo kao UskladjenostModela.PrelaziKubikazu i PrelaziSnagu, kao
+            // uslov na bazi: prazna granica ne ogranicava nista.
+            upit = upit.Where(x => (maxKubikaza != null && x.Kubikaza > maxKubikaza)
+                                   || (maxSnaga != null && x.SnagaKw > maxSnaga));
+        }
+
+        const int NajviseUPoruci = 5;
+
+        var ukupno = await upit.CountAsync(ct);
+
+        if (ukupno == 0)
+        {
+            return;
+        }
+
+        var modeli = await upit
+            .OrderBy(x => x.Marka.Naziv).ThenBy(x => x.Naziv)
+            .Take(NajviseUPoruci)
+            .Select(x => x.Marka.Naziv + " " + x.Naziv + " (" + x.Kubikaza + " ccm)")
+            .ToListAsync(ct);
+
+        var ostali = ukupno > modeli.Count ? $" i jos {ukupno - modeli.Count}" : string.Empty;
+
+        throw new BusinessException(novo is null
+            ? $"Bez ovog pravila modeli {string.Join(", ", modeli)}{ostali} ne bi bili pokriveni " +
+              "svojom kategorijom. Prvo im promijenite kategoriju u sifarniku Modeli vozila."
+            : $"Ovom pravilu ne bi odgovarali modeli {string.Join(", ", modeli)}{ostali}. " +
+              "Prvo im promijenite kategoriju u sifarniku Modeli vozila.");
     }
 
     private async Task ProvjeriVezeAsync(int kategorijaId, int tipVozilaId, CancellationToken ct)

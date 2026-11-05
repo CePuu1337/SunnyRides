@@ -5,6 +5,7 @@ using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Base;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 
 namespace SunnyRides.Services.Sifrarnici;
@@ -86,6 +87,7 @@ public class ModelVozilaService
     {
         await ProvjeriVezeAsync(request.MarkaId, request.TipVozilaId,
                                 request.TipGorivaId, request.KategorijaDozvoleId, ct);
+        await ObaveznoUskladjenSaKategorijomAsync(entitet, ct);
     }
 
     protected override async Task BeforeUpdateAsync(
@@ -93,6 +95,39 @@ public class ModelVozilaService
     {
         await ProvjeriVezeAsync(request.MarkaId, request.TipVozilaId,
                                 request.TipGorivaId, request.KategorijaDozvoleId, ct);
+        await ObaveznoUskladjenSaKategorijomAsync(entitet, ct);
+    }
+
+    /// <summary>
+    /// Kubikaza i snaga modela moraju stati u pravilo kategorije koja mu je upisana, za
+    /// njegov tip vozila. Prijava trazi da se uskladjenost kategorije sa kubikazom i
+    /// snagom provjerava na serveru - bez ovoga bi model od 649 ccm mogao biti upisan
+    /// kao A1 i ponudjen klijentu koji ga ne smije voziti.
+    /// </summary>
+    private async Task ObaveznoUskladjenSaKategorijomAsync(ModelVozila model, CancellationToken ct)
+    {
+        var pravilo = await Context.PravilaKategorija
+            .AsNoTracking()
+            .Where(x => x.KategorijaDozvoleId == model.KategorijaDozvoleId && x.TipVozilaId == model.TipVozilaId)
+            .Select(x => new PraviloUlaz(x.KategorijaDozvoleId, x.TipVozilaId, x.MaxKubikaza, x.MaxSnagaKw, x.MinGodine))
+            .FirstOrDefaultAsync(ct);
+
+        var oznaka = await Context.KategorijeDozvola
+            .Where(x => x.Id == model.KategorijaDozvoleId)
+            .Select(x => x.Oznaka)
+            .FirstAsync(ct);
+
+        var tip = await Context.TipoviVozila
+            .Where(x => x.Id == model.TipVozilaId)
+            .Select(x => x.Naziv)
+            .FirstAsync(ct);
+
+        var razlog = UskladjenostModela.Razlog(oznaka, tip, model.Kubikaza, model.SnagaKw, pravilo);
+
+        if (razlog is not null)
+        {
+            throw new BusinessException(razlog);
+        }
     }
 
     protected override async Task BeforeDeleteAsync(ModelVozila entitet, CancellationToken ct)
