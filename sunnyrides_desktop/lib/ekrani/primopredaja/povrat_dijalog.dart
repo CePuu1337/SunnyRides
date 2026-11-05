@@ -9,6 +9,7 @@ import '../../widgeti/birac_fotografija.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../../widgeti/naknadni_unos.dart';
 import '../../widgeti/obavjestenje.dart';
+import '../../widgeti/potvrda.dart';
 
 /// Povrat vozila, sa obracunom depozita i podacima sa izdavanja.
 ///
@@ -126,6 +127,39 @@ class _PovratDijalogStanje extends State<PovratDijalog> {
     }
   }
 
+  String _tekstPotvrde() {
+    final dijelovi = <String>[
+      'Najam se zatvara i povrat se poslije ne može mijenjati.',
+    ];
+    final obracun = _obracun;
+
+    if (obracun != null) {
+      dijelovi.add(
+        'Klijentu se vraća ${Formati.novac(obracun.povratDepozita)} od depozita',
+      );
+
+      if (obracun.zadrzanoOdDepozita > 0) {
+        dijelovi.last +=
+            ', a zadržava se ${Formati.novac(obracun.zadrzanoOdDepozita)}';
+      }
+
+      dijelovi.last += '.';
+
+      if (obracun.nepokrivenoDepozitom > 0) {
+        dijelovi.add(
+          'Depozit ne pokriva ${Formati.novac(obracun.nepokrivenoDepozitom)} – taj iznos se naplaćuje posebno.',
+        );
+      }
+    }
+
+    final blokirajDo = _blokirajDo;
+    if (blokirajDo != null) {
+      dijelovi.add('Vozilo ostaje nedostupno do ${Formati.datum(blokirajDo)}.');
+    }
+
+    return dijelovi.join(' ');
+  }
+
   Future<void> _sacuvaj() async {
     if (!_forma.currentState!.validate()) {
       return;
@@ -136,6 +170,28 @@ class _PovratDijalogStanje extends State<PovratDijalog> {
         () => _greska = 'Uz oštećenje je obavezna bar jedna fotografija.',
       );
 
+      return;
+    }
+
+    // Povrat zatvara najam i obracunava depozit; poslije se ne moze ispraviti.
+    // Brojevi u pitanju su oni iz obracuna na ekranu - dok se obracun racuna
+    // nakon izmjene, ne pita se sa starim brojevima.
+    if (_racuna) {
+      setState(
+        () => _greska = 'Sačekajte da se obračun osvježi pa pokušajte ponovo.',
+      );
+
+      return;
+    }
+
+    final potvrdjeno = await potvrdiRadnju(
+      context,
+      naslov: 'Evidentirati povrat vozila?',
+      tekst: _tekstPotvrde(),
+      potvrda: 'Da, evidentiraj',
+    );
+
+    if (!potvrdjeno || !mounted) {
       return;
     }
 

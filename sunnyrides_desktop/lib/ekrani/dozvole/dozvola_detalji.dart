@@ -6,6 +6,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 import '../../servisi/dozvola_servis.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/obavjestenje.dart';
+import '../../widgeti/potvrda.dart';
 import '../../widgeti/sadrzaj.dart';
 import 'odbijanje_dijalog.dart';
 
@@ -97,6 +98,24 @@ class _DozvolaDetaljiStanje extends State<DozvolaDetalji> {
   }
 
   Future<void> _odobri() async {
+    // Odobrena dozvola se s ovog ekrana ne moze povuci - vraca je na provjeru tek
+    // klijent kad posalje novu. Zato prije odobrenja pise sta ce klijent smjeti.
+    final kategorije = _kategorije?.dozvoljeneKategorije ?? const <String>[];
+    final potvrdjeno = await potvrdiRadnju(
+      context,
+      naslov: 'Odobriti dozvolu?',
+      tekst:
+          '${_dozvola?.klijentImePrezime ?? 'Klijent'} će moći rezervisati vozila '
+          '${kategorije.isEmpty ? 'kategorija upisanih na dozvoli' : 'kategorija ${kategorije.join(', ')}'}. '
+          'Odobrenje se ne može povući s ovog ekrana – ponovo na provjeru ide tek '
+          'kad klijent pošalje novu dozvolu.',
+      potvrda: 'Da, odobri',
+    );
+
+    if (!potvrdjeno || !mounted) {
+      return;
+    }
+
     await _obradi(
       () => widget.servis.odobri(widget.dozvolaId),
       'Dozvola je odobrena. Klijent može rezervisati vozila svoje kategorije.',

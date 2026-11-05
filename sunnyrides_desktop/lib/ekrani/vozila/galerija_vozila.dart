@@ -5,6 +5,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../modeli/vozilo.dart';
 import '../../servisi/vozilo_servis.dart';
+import '../../widgeti/potvrda.dart';
 
 /// Fotografije vozila unutar forme za izmjenu.
 ///
@@ -115,6 +116,19 @@ class _GalerijaVozilaStanje extends State<GalerijaVozila> {
   }
 
   Future<void> _obrisi(SlikaVozila slika) async {
+    // Fajl se brise sa diska servera, pa se fotografija ne moze vratiti.
+    final potvrdjeno = await potvrdiRadnju(
+      context,
+      naslov: 'Obrisati fotografiju?',
+      tekst: 'Fotografija se trajno briše iz galerije vozila i ne može se vratiti.',
+      potvrda: 'Da, obriši',
+      opasna: true,
+    );
+
+    if (!potvrdjeno || !mounted) {
+      return;
+    }
+
     try {
       await widget.servis.obrisiSliku(widget.voziloId, slika.id);
       await _ucitaj();

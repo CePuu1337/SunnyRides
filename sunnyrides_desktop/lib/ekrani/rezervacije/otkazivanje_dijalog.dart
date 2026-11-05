@@ -5,6 +5,7 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 import '../../servisi/rezervacija_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../../widgeti/obavjestenje.dart';
+import '../../widgeti/potvrda.dart';
 
 /// Otkazivanje rezervacije sa prikazom obracuna povrata.
 ///
@@ -99,6 +100,24 @@ class _OtkazivanjeDijalogStanje extends State<OtkazivanjeDijalog> {
             'Za razlog „${_razlog!.naziv}" napišite kratko objašnjenje za klijenta.',
       );
 
+      return;
+    }
+
+    // Otkazivanje se ne moze vratiti: termin se oslobadja, povrat se salje na
+    // Stripe i klijent dobija obavjestenje. Zato iznos jos jednom, u pitanju.
+    final povrat = _obracun?.ukupanPovrat ?? 0;
+    final potvrdjeno = await potvrdiRadnju(
+      context,
+      naslov: 'Otkazati rezervaciju ${widget.rezervacija.broj}?',
+      tekst:
+          '${povrat > 0 ? 'Klijentu se vraća ${Formati.novac(povrat)}. ' : 'Nema iznosa za povrat. '}'
+          'Termin se oslobađa i klijent dobija obavještenje. '
+          'Otkazana rezervacija se ne može ponovo aktivirati.',
+      potvrda: 'Da, otkaži',
+      opasna: true,
+    );
+
+    if (!potvrdjeno || !mounted) {
       return;
     }
 

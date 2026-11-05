@@ -88,24 +88,71 @@ class _OtkazivanjeListStanje extends State<OtkazivanjeList> {
     return null;
   }
 
-  bool get _mozePotvrditi {
+  /// Sta jos fali da bi se otkazivanje moglo potvrditi, ili null kad ne fali nista.
+  /// Ispisuje se ispod onemogucenog dugmeta, da korisnik ne pogadja zasto ne radi.
+  String? get _staFali {
     final razlog = _razlog;
 
-    if (razlog == null || _slanje) {
-      return false;
+    if (razlog == null) {
+      return 'Odaberite razlog otkazivanja.';
     }
 
     if (razlog.traziNapomenu && _napomena.text.trim().isEmpty) {
-      return false;
+      return 'Uz ovaj razlog upišite kratko objašnjenje.';
     }
 
-    return _obracun?.mozeSeOtkazati ?? false;
+    return null;
+  }
+
+  bool get _mozePotvrditi =>
+      !_slanje && _staFali == null && (_obracun?.mozeSeOtkazati ?? false);
+
+  /// Otkazivanje je nepovratno, pa se prije slanja jos jednom pita, uz iznos koji
+  /// ce se vratiti - isti onaj koji je server izracunao za obracun iznad.
+  Future<bool> _pitajZaPotvrdu(ObracunOtkazivanja obracun) async {
+    final zadrzano = obracun.zadrzanoAgenciji > 0
+        ? ', a ${Formati.novac(obracun.zadrzanoAgenciji)} ostaje agenciji po '
+              'uslovima otkazivanja'
+        : '';
+
+    final potvrda = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Otkazati rezervaciju ${obracun.broj}?'),
+        content: Text(
+          'Na karticu se vraća ${Formati.novac(obracun.ukupanPovrat)}$zadrzano.'
+          '\n\nOtkazivanje se ne može poništiti, a termin se odmah nudi '
+          'drugim klijentima.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Ne, zadrži'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Boje.greska,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Da, otkaži'),
+          ),
+        ],
+      ),
+    );
+
+    return potvrda ?? false;
   }
 
   Future<void> _potvrdi() async {
     final razlog = _razlog;
+    final obracun = _obracun;
 
-    if (razlog == null) {
+    if (razlog == null || obracun == null) {
+      return;
+    }
+
+    if (!await _pitajZaPotvrdu(obracun) || !mounted) {
       return;
     }
 
@@ -228,6 +275,17 @@ class _OtkazivanjeListStanje extends State<OtkazivanjeList> {
                         ),
                       ],
                     ),
+                    if (_staFali != null && !_slanje) ...[
+                      const SizedBox(height: Razmaci.s),
+                      Text(
+                        _staFali!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Boje.tekstPrigusen,
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
