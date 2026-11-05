@@ -26,6 +26,7 @@ class CijenaRezervacije {
     required this.ukupanIznos,
     this.nazivSezone,
     this.paketOsiguranjaNaziv,
+    this.usloviOtkazivanja = const [],
   });
 
   final DateTime datumOd;
@@ -51,6 +52,9 @@ class CijenaRezervacije {
   final double iznosDepozita;
   final double ukupanIznos;
 
+  /// Politika otkazivanja za ovaj termin, sa datumima, kako je racuna server.
+  final List<PeriodPovrata> usloviOtkazivanja;
+
   /// Opis trajanja onako kako je naplaceno - po satu ili po danu.
   String get trajanje => naplataPoSatu ? '$brojSati h' : '$brojDana d';
 
@@ -75,6 +79,28 @@ class CijenaRezervacije {
       iznosOsiguranja: citajDouble(json['iznosOsiguranja']),
       iznosDepozita: citajDouble(json['iznosDepozita']),
       ukupanIznos: citajDouble(json['ukupanIznos']),
+      usloviOtkazivanja: citajListu(
+        json['usloviOtkazivanja'],
+        PeriodPovrata.izJsona,
+      ),
+    );
+  }
+}
+
+/// Jedan period politike otkazivanja: otkazivanje u njemu vraca ovoliko najma.
+/// Prazan pocetak znaci "od sada", a prazan kraj "do preuzimanja".
+class PeriodPovrata {
+  const PeriodPovrata({required this.procenatPovrataNajma, this.od, this.doTrenutka});
+
+  final DateTime? od;
+  final DateTime? doTrenutka;
+  final double procenatPovrataNajma;
+
+  factory PeriodPovrata.izJsona(Map<String, dynamic> json) {
+    return PeriodPovrata(
+      od: citajDatumIliNista(json['od']),
+      doTrenutka: citajDatumIliNista(json['do']),
+      procenatPovrataNajma: citajDouble(json['procenatPovrataNajma']),
     );
   }
 }

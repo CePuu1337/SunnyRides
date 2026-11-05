@@ -47,4 +47,10 @@ public class CijenaRezervacijeDto
 
     /// <summary>Najam, oprema, osiguranje i depozit zajedno - iznos koji se naplacuje.</summary>
     public decimal UkupanIznos { get; set; }
+
+    /// <summary>
+    /// Politika otkazivanja za ovaj termin, sa konkretnim datumima, da je klijent vidi
+    /// prije nego potvrdi rezervaciju. Popunjava se samo u obracunu prije rezervacije.
+    /// </summary>
+    public List<PeriodPovrataDto> UsloviOtkazivanja { get; set; } = new();
 }

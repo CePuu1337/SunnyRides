@@ -221,7 +221,52 @@ class _NovaRezervacijaEkranStanje extends State<NovaRezervacijaEkran> {
     _osvjeziObracun();
   }
 
+  /// Kreiranje rezervacije je "slanje narudzbe" iz uputa: prije njega ide dijalog
+  /// potvrde, sa iznosom i uslovima otkazivanja koje klijent prihvata.
+  Future<bool> _pitajZaPotvrdu(CijenaRezervacije obracun) async {
+    final punPovrat = obracun.usloviOtkazivanja
+        .where((x) => x.procenatPovrataNajma == 100 && x.doTrenutka != null)
+        .firstOrNull;
+
+    final otkazivanje = punPovrat == null
+        ? 'Za ovaj termin se pri otkazivanju najam više ne vraća u cijelosti - '
+              'uslovi su navedeni ispod razrade cijene.'
+        : 'Otkazivanje do ${Formati.datumIVrijeme(punPovrat.doTrenutka!)} vraća '
+              'najam u cijelosti.';
+
+    final potvrda = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Potvrdite rezervaciju'),
+        content: Text(
+          'Za naplatu: ${Formati.novac(obracun.ukupanIznos)}, od toga '
+          '${Formati.novac(obracun.iznosDepozita)} depozita koji se vraća.'
+          '\n\n$otkazivanje\n\n'
+          'Vozilo se drži za vas dok ne završite plaćanje.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Odustani'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Potvrdi'),
+          ),
+        ],
+      ),
+    );
+
+    return potvrda ?? false;
+  }
+
   Future<void> _potvrdi() async {
+    final obracun = _obracun;
+
+    if (obracun == null || !await _pitajZaPotvrdu(obracun) || !mounted) {
+      return;
+    }
+
     setState(() => _slanje = true);
 
     try {
@@ -355,6 +400,10 @@ class _NovaRezervacijaEkranStanje extends State<NovaRezervacijaEkran> {
               racunanje: _racunanje,
               greska: _greskaObracuna,
             ),
+            if (obracun != null && obracun.usloviOtkazivanja.isNotEmpty) ...[
+              const SizedBox(height: Razmaci.l),
+              _UsloviOtkazivanja(periodi: obracun.usloviOtkazivanja),
+            ],
             const SizedBox(height: Razmaci.xxl),
           ],
         ),
@@ -630,6 +679,70 @@ class _Razrada extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Politika otkazivanja za odabrani termin, prije dugmeta za potvrdu.
+///
+/// Periodi i datumi dolaze sa servera, iz istih konstanti po kojima se racuna povrat
+/// pri otkazivanju, pa prikaz i obracun ne mogu reci dvije razlicite stvari.
+class _UsloviOtkazivanja extends StatelessWidget {
+  const _UsloviOtkazivanja({required this.periodi});
+
+  final List<PeriodPovrata> periodi;
+
+  static String _kada(PeriodPovrata period) {
+    final od = period.od;
+    final doTrenutka = period.doTrenutka;
+
+    if (od == null && doTrenutka == null) {
+      return 'Od sada do preuzimanja';
+    }
+
+    if (od == null) {
+      return 'Do ${Formati.datumIVrijeme(doTrenutka!)}';
+    }
+
+    if (doTrenutka == null) {
+      return 'Od ${Formati.datumIVrijeme(od)} do preuzimanja';
+    }
+
+    return 'Od ${Formati.datumIVrijeme(od)} do ${Formati.datumIVrijeme(doTrenutka)}';
+  }
+
+  static String _sta(double procenat) => switch (procenat) {
+    >= 100 => 'najam se vraća u cijelosti',
+    <= 0 => 'najam se ne vraća',
+    _ => 'vraća se ${Formati.postotak(procenat)} najma',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return _Okvir(
+      naslov: 'Uslovi otkazivanja',
+      dijete: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final period in periodi)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Razmaci.s),
+              child: Text(
+                '${_kada(period)}: ${_sta(period.procenatPovrataNajma)}.',
+                style: const TextStyle(fontSize: 13, height: 1.35),
+              ),
+            ),
+          const Text(
+            'Depozit se vraća u svakom slučaju.',
+            style: TextStyle(fontSize: 13, height: 1.35),
+          ),
+          const SizedBox(height: Razmaci.s),
+          const Text(
+            'Povrat se računa od iznosa koji je stvarno naplaćen.',
+            style: TextStyle(fontSize: 11.5, color: Boje.tekstPrigusen),
+          ),
+        ],
       ),
     );
   }

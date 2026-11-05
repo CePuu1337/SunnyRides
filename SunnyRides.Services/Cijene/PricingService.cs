@@ -4,6 +4,7 @@ using SunnyRides.Model.Requests;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Flota;
+using SunnyRides.Services.Rezervacije;
 
 namespace SunnyRides.Services.Cijene;
 
@@ -60,9 +61,15 @@ public class PricingService : IPricingService
         var stavke = await UcitajOpremuAsync(oprema, ct);
         var osiguranje = await UcitajOsiguranjeAsync(paketOsiguranjaId, ct);
 
-        return ObracunCijene.Izracunaj(NapraviUlaz(
+        var obracun = ObracunCijene.Izracunaj(NapraviUlaz(
             datumOd, datumDo, vozilo.SatnaTarifa, vozilo.DnevnaTarifa, vozilo.IznosDepozita,
             sezona, stavke, osiguranje));
+
+        // Uslovi otkazivanja idu uz razradu cijene: klijent ih tako vidi prije potvrde,
+        // za tacno ovaj termin, i osvjezavaju se kad promijeni termin.
+        obracun.UsloviOtkazivanja = PravilaOtkazivanja.Uslovi(datumOd, DateTime.UtcNow);
+
+        return obracun;
     }
 
     public async Task<Dictionary<int, CijenaRezervacijeDto>> IzracunajZaVozilaAsync(

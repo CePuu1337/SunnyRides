@@ -51,6 +51,50 @@ public static class PravilaOtkazivanja
         return 0m;
     }
 
+    /// <summary>
+    /// Politika otkazivanja za konkretan termin, kao periodi sa datumima: do kada se
+    /// najam vraca u cijelosti, do kada polovina, i od kada nista. Klijent je vidi prije
+    /// potvrde rezervacije.
+    ///
+    /// Granice dolaze iz istih konstanti i istog poredjenja kao
+    /// <see cref="ProcenatPovrataNajma"/>, pa se prikaz i obracun ne mogu razici kad se
+    /// pravilo promijeni. Periodi koji su vec prosli se ne vracaju.
+    /// </summary>
+    public static List<PeriodPovrataDto> Uslovi(DateTime datumOd, DateTime sada)
+    {
+        // "Vise od 7 dana prije" - sve strogo prije ove granice vraca cijeli najam.
+        var punPovratDo = datumOd.AddDays(-DanaZaPunPovrat);
+
+        // "Od 3 dana prije" - granica jos pripada polovini (>= u ProcenatPovrataNajma).
+        var polovinaDo = datumOd.AddDays(-DanaZaPolovicanPovrat);
+
+        var periodi = new List<PeriodPovrataDto>();
+
+        if (sada < punPovratDo)
+        {
+            periodi.Add(new PeriodPovrataDto { Od = null, Do = punPovratDo, ProcenatPovrataNajma = 100m });
+        }
+
+        if (sada <= polovinaDo)
+        {
+            periodi.Add(new PeriodPovrataDto
+            {
+                Od = sada < punPovratDo ? punPovratDo : null,
+                Do = polovinaDo,
+                ProcenatPovrataNajma = ProcenatPolovicnog
+            });
+        }
+
+        periodi.Add(new PeriodPovrataDto
+        {
+            Od = sada <= polovinaDo ? polovinaDo : null,
+            Do = null,
+            ProcenatPovrataNajma = 0m
+        });
+
+        return periodi;
+    }
+
     public static ObracunOtkazivanjaDto Izracunaj(UlazOtkazivanja ulaz)
     {
         var danaDoPreuzimanja = (ulaz.DatumOd - ulaz.Sada).TotalDays;
