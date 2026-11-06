@@ -59,18 +59,23 @@ class CijenaServis {
     return Dostupnost.izJsona(odgovor as Map<String, dynamic>);
   }
 
-  Future<List<VrstaOpreme>> vrsteOpreme() async {
+  /// Oprema koja se uz ovo vozilo može uzeti u zadatom terminu. Server je već
+  /// oduzeo opremu koju u istom terminu drže druge rezervacije i izbacio onu
+  /// koje nema, pa se nudi tačno ovo što stigne.
+  Future<List<VrstaOpreme>> dostupnaOprema({
+    required int voziloId,
+    required DateTime datumOd,
+    required DateTime datumDo,
+  }) async {
     final odgovor = await _klijent.get(
-      '/api/vrste-opreme',
-      upit: {
-        'page': 0,
-        'pageSize': 50,
-        'includeTotalCount': false,
-        'orderBy': 'Naziv',
-      },
+      '/api/dostupnost/vozila/$voziloId/oprema',
+      upit: {'datumOd': datumOd, 'datumDo': datumDo},
     );
 
-    return _lista(odgovor, VrstaOpreme.izJsona);
+    return [
+      for (final stavka in odgovor as List<dynamic>)
+        VrstaOpreme.izJsona(stavka as Map<String, dynamic>),
+    ];
   }
 
   Future<List<PaketOsiguranja>> paketiOsiguranja() async {

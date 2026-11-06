@@ -45,16 +45,22 @@ class KalendarServis {
     ).stavke;
   }
 
-  Future<List<VrstaOpreme>> vrsteOpreme() async {
+  /// Oprema koja je uz vozilo slobodna u terminu - ista lista koju dobija i
+  /// klijent u mobilnoj aplikaciji. Server je već oduzeo opremu drugih rezervacija.
+  Future<List<VrstaOpreme>> dostupnaOprema({
+    required int voziloId,
+    required DateTime datumOd,
+    required DateTime datumDo,
+  }) async {
     final odgovor = await _klijent.get(
-      '/api/vrste-opreme',
-      upit: {'page': 0, 'pageSize': 100, 'includeTotalCount': false},
+      '/api/dostupnost/vozila/$voziloId/oprema',
+      upit: {'datumOd': datumOd, 'datumDo': datumDo},
     );
 
-    return Strana.izJsona(
-      odgovor as Map<String, dynamic>,
-      VrstaOpreme.izJsona,
-    ).stavke;
+    return [
+      for (final stavka in odgovor as List<dynamic>)
+        VrstaOpreme.izJsona(stavka as Map<String, dynamic>),
+    ];
   }
 
   Future<List<PaketOsiguranja>> paketiOsiguranja() async {

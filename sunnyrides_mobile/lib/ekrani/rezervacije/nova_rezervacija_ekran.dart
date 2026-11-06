@@ -71,7 +71,11 @@ class _NovaRezervacijaEkranStanje extends State<NovaRezervacijaEkran> {
   Future<void> _pripremi() async {
     try {
       final rezultati = await Future.wait([
-        _cijene.vrsteOpreme(),
+        _cijene.dostupnaOprema(
+          voziloId: widget.vozilo.id,
+          datumOd: _od,
+          datumDo: _do,
+        ),
         _cijene.paketiOsiguranja(),
       ]);
 
@@ -189,13 +193,76 @@ class _NovaRezervacijaEkranStanje extends State<NovaRezervacijaEkran> {
     });
 
     if (_do.isAfter(_od)) {
+      await _osvjeziOpremu();
       await _osvjeziObracun();
+    }
+  }
+
+  /// Slobodna oprema zavisi od termina: kaciga slobodna u petak može u subotu biti
+  /// kod drugog klijenta. Zato se lista traži ponovo uz svaki novi termin, a
+  /// odabrane količine se svode na ono što je u novom terminu slobodno.
+  Future<void> _osvjeziOpremu() async {
+    final List<VrstaOpreme> oprema;
+
+    try {
+      oprema = await _cijene.dostupnaOprema(
+        voziloId: widget.vozilo.id,
+        datumOd: _od,
+        datumDo: _do,
+      );
+    } on ApiGreska {
+      // Obračun koji ide odmah poslije pokazuje grešku za termin; ovdje se samo
+      // ostavlja dosadašnja lista.
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final slobodno = {
+      for (final vrsta in oprema) vrsta.id: vrsta.slobodno ?? 0,
+    };
+    final smanjeno = <String>[];
+
+    for (final vrsta in _oprema) {
+      final odabrano = _kolicine[vrsta.id] ?? 0;
+      final najvise = slobodno[vrsta.id] ?? 0;
+
+      if (odabrano > najvise) {
+        smanjeno.add(vrsta.naziv);
+      }
+    }
+
+    setState(() {
+      _oprema = oprema;
+
+      for (final id in _kolicine.keys.toList()) {
+        final najvise = slobodno[id] ?? 0;
+
+        if (najvise == 0) {
+          _kolicine.remove(id);
+        } else if (_kolicine[id]! > najvise) {
+          _kolicine[id] = najvise;
+        }
+      }
+    });
+
+    if (smanjeno.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'U novom terminu nema dovoljno slobodne opreme '
+            '(${smanjeno.join(', ')}), pa je količina smanjena.',
+          ),
+        ),
+      );
     }
   }
 
   void _promijeniKolicinu(VrstaOpreme vrsta, int promjena) {
     final trenutna = _kolicine[vrsta.id] ?? 0;
-    final nova = (trenutna + promjena).clamp(0, 5);
+    final nova = (trenutna + promjena).clamp(0, _najviseKomada(vrsta));
 
     if (nova == trenutna) {
       return;
@@ -210,6 +277,14 @@ class _NovaRezervacijaEkranStanje extends State<NovaRezervacijaEkran> {
     });
 
     _osvjeziObracun();
+  }
+
+  /// Najviše pet komada jedne opreme po rezervaciji, a manje kad toliko nije
+  /// slobodno u terminu.
+  static int _najviseKomada(VrstaOpreme vrsta) {
+    final slobodno = vrsta.slobodno;
+
+    return slobodno == null || slobodno > 5 ? 5 : slobodno;
   }
 
   void _odaberiPaket(int? paketId) {
@@ -362,6 +437,7 @@ class _NovaRezervacijaEkranStanje extends State<NovaRezervacijaEkran> {
                       _OpremaRed(
                         vrsta: vrsta,
                         kolicina: _kolicine[vrsta.id] ?? 0,
+                        najvise: _najviseKomada(vrsta),
                         naPromjenu: (promjena) =>
                             _promijeniKolicinu(vrsta, promjena),
                       ),
@@ -546,11 +622,13 @@ class _OpremaRed extends StatelessWidget {
   const _OpremaRed({
     required this.vrsta,
     required this.kolicina,
+    required this.najvise,
     required this.naPromjenu,
   });
 
   final VrstaOpreme vrsta;
   final int kolicina;
+  final int najvise;
   final ValueChanged<int> naPromjenu;
 
   @override
@@ -561,6 +639,14 @@ class _OpremaRed extends StatelessWidget {
         ? '${Formati.novac(vrsta.fiksnaCijena!)} jednokratno'
         : '';
 
+    // Kad je slobodno manje od uobičajenog maksimuma, piše koliko - inače bi
+    // klijent pomislio da dugme "+" ne radi.
+    final slobodno = vrsta.slobodno;
+    final opis = [
+      if (cijena.isNotEmpty) cijena,
+      if (slobodno != null && slobodno <= 5) 'slobodno $slobodno',
+    ].join(' · ');
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Razmaci.xs),
       child: Row(
@@ -570,9 +656,9 @@ class _OpremaRed extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(vrsta.naziv, style: const TextStyle(fontSize: 13)),
-                if (cijena.isNotEmpty)
+                if (opis.isNotEmpty)
                   Text(
-                    cijena,
+                    opis,
                     style: const TextStyle(
                       fontSize: 11,
                       color: Boje.tekstPrigusen,
@@ -599,7 +685,7 @@ class _OpremaRed extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () => naPromjenu(1),
+            onPressed: kolicina >= najvise ? null : () => naPromjenu(1),
             icon: const Icon(Icons.add_circle_outline),
             iconSize: 21,
             visualDensity: VisualDensity.compact,

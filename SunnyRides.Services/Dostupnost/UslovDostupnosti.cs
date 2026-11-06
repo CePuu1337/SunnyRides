@@ -1,3 +1,7 @@
+using System.Linq.Expressions;
+using SunnyRides.Model.Enums;
+using SunnyRides.Services.Database.Entities;
+
 namespace SunnyRides.Services.Dostupnost;
 
 /// <summary>
@@ -20,4 +24,16 @@ public static class UslovDostupnosti
 
     /// <summary>Gornja granica preklapanja: postojeci najam smeta ako pocinje prije ovog trenutka.</summary>
     public static DateTime GranicaDo(DateTime trazeniDo) => trazeniDo + Buffer;
+
+    /// <summary>
+    /// Rezervacija koja drzi svoj termin - i vozilo i opremu uz njega.
+    ///
+    /// Otkazana ne drzi nista, a zavrsena je proslost. Neplacena drzi samo dok joj
+    /// traje drzanje; kad istekne, termin je slobodan i prije nego je worker formalno
+    /// otkaze. Isti uslov koriste provjera vozila i provjera opreme, da jedno ne bi
+    /// vidjelo rezervaciju koju drugo ne vidi.
+    /// </summary>
+    public static Expression<Func<Rezervacija, bool>> ZauzimaTermin(DateTime sada) =>
+        r => r.Status == StatusRezervacije.Confirmed
+             || (r.Status == StatusRezervacije.Pending && r.DrziDo > sada);
 }

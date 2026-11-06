@@ -154,9 +154,10 @@ public class AvailabilityService : IAvailabilityService
                 "Zakljucavanje vozila ima smisla samo unutar otvorene transakcije.");
         }
 
-        // Jedini raw SQL u projektu. EF nema nacin da izrazi lock hint, a bez njega
-        // dvije istovremene rezervacije mogu obje proci provjeru dostupnosti prije
-        // nego ijedna upise svoj red.
+        // Raw SQL, jer EF nema nacin da izrazi lock hint. Isti oblik imaju jos samo
+        // zakljucavanje rezervacije i zaliha opreme. Bez njega dvije istovremene
+        // rezervacije mogu obje proci provjeru dostupnosti prije nego ijedna upise
+        // svoj red.
         //
         // UPDLOCK uzima lock koji drugi citac sa istim hintom mora cekati; HOLDLOCK
         // ga drzi do kraja transakcije umjesto do kraja upita. Vrijednost ide kao
@@ -178,12 +179,7 @@ public class AvailabilityService : IAvailabilityService
 
         var upit = _context.Rezervacije
             .Where(r => r.VoziloId == voziloId)
-
-            // Otkazana rezervacija ne zauzima nista, a zavrsena je proslost.
-            // Pending zauzima samo dok traje drzanje termina - kad istekne,
-            // termin je slobodan i prije nego ga worker formalno otkaze.
-            .Where(r => r.Status == StatusRezervacije.Confirmed
-                        || (r.Status == StatusRezervacije.Pending && r.DrziDo > sada))
+            .Where(UslovDostupnosti.ZauzimaTermin(sada))
 
             .Where(r => r.DatumDo > granicaOd && r.DatumOd < granicaDo);
 

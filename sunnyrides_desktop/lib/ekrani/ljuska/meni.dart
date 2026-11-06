@@ -13,6 +13,7 @@ import '../pregled/pregled_ekran.dart';
 import '../primopredaja/primopredaja_ekran.dart';
 import '../rezervacije/rezervacije_ekran.dart';
 import '../vozila/vozila_ekran.dart';
+import '../zalihe/zalihe_ekran.dart';
 
 /// Jedna stavka bocne trake.
 class StavkaMenija {
@@ -117,6 +118,13 @@ class Meni {
           ikona: Icons.compare_arrows_outlined,
           gradi: _primopredaja,
         ),
+        StavkaMenija(
+          id: 'zalihe',
+          naziv: 'Zalihe opreme',
+          podnaslov: 'Oprema po poslovnicama',
+          ikona: Icons.inventory_2_outlined,
+          gradi: _zalihe,
+        ),
       ],
     ),
     GrupaMenija(
@@ -195,6 +203,8 @@ Widget _rezervacije(BuildContext context) => const RezervacijeEkran();
 Widget _kalendar(BuildContext context) => const KalendarEkran();
 
 Widget _primopredaja(BuildContext context) => const PrimopredajaEkran();
+
+Widget _zalihe(BuildContext context) => const ZaliheEkran();
 
 Widget _dozvole(BuildContext context) => const DozvoleEkran();
 

@@ -104,16 +104,22 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
 
   Future<void> _ucitaj() async {
     try {
-      final vrste = await _servis.vrsteOpreme();
-      final paketi = await _servis.paketiOsiguranja();
+      final rezultati = await Future.wait([
+        _servis.dostupnaOprema(
+          voziloId: widget.vozilo.voziloId,
+          datumOd: _od,
+          datumDo: _do,
+        ),
+        _servis.paketiOsiguranja(),
+      ]);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _vrsteOpreme = vrste;
-        _paketi = paketi;
+        _vrsteOpreme = rezultati[0] as List<VrstaOpreme>;
+        _paketi = rezultati[1] as List<PaketOsiguranja>;
         _ucitavanje = false;
       });
 
@@ -448,7 +454,48 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
       }
     });
 
+    if (_do.isAfter(_od)) {
+      await _osvjeziOpremu();
+    }
+
     _preracunaj();
+  }
+
+  /// Slobodna oprema zavisi od termina, pa se uz novi termin traži ponovo, a
+  /// odabrane količine se svode na ono što je u njemu slobodno.
+  Future<void> _osvjeziOpremu() async {
+    final List<VrstaOpreme> vrste;
+
+    try {
+      vrste = await _servis.dostupnaOprema(
+        voziloId: widget.vozilo.voziloId,
+        datumOd: _od,
+        datumDo: _do,
+      );
+    } on ApiGreska {
+      // Grešku za termin pokazuje obračun koji ide odmah poslije.
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final slobodno = {for (final vrsta in vrste) vrsta.id: vrsta.slobodno ?? 0};
+
+    setState(() {
+      _vrsteOpreme = vrste;
+
+      for (final id in _oprema.keys.toList()) {
+        final najvise = slobodno[id] ?? 0;
+
+        if (najvise == 0) {
+          _oprema.remove(id);
+        } else if (_oprema[id]! > najvise) {
+          _oprema[id] = najvise;
+        }
+      }
+    });
   }
 
   void _promijeniOpremu(int vrstaId, int kolicina) {
@@ -717,7 +764,7 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
         const _Naslov('Dodatna oprema'),
         if (_vrsteOpreme.isEmpty)
           const Text(
-            'Nema opreme u ponudi.',
+            'U ovom terminu nema slobodne opreme u poslovnici vozila.',
             style: TextStyle(color: Boje.tekstPrigusen, fontSize: 12.5),
           )
         else
@@ -999,7 +1046,12 @@ class _RedOpreme extends StatelessWidget {
   final int kolicina;
   final ValueChanged<int> naPromjenu;
 
-  static const _najvise = 5;
+  /// Najviše pet komada po rezervaciji, a manje kad toliko nije slobodno.
+  int get _najvise {
+    final slobodno = vrsta.slobodno;
+
+    return slobodno == null || slobodno > 5 ? 5 : slobodno;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1008,6 +1060,11 @@ class _RedOpreme extends StatelessWidget {
         : vrsta.fiksnaCijena != null
         ? '${Formati.novac(vrsta.fiksnaCijena!)} jednokratno'
         : '';
+    final slobodno = vrsta.slobodno;
+    final opis = [
+      if (cijena.isNotEmpty) cijena,
+      if (slobodno != null) 'slobodno $slobodno',
+    ].join(' · ');
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -1019,7 +1076,7 @@ class _RedOpreme extends StatelessWidget {
               children: [
                 Text(vrsta.naziv, style: const TextStyle(fontSize: 13)),
                 Text(
-                  cijena,
+                  opis,
                   style: const TextStyle(
                     color: Boje.tekstPrigusen,
                     fontSize: 11.5,

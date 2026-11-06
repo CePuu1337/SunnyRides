@@ -11,6 +11,7 @@ using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Flota;
+using SunnyRides.Services.Oprema;
 using SunnyRides.Services.Poruke;
 
 namespace SunnyRides.Services.Rezervacije;
@@ -30,6 +31,7 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
     private readonly IRezervacijaService _rezervacije;
     private readonly IObjavljivacPoruka _objavljivac;
     private readonly IOpsegPoslovnice _opseg;
+    private readonly IDostupnostOpremeService _dostupnostOpreme;
 
     public ZamjenaVozilaService(
         SunnyRidesDbContext context,
@@ -38,7 +40,8 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
         IRezervacijaStateMachine stateMachine,
         IRezervacijaService rezervacije,
         IObjavljivacPoruka objavljivac,
-        IOpsegPoslovnice opseg)
+        IOpsegPoslovnice opseg,
+        IDostupnostOpremeService dostupnostOpreme)
     {
         _context = context;
         _dostupnost = dostupnost;
@@ -47,6 +50,7 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
         _rezervacije = rezervacije;
         _objavljivac = objavljivac;
         _opseg = opseg;
+        _dostupnostOpreme = dostupnostOpreme;
     }
 
     public async Task<List<VoziloDto>> ZamjenskaVozilaAsync(
@@ -139,6 +143,8 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
         await _dostupnost.ObaveznoSlobodnoAsync(
             novo.Id, rezervacija.DatumOd, rezervacija.DatumDo, ct: ct);
 
+        await ObaveznoOpremaUNovojPoslovniciAsync(rezervacija, novo, ct);
+
         var napomena = string.IsNullOrWhiteSpace(request.Napomena) ? null : request.Napomena.Trim();
 
         _stateMachine.ZabiljeziIzmjenu(
@@ -174,6 +180,30 @@ public class ZamjenaVozilaService : IZamjenaVozilaService
     }
 
     // --- pravila -----------------------------------------------------------
+
+    /// <summary>
+    /// Zamjena moze prebaciti rezervaciju u drugu poslovnicu istog grada, jer se vozilo
+    /// preuzima tamo gdje stoji. Oprema uz rezervaciju se tada preuzima u novoj
+    /// poslovnici, pa mora biti slobodna tamo - ista provjera kao pri kreiranju.
+    /// Sama rezervacija se ne racuna, jer se njena oprema iz nove poslovnice jos ne
+    /// uzima.
+    /// </summary>
+    private async Task ObaveznoOpremaUNovojPoslovniciAsync(
+        Rezervacija rezervacija, Vozilo novo, CancellationToken ct)
+    {
+        if (novo.PoslovnicaId == rezervacija.PoslovnicaId)
+        {
+            return;
+        }
+
+        var oprema = await _context.StavkeOpreme
+            .Where(x => x.RezervacijaId == rezervacija.Id)
+            .Select(x => new StavkaOpremeRequest { VrstaOpremeId = x.VrstaOpremeId, Kolicina = x.Kolicina })
+            .ToListAsync(ct);
+
+        await _dostupnostOpreme.ObaveznoDostupnoAsync(
+            oprema, novo.PoslovnicaId, rezervacija.DatumOd, rezervacija.DatumDo, rezervacija.Id, ct);
+    }
 
     /// <summary>
     /// Mijenja se samo rezervacija koja jos vazi i cije vozilo jos nije izdato. Izdato

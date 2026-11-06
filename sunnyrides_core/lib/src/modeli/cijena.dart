@@ -138,6 +138,7 @@ class VrstaOpreme {
     required this.naziv,
     this.cijenaPoDanu,
     this.fiksnaCijena,
+    this.slobodno,
   });
 
   final int id;
@@ -145,12 +146,17 @@ class VrstaOpreme {
   final double? cijenaPoDanu;
   final double? fiksnaCijena;
 
+  /// Koliko je komada slobodno u traženom terminu. Postoji samo kad je oprema
+  /// stigla sa provjere dostupnosti za konkretno vozilo i termin.
+  final int? slobodno;
+
   factory VrstaOpreme.izJsona(Map<String, dynamic> json) {
     return VrstaOpreme(
       id: citajInt(json['id']),
       naziv: json['naziv']?.toString() ?? '',
       cijenaPoDanu: citajDoubleIliNista(json['cijenaPoDanu']),
       fiksnaCijena: citajDoubleIliNista(json['fiksnaCijena']),
+      slobodno: json['slobodno'] == null ? null : citajInt(json['slobodno']),
     );
   }
 }

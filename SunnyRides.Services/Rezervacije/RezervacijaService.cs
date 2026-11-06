@@ -15,6 +15,7 @@ using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Dostupnost;
 using SunnyRides.Services.Dozvole;
 using SunnyRides.Services.Exceptions;
+using SunnyRides.Services.Oprema;
 using SunnyRides.Services.Placanja;
 using SunnyRides.Services.Poruke;
 
@@ -38,6 +39,7 @@ public class RezervacijaService
     private readonly IIzvrsilacPovrata _izvrsilacPovrata;
     private readonly IObjavljivacPoruka _objavljivac;
     private readonly IOpsegPoslovnice _opseg;
+    private readonly IDostupnostOpremeService _dostupnostOpreme;
 
     /// <summary>
     /// Kad listu trazi uposlenik, ovdje stoji njegova poslovnica i lista se suzava na
@@ -61,7 +63,8 @@ public class RezervacijaService
         IRezervacijaStateMachine stateMachine,
         IIzvrsilacPovrata izvrsilacPovrata,
         IObjavljivacPoruka objavljivac,
-        IOpsegPoslovnice opseg)
+        IOpsegPoslovnice opseg,
+        IDostupnostOpremeService dostupnostOpreme)
         : base(context)
     {
         _trenutniKorisnik = trenutniKorisnik;
@@ -72,6 +75,7 @@ public class RezervacijaService
         _izvrsilacPovrata = izvrsilacPovrata;
         _objavljivac = objavljivac;
         _opseg = opseg;
+        _dostupnostOpreme = dostupnostOpreme;
     }
 
     protected override string NazivEntiteta => "Rezervacija";
@@ -294,7 +298,12 @@ public class RezervacijaService
 
         await _dostupnost.ObaveznoSlobodnoAsync(vozilo.Id, request.DatumOd, request.DatumDo, ct: ct);
 
-        await ProvjeriZaliheOpremeAsync(request.Oprema, vozilo.PoslovnicaId, ct);
+        // Oprema se preuzima u poslovnici vozila. Od zaliha se oduzima ono sto u
+        // istom terminu vec drze druge rezervacije; servis pri tome zakljuca zalihe
+        // poslovnice, jer dvije rezervacije razlicitih vozila mogu istovremeno
+        // traziti posljednju kacigu, a zakljucano vozilo to ne sprjecava.
+        await _dostupnostOpreme.ObaveznoDostupnoAsync(
+            request.Oprema, vozilo.PoslovnicaId, request.DatumOd, request.DatumDo, null, ct);
 
         // Iznos racuna server. Klijent ga ne salje i ne bi mu se vjerovalo ni da ga posalje.
         var cijena = await _pricingService.IzracunajAsync(
@@ -701,48 +710,6 @@ public class RezervacijaService
         if (datumOd < DateTime.UtcNow)
         {
             throw new BusinessException("Termin preuzimanja je u proslosti.");
-        }
-    }
-
-    /// <summary>
-    /// Oprema koje nema na stanju u poslovnici preuzimanja se ne moze rezervisati.
-    ///
-    /// Gleda se stanje zaliha, ne i koliko je te opreme vec obecano drugim
-    /// rezervacijama u istom terminu. Za obim ovog sistema - nekoliko komada po
-    /// poslovnici i rijetki preklapajuci termini - to je prihvatljivo, a razlika je
-    /// zabiljezena u dokumentaciji da se ne bi cinilo kao previd.
-    /// </summary>
-    private async Task ProvjeriZaliheOpremeAsync(
-        List<StavkaOpremeRequest> oprema, int poslovnicaId, CancellationToken ct)
-    {
-        if (oprema.Count == 0)
-        {
-            return;
-        }
-
-        var idevi = oprema.Select(x => x.VrstaOpremeId).ToList();
-
-        var stanja = await Context.StanjaOpreme
-            .Where(x => x.PoslovnicaId == poslovnicaId && idevi.Contains(x.VrstaOpremeId))
-            .Select(x => new { x.VrstaOpremeId, x.Kolicina, Naziv = x.VrstaOpreme.Naziv })
-            .AsNoTracking()
-            .ToListAsync(ct);
-
-        foreach (var trazeno in oprema)
-        {
-            var stanje = stanja.FirstOrDefault(x => x.VrstaOpremeId == trazeno.VrstaOpremeId);
-
-            if (stanje is null || stanje.Kolicina == 0)
-            {
-                throw new BusinessException(
-                    "Odabrana oprema nije dostupna u poslovnici preuzimanja.");
-            }
-
-            if (stanje.Kolicina < trazeno.Kolicina)
-            {
-                throw new BusinessException(
-                    $"Za opremu \"{stanje.Naziv}\" dostupno je {stanje.Kolicina} komada.");
-            }
         }
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SunnyRides.Model.DTOs;
 using SunnyRides.Model.Konstante;
 using SunnyRides.Services.Dostupnost;
+using SunnyRides.Services.Oprema;
 
 namespace SunnyRides.API.Controllers;
 
@@ -18,10 +19,13 @@ namespace SunnyRides.API.Controllers;
 public class DostupnostController : ControllerBase
 {
     private readonly IAvailabilityService _availabilityService;
+    private readonly IDostupnostOpremeService _dostupnostOpreme;
 
-    public DostupnostController(IAvailabilityService availabilityService)
+    public DostupnostController(
+        IAvailabilityService availabilityService, IDostupnostOpremeService dostupnostOpreme)
     {
         _availabilityService = availabilityService;
+        _dostupnostOpreme = dostupnostOpreme;
     }
 
     /// <summary>Je li jedno vozilo slobodno u zadatom terminu, i ako nije - zasto.</summary>
@@ -35,6 +39,20 @@ public class DostupnostController : ControllerBase
     {
         return await _availabilityService.ProvjeriAsync(
             voziloId, datumOd, datumDo, ignorisiRezervacijuId, ct);
+    }
+
+    /// <summary>
+    /// Oprema koja se uz vozilo moze uzeti u zadatom terminu, sa brojem slobodnih
+    /// komada. Lista je kratka po prirodi - koliko ima vrsta opreme u katalogu.
+    /// </summary>
+    [HttpGet("vozila/{voziloId:int}/oprema")]
+    public async Task<List<DostupnaOpremaDto>> OpremaAsync(
+        int voziloId,
+        [FromQuery] DateTime datumOd,
+        [FromQuery] DateTime datumDo,
+        CancellationToken ct)
+    {
+        return await _dostupnostOpreme.DostupnaZaVoziloAsync(voziloId, datumOd, datumDo, ct);
     }
 
     /// <summary>

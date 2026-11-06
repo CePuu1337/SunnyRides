@@ -18,6 +18,7 @@ using SunnyRides.Services.Kalendar;
 using SunnyRides.Services.Korisnici;
 using SunnyRides.Services.Lokacija;
 using SunnyRides.Services.Obavijesti;
+using SunnyRides.Services.Oprema;
 using SunnyRides.Services.Recenzije;
 using SunnyRides.Services.Sifrarnici;
 
@@ -74,6 +75,10 @@ public static class RegistracijaServisa
         // Dozvole su jedina implementacija hijerarhije kategorija - koristi ih i
         // pretraga i provjera preduslova pri rezervaciji.
         services.AddScoped<IDozvolaService, DozvolaService>();
+
+        // Isto kao za vozilo: jedno mjesto odlucuje koliko je opreme slobodno, a
+        // koriste ga rezervacija, zamjena vozila i izmjena zaliha.
+        services.AddScoped<IDostupnostOpremeService, DostupnostOpremeService>();
 
         // Jedino mjesto gdje se mijenja status rezervacije. Scoped je jer cita
         // prijavljenog korisnika iz trenutnog zahtjeva.
@@ -166,6 +171,7 @@ public static class RegistracijaServisa
         services.AddScoped<IModelVozilaService, ModelVozilaService>();
         services.AddScoped<IPravilaKategorijeService, PravilaKategorijeService>();
         services.AddScoped<IVrstaOpremeService, VrstaOpremeService>();
+        services.AddScoped<IStanjeOpremeService, StanjeOpremeService>();
         services.AddScoped<IPaketOsiguranjaService, PaketOsiguranjaService>();
         services.AddScoped<IRazlogOtkazivanjaService, RazlogOtkazivanjaService>();
     }

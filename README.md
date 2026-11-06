@@ -91,12 +91,12 @@ Lozinka je svuda `test`.
 | Uposlenik | `uposlenik` | `test` |
 
 - `desktop` i `administrator` su administratori i vide sve poslovnice.
-- `uposlenik` radi u poslovnici u Mostaru i vidi samo nju. Izvještaje ima samo
-  administrator.
+- `uposlenik` radi u poslovnici u Mostaru i vidi samo nju, pa i zalihe opreme vodi
+  samo za nju. Izvještaje ima samo administrator.
 - `mobile` je klijent iz Sarajeva. Sarajevo nema poslovnicu, pa mu je najbliža Mostar.
-- Klijent koji se registruje kroz aplikaciju bira grad odmah nakon registracije, a
-  vozačku dozvolu prijavljuje u profilu. Dok mu je uposlenik ne odobri, može
-  pretraživati vozila, ali ne i rezervisati.
+- Klijent koji se registruje kroz aplikaciju odmah poslije registracije bira grad i
+  prijavljuje vozačku dozvolu, sa fotografijom obje strane. Dok mu je uposlenik ne
+  odobri, može pretraživati vozila, ali ne i rezervisati.
 
 ### Testno plaćanje
 
