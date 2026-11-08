@@ -410,6 +410,7 @@ public class PlacanjeService
         await using var transakcija = await Context.Database.BeginTransactionAsync(ct);
 
         Rezervacija? rezervacija = null;
+        PovratPoruka? promjenaPovrata = null;
 
         if (DogadjajiIntenta.Contains(dogadjaj.Tip) && dogadjaj.PaymentIntentId is not null)
         {
@@ -419,11 +420,20 @@ public class PlacanjeService
                  && dogadjaj.RefundId is not null)
         {
             var povrat = await Context.Refundi
+                .Include(x => x.Placanje)
                 .FirstOrDefaultAsync(x => x.ProviderRefundId == dogadjaj.RefundId, ct);
 
             if (povrat is not null)
             {
+                var prije = povrat.Status;
                 povrat.Status = IznosiStripe.StatusPovrata(dogadjaj.RefundStatus);
+
+                // Povrat koji je bio "pokrenut" sad je zavrsen - klijent dobija drugu
+                // poruku, "izvrsen". Isti status dvaput ne pravi dvije poruke.
+                if (povrat.Status != prije && IznosiStripe.PovratTrebaJaviti(povrat.Status))
+                {
+                    promjenaPovrata = new PovratPoruka(povrat.Placanje.RezervacijaId, povrat.Id);
+                }
             }
         }
 
@@ -457,6 +467,11 @@ public class PlacanjeService
         }
 
         await transakcija.CommitAsync(ct);
+
+        if (promjenaPovrata is not null)
+        {
+            await _izvrsilac.JaviKlijentuAsync([promjenaPovrata], ct);
+        }
 
         if (rezervacija is not null)
         {
@@ -566,8 +581,13 @@ public class PlacanjeService
 
         await transakcija.CommitAsync(ct);
 
-        await _izvrsilac.PosaljiAsync(zaSlanje, placanje, ct);
+        var poruka = await _izvrsilac.PosaljiAsync(zaSlanje, placanje, ct);
         await SacuvajAsync(ct);
+
+        if (poruka is not null)
+        {
+            await _izvrsilac.JaviKlijentuAsync([poruka], ct);
+        }
 
         if (zaSlanje.Status == StatusPlacanja.Failed)
         {
@@ -706,8 +726,11 @@ public class PlacanjeService
     /// </summary>
     private async Task IzvrsiKodStripeaAsync(Rezervacija rezervacija, CancellationToken ct)
     {
-        await _izvrsilac.IzvrsiZaRezervacijuAsync(rezervacija, ct);
+        var prihvaceniPovrati = await _izvrsilac.IzvrsiZaRezervacijuAsync(rezervacija, ct);
         await SacuvajAsync(ct);
+
+        // Klijent se obavjestava tek kad je status povrata snimljen.
+        await _izvrsilac.JaviKlijentuAsync(prihvaceniPovrati, ct);
     }
 
     /// <summary>

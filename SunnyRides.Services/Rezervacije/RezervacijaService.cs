@@ -451,10 +451,13 @@ public class RezervacijaService
         // Novac se salje tek kad je otkazivanje trajno upisano. Ako Stripe ne odgovori,
         // otkazivanje ostaje vazece, a povrat stoji zapisan i moze se poslati ponovo.
         // Otvoreni intenti se ponistavaju, da se otkazana rezervacija ne moze naplatiti.
-        await _izvrsilacPovrata.IzvrsiZaRezervacijuAsync(rezervacija, ct);
+        var prihvaceniPovrati = await _izvrsilacPovrata.IzvrsiZaRezervacijuAsync(rezervacija, ct);
         await SacuvajAsync(ct);
 
+        // Poruke idu tek kad je status povrata snimljen, da worker procita isto sto
+        // je Stripe odgovorio.
         await _objavljivac.ObjaviAsync(Redovi.RezervacijaOtkazana, new RezervacijaPoruka(id), ct);
+        await _izvrsilacPovrata.JaviKlijentuAsync(prihvaceniPovrati, ct);
 
         return await GetByIdOsnovnoAsync(id, ct);
     }

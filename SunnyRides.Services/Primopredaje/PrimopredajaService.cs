@@ -526,7 +526,7 @@ public class PrimopredajaService
         await transakcija.CommitAsync(ct);
 
         // Depozit se vraca tek kad je povrat trajno upisan, isto kao kod otkazivanja.
-        await _izvrsilacPovrata.IzvrsiZaRezervacijuAsync(rezervacija, ct);
+        var prihvaceniPovrati = await _izvrsilacPovrata.IzvrsiZaRezervacijuAsync(rezervacija, ct);
         await SacuvajAsync(ct);
 
         _logger.LogInformation(
@@ -537,6 +537,7 @@ public class PrimopredajaService
         // povratu koji nije prosao bila bi gora od poruke koja kasni.
         await _objavljivac.ObjaviAsync(
             Redovi.VoziloVraceno, new PrimopredajaPoruka(rezervacija.Id, povrat.Id), ct);
+        await _izvrsilacPovrata.JaviKlijentuAsync(prihvaceniPovrati, ct);
 
         return await base.GetByIdAsync(povrat.Id, ct);
     }

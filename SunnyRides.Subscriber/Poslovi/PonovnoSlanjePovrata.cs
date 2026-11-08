@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SunnyRides.Model.Enums;
+using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Placanja;
 
@@ -62,12 +63,20 @@ public class PonovnoSlanjePovrata : PeriodicniPosao
 
         _logger.LogInformation("Pronadjeno {Broj} povrata koji jos nisu poslani.", zaostali.Count);
 
+        var prihvaceni = new List<PovratPoruka>();
+
         foreach (var povrat in zaostali)
         {
             // Izvrsilac ne baca izuzetke i ne snima sam; status mijenja na entitetu.
-            await izvrsilac.PosaljiAsync(povrat, povrat.Placanje, ct);
+            if (await izvrsilac.PosaljiAsync(povrat, povrat.Placanje, ct) is { } poruka)
+            {
+                prihvaceni.Add(poruka);
+            }
         }
 
         await context.SaveChangesAsync(ct);
+
+        // Klijent saznaje za povrat tek kad je njegov novi status snimljen.
+        await izvrsilac.JaviKlijentuAsync(prihvaceni, ct);
     }
 }

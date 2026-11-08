@@ -27,25 +27,25 @@ public class IzvrsilacPovrata : IIzvrsilacPovrata
     /// </summary>
     public static string KljucPovrata(Refund povrat) => $"povrat-{povrat.Id}-{povrat.DatumKreiranja.Ticks}";
 
-    public async Task PosaljiAsync(Refund povrat, Placanje placanje, CancellationToken ct)
+    public async Task<PovratPoruka?> PosaljiAsync(Refund povrat, Placanje placanje, CancellationToken ct)
     {
         if (povrat.Status != StatusPlacanja.Created)
         {
-            return;
+            return null;
         }
 
         if (string.IsNullOrWhiteSpace(placanje.ProviderPaymentIntentId))
         {
             povrat.Status = StatusPlacanja.Failed;
             _logger.LogError("Povrat {PovratId} nema PaymentIntent na koji bi se vezao.", povrat.Id);
-            return;
+            return null;
         }
 
         if (!_stripe.JeKonfigurisan)
         {
             // Ostaje Created - cim kljuc bude postavljen, osoblje ga moze poslati.
             _logger.LogWarning("Povrat {PovratId} nije poslan jer Stripe nije konfigurisan.", povrat.Id);
-            return;
+            return null;
         }
 
         try
@@ -63,10 +63,18 @@ public class IzvrsilacPovrata : IIzvrsilacPovrata
                 "Povrat {PovratId} od {Iznos} EUR poslan Stripe-u kao {RefundId}, status {Status}.",
                 povrat.Id, povrat.Iznos, odgovor.Id, odgovor.Status);
 
-            // Klijenta se obavjestava tek kad je Stripe povrat prihvatio. Odbijen
-            // povrat ne salje nikakvu poruku - nema sta da se javi.
-            await _objavljivac.ObjaviAsync(Redovi.PovratIzvrsen,
-                new PovratPoruka(placanje.RezervacijaId, povrat.Id), ct);
+            // Stripe moze odgovoriti i statusom "failed" ili "canceled", bez izuzetka.
+            // Tada novac nije vracen i klijent ne dobija poruku da jeste - osoblje vidi
+            // odbijen povrat na ekranu placanja i moze ga ponoviti.
+            if (!IznosiStripe.PovratTrebaJaviti(povrat.Status))
+            {
+                _logger.LogWarning(
+                    "Stripe je povrat {PovratId} vratio sa statusom {Status}; klijent se ne obavjestava.",
+                    povrat.Id, odgovor.Status);
+                return null;
+            }
+
+            return new PovratPoruka(placanje.RezervacijaId, povrat.Id);
         }
         catch (PlatniProvajderException ex) when (ex.Konacna)
         {
@@ -74,12 +82,22 @@ public class IzvrsilacPovrata : IIzvrsilacPovrata
             // ponovo, sto pravi novi zapis sa novim kljucem.
             povrat.Status = StatusPlacanja.Failed;
             _logger.LogError(ex, "Stripe je odbio povrat {PovratId}.", povrat.Id);
+            return null;
         }
         catch (PlatniProvajderException ex)
         {
             // Ishod nepoznat. Zapis ostaje Created, a sljedeci pokusaj ide istim kljucem,
             // pa ako je Stripe povrat ipak izvrsio, vratit ce isti rezultat umjesto novog.
             _logger.LogError(ex, "Povrat {PovratId} nije potvrdjen, ostaje za ponovno slanje.", povrat.Id);
+            return null;
+        }
+    }
+
+    public async Task JaviKlijentuAsync(IEnumerable<PovratPoruka> poruke, CancellationToken ct)
+    {
+        foreach (var poruka in poruke)
+        {
+            await _objavljivac.ObjaviAsync(Redovi.PovratIzvrsen, poruka, ct);
         }
     }
 
@@ -118,13 +136,18 @@ public class IzvrsilacPovrata : IIzvrsilacPovrata
         }
     }
 
-    public async Task IzvrsiZaRezervacijuAsync(Rezervacija rezervacija, CancellationToken ct)
+    public async Task<List<PovratPoruka>> IzvrsiZaRezervacijuAsync(Rezervacija rezervacija, CancellationToken ct)
     {
+        var zaKlijenta = new List<PovratPoruka>();
+
         foreach (var placanje in rezervacija.Placanja.OrderBy(p => p.Id))
         {
             foreach (var povrat in placanje.Refundi.Where(r => r.Status == StatusPlacanja.Created).OrderBy(r => r.Id))
             {
-                await PosaljiAsync(povrat, placanje, ct);
+                if (await PosaljiAsync(povrat, placanje, ct) is { } poruka)
+                {
+                    zaKlijenta.Add(poruka);
+                }
             }
 
             if (rezervacija.Status != StatusRezervacije.Pending)
@@ -132,5 +155,7 @@ public class IzvrsilacPovrata : IIzvrsilacPovrata
                 await PonistiIntentAsync(placanje, ct);
             }
         }
+
+        return zaKlijenta;
     }
 }

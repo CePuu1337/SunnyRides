@@ -118,10 +118,11 @@ public class OtkazivanjeNeplacenih : PeriodicniPosao
 
         // Tek kad je otkazivanje trajno upisano. Neplacena rezervacija nema sta da se
         // vraca, ali ima otvoren intent koji od sada ne smije proci.
-        await izvrsilac.IzvrsiZaRezervacijuAsync(rezervacija, ct);
+        var prihvaceniPovrati = await izvrsilac.IzvrsiZaRezervacijuAsync(rezervacija, ct);
         await context.SaveChangesAsync(ct);
 
         await objavljivac.ObjaviAsync(Redovi.RezervacijaOtkazana, new RezervacijaPoruka(id), ct);
+        await izvrsilac.JaviKlijentuAsync(prihvaceniPovrati, ct);
 
         _logger.LogInformation(
             "Rezervacija {Broj} je otkazana - placanje nije zavrseno na vrijeme.", rezervacija.Broj);

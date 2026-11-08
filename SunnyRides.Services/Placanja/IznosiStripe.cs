@@ -50,4 +50,13 @@ public static class IznosiStripe
     /// </summary>
     public static bool PovratJeVazeci(StatusPlacanja status) =>
         status is not (StatusPlacanja.Failed or StatusPlacanja.Canceled);
+
+    /// <summary>
+    /// Povrat o kojem se klijentu salje obavjestenje: Stripe ga je prihvatio (Pending,
+    /// "pokrenut") ili zavrsio (Succeeded, "izvrsen"). Odbijen i ponisten nisu vratili
+    /// nista, a Created jos nije ni stigao do Stripe-a - o njima klijent ne dobija
+    /// poruku da mu je novac vracen.
+    /// </summary>
+    public static bool PovratTrebaJaviti(StatusPlacanja status) =>
+        status is StatusPlacanja.Pending or StatusPlacanja.Succeeded;
 }

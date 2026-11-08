@@ -6,6 +6,7 @@ using SunnyRides.Model.Poruke;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
 using SunnyRides.Services.Notifikacije;
+using SunnyRides.Services.Placanja;
 using SunnyRides.Subscriber.Email;
 using SunnyRides.Services.Vrijeme;
 
@@ -292,19 +293,39 @@ public class ObradaDogadjaja
             return;
         }
 
-        var rezervacija = povrat.Placanje.Rezervacija;
+        // Status se cita ponovo, iz baze, a ne vjeruje se samoj poruci. Odbijen ili
+        // ponisten povrat nije vratio novac, a Created jos nije ni stigao do Stripe-a -
+        // za njih klijent ne smije dobiti poruku da mu je novac vracen.
+        if (!IznosiStripe.PovratTrebaJaviti(povrat.Status))
+        {
+            _logger.LogWarning(
+                "Povrat {PovratId} je u statusu {Status}, obavjestenje klijentu se ne salje.",
+                povrat.Id, povrat.Status);
+            return;
+        }
 
+        var rezervacija = povrat.Placanje.Rezervacija;
+        var izvrsen = povrat.Status == StatusPlacanja.Succeeded;
+
+        // Stripe "succeeded" znaci da je povrat zavrsen kod njih; "pending" da je
+        // poslan i ceka banku. U oba slucaja novac na karticu stize za nekoliko dana,
+        // ali samo prvi se smije zvati izvrsenim.
         var tekst =
             $"Postovani/a {rezervacija.Korisnik.Ime},\n\n" +
-            $"povrat sredstava za rezervaciju {rezervacija.Broj} je poslan.\n\n" +
+            (izvrsen
+                ? $"povrat sredstava za rezervaciju {rezervacija.Broj} je izvrsen.\n\n"
+                : $"povrat sredstava za rezervaciju {rezervacija.Broj} je pokrenut i poslan je banci.\n\n") +
             $"Iznos: {povrat.Iznos:0.00} EUR\n" +
             $"Razlog: {povrat.Razlog}\n\n" +
             "Sredstva se vracaju na karticu kojom je placeno, obicno u roku od 5 do 10 radnih dana.\n\n" +
             "SunnyRides";
 
         await JaviAsync(rezervacija.Korisnik, rezervacija.Id, TipNotifikacije.PovratIzvrsen,
-            "Povrat sredstava je izvrsen",
-            $"Vraceno {povrat.Iznos:0.00} EUR za rezervaciju {rezervacija.Broj}.", tekst, ct);
+            izvrsen ? "Povrat sredstava je izvrsen" : "Povrat sredstava je pokrenut",
+            izvrsen
+                ? $"Vraceno {povrat.Iznos:0.00} EUR za rezervaciju {rezervacija.Broj}."
+                : $"Povrat od {povrat.Iznos:0.00} EUR za rezervaciju {rezervacija.Broj} je poslan banci.",
+            tekst, ct);
     }
 
     // --- dozvole -----------------------------------------------------------
