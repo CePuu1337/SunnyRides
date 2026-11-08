@@ -86,6 +86,40 @@ class StatusnaPilula extends StatelessWidget {
     }
   }
 
+  /// Status placanja ili povrata. Neuspjelo je crveno jer je to ono sto osoblje
+  /// mora primijetiti i ponoviti.
+  factory StatusnaPilula.placanje(StatusPlacanja? status) {
+    switch (status) {
+      case StatusPlacanja.uspjesno:
+        return StatusnaPilula(
+          tekst: status!.naziv,
+          pozadina: Boje.uspjehPozadina,
+          bojaTeksta: Boje.uspjehTekst,
+        );
+      case StatusPlacanja.kreirano:
+      case StatusPlacanja.uObradi:
+        return StatusnaPilula(
+          tekst: status!.naziv,
+          pozadina: Boje.upozorenjePozadina,
+          bojaTeksta: Boje.upozorenjeTekst,
+        );
+      case StatusPlacanja.neuspjesno:
+        return StatusnaPilula(
+          tekst: status!.naziv,
+          pozadina: Boje.greskaPozadina,
+          bojaTeksta: Boje.greskaTekst,
+          ikona: Icons.error_outline,
+        );
+      case StatusPlacanja.ponisteno:
+      case null:
+        return StatusnaPilula(
+          tekst: status?.naziv ?? 'Nepoznato',
+          pozadina: Boje.neutralnoPozadina,
+          bojaTeksta: Boje.neutralnoTekst,
+        );
+    }
+  }
+
   /// Pilula koja govori je li rezervacija placena. Stoji uz statusnu, ne umjesto nje.
   factory StatusnaPilula.placeno(bool placeno) {
     return StatusnaPilula(

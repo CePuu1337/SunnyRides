@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
+import '../../modeli/placanje.dart';
+import '../../servisi/placanje_servis.dart';
 import '../../servisi/rezervacija_servis.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/sadrzaj.dart';
 import '../../widgeti/slicica.dart';
+import '../placanja/prikaz_placanja.dart';
 import 'otkazivanje_dijalog.dart';
 
-/// Sve o jednoj rezervaciji: vozilo, klijent, period, obracun i historija statusa.
+/// Sve o jednoj rezervaciji: vozilo, klijent, period, obracun, placanja i povrati,
+/// i historija statusa.
 class RezervacijaDetalji extends StatefulWidget {
   const RezervacijaDetalji({super.key, required this.rezervacijaId});
 
@@ -20,8 +24,10 @@ class RezervacijaDetalji extends StatefulWidget {
 
 class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
   late final RezervacijaServis _servis;
+  late final PlacanjeServis _placanjaServis;
 
   Rezervacija? _rezervacija;
+  List<Placanje> _placanja = const [];
   bool _ucitavanje = true;
   bool _promijenjeno = false;
   String? _greska;
@@ -30,7 +36,9 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
   void initState() {
     super.initState();
 
-    _servis = RezervacijaServis(context.read<ApiKlijent>());
+    final klijent = context.read<ApiKlijent>();
+    _servis = RezervacijaServis(klijent);
+    _placanjaServis = PlacanjeServis(klijent);
     _ucitaj();
   }
 
@@ -41,14 +49,21 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
     });
 
     try {
-      final rezervacija = await _servis.detalji(widget.rezervacijaId);
+      final rezultati = await Future.wait([
+        _servis.detalji(widget.rezervacijaId),
+        _placanjaServis.lista(
+          rezervacijaId: widget.rezervacijaId,
+          velicinaStranice: 20,
+        ),
+      ]);
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _rezervacija = rezervacija;
+        _rezervacija = rezultati[0] as Rezervacija;
+        _placanja = (rezultati[1] as Strana<Placanje>).stavke;
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {
@@ -60,6 +75,20 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
         _greska = greska.poruka;
         _ucitavanje = false;
       });
+    }
+  }
+
+  Future<void> _ponoviPovrat(Placanje placanje, Povrat povrat) async {
+    final poslano = await ponoviPovratUzPotvrdu(
+      context,
+      _placanjaServis,
+      placanje,
+      povrat,
+    );
+
+    if (poslano && mounted) {
+      _promijenjeno = true;
+      await _ucitaj();
     }
   }
 
@@ -99,7 +128,11 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
               naPonovniPokusaj: _ucitaj,
               dijete: rezervacija == null
                   ? const SizedBox.shrink()
-                  : _Prikaz(rezervacija: rezervacija),
+                  : _Prikaz(
+                      rezervacija: rezervacija,
+                      placanja: _placanja,
+                      naPonavljanje: _ponoviPovrat,
+                    ),
             ),
           ),
         ],
@@ -170,9 +203,15 @@ class _Traka extends StatelessWidget {
 }
 
 class _Prikaz extends StatelessWidget {
-  const _Prikaz({required this.rezervacija});
+  const _Prikaz({
+    required this.rezervacija,
+    required this.placanja,
+    required this.naPonavljanje,
+  });
 
   final Rezervacija rezervacija;
+  final List<Placanje> placanja;
+  final void Function(Placanje placanje, Povrat povrat) naPonavljanje;
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +252,29 @@ class _Prikaz extends StatelessWidget {
                 naslov: 'Obračun',
                 podnaslov: 'Iznos koji je rezervacija nosila',
                 dijete: _Obracun(rezervacija: rezervacija),
+              ),
+              const SizedBox(height: Razmaci.l),
+              Kartica(
+                naslov: 'Plaćanja i povrati',
+                podnaslov: 'Šta je Stripe naplatio i šta je vraćeno',
+                dijete: placanja.isEmpty
+                    ? const PrazanPopis(
+                        poruka: 'Za ovu rezervaciju nema pokušaja plaćanja.',
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final placanje in placanja) ...[
+                            PrikazPlacanja(
+                              placanje: placanje,
+                              saRezervacijom: false,
+                              naPonavljanje: (povrat) =>
+                                  naPonavljanje(placanje, povrat),
+                            ),
+                            const SizedBox(height: Razmaci.s),
+                          ],
+                        ],
+                      ),
               ),
               if (rezervacija.status == StatusRezervacije.otkazana) ...[
                 const SizedBox(height: Razmaci.l),

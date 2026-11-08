@@ -154,6 +154,11 @@ public class PlacanjeService
             upit = upit.Where(x => x.Status == search.Status.Value);
         }
 
+        if (search.PoslovnicaId.HasValue)
+        {
+            upit = upit.Where(x => x.Rezervacija.PoslovnicaId == search.PoslovnicaId.Value);
+        }
+
         if (search.SamoNeuspjeliPovrati == true)
         {
             upit = upit.Where(x => x.Refundi.Any(r => r.Status == StatusPlacanja.Failed));
@@ -171,6 +176,7 @@ public class PlacanjeService
 
     private static IQueryable<Placanje> SaPovezanim(IQueryable<Placanje> upit) =>
         upit.Include(x => x.Rezervacija).ThenInclude(r => r.Korisnik)
+            .Include(x => x.Rezervacija).ThenInclude(r => r.Poslovnica)
             .Include(x => x.Refundi).ThenInclude(r => r.KreiraoKorisnik);
 
     // --- priprema naplate --------------------------------------------------

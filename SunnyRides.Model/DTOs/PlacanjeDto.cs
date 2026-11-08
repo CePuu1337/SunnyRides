@@ -12,6 +12,7 @@ public class PlacanjeDto
     public StatusRezervacije StatusRezervacije { get; set; }
     public bool IsPaid { get; set; }
     public string? KlijentImePrezime { get; set; }
+    public string? PoslovnicaNaziv { get; set; }
 
     /// <summary>Iznos koji je server zatrazio.</summary>
     public decimal Iznos { get; set; }

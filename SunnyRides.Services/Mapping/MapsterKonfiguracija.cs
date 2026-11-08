@@ -233,6 +233,9 @@ public static class MapsterKonfiguracija
             .Map(dto => dto.KlijentImePrezime,
                  e => e.Rezervacija != null && e.Rezervacija.Korisnik != null
                       ? e.Rezervacija.Korisnik.Ime + " " + e.Rezervacija.Korisnik.Prezime : null)
+            .Map(dto => dto.PoslovnicaNaziv,
+                 e => e.Rezervacija != null && e.Rezervacija.Poslovnica != null
+                      ? e.Rezervacija.Poslovnica.Naziv : null)
             .Map(dto => dto.UkupnoVraceno,
                  e => e.Refundi
                      .Where(r => r.Status != StatusPlacanja.Failed && r.Status != StatusPlacanja.Canceled)

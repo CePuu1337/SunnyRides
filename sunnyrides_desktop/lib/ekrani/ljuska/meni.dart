@@ -7,6 +7,7 @@ import '../izvjestaji/izvjestaji_ekran.dart';
 import '../kalendar/kalendar_ekran.dart';
 import '../korisnici/korisnici_ekran.dart';
 import '../obavijesti/obavijesti_ekran.dart';
+import '../placanja/placanja_ekran.dart';
 import '../recenzije/recenzije_ekran.dart';
 import '../sifrarnici/sifrarnici_ekran.dart';
 import '../pregled/pregled_ekran.dart';
@@ -158,6 +159,13 @@ class Meni {
       naslov: 'SISTEM',
       stavke: [
         StavkaMenija(
+          id: 'placanja',
+          naziv: 'Plaćanja',
+          podnaslov: 'Naplate i povrati novca klijentima',
+          ikona: Icons.payments_outlined,
+          gradi: _placanja,
+        ),
+        StavkaMenija(
           id: 'obavijesti',
           naziv: 'Obavijesti',
           podnaslov: 'Objave koje klijenti vide u aplikaciji',
@@ -219,3 +227,5 @@ Widget _cjenovnik(BuildContext context) => const CjenovnikEkran();
 Widget _izvjestaji(BuildContext context) => const IzvjestajiEkran();
 
 Widget _obavijesti(BuildContext context) => const ObavijestiEkran();
+
+Widget _placanja(BuildContext context) => const PlacanjaEkran();

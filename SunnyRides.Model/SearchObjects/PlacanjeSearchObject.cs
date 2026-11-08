@@ -12,6 +12,12 @@ public class PlacanjeSearchObject : BaseSearchObject
     public StatusPlacanja? Status { get; set; }
 
     /// <summary>
+    /// Poslovnica rezervacije. Administratoru sluzi kao filter; uposlenika server
+    /// ionako ogranicava na njegovu, sta god ovdje poslao.
+    /// </summary>
+    public int? PoslovnicaId { get; set; }
+
+    /// <summary>
     /// True vraca samo placanja koja imaju povrat odbijen kod Stripe-a - osoblje
     /// ovim nalazi ono sto treba pokusati ponovo.
     /// </summary>
