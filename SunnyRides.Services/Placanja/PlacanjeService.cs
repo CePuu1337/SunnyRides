@@ -45,6 +45,12 @@ public class PlacanjeService
     /// <summary>Kad zahtjev dolazi od klijenta, lista se suzava na njegova placanja.</summary>
     private int? _ogranicenjeNaKorisnika;
 
+    /// <summary>
+    /// Kad listu trazi uposlenik, ovdje stoji njegova poslovnica i lista se suzava na
+    /// placanja rezervacija te poslovnice. Administrator i klijent ovdje imaju null.
+    /// </summary>
+    private int? _ogranicenjeNaPoslovnicu;
+
     /// <summary>Placanje koje je upravo potvrdjeno kroz webhook, da se poruka objavi tek poslije commita.</summary>
     private int? _potvrdjenoWebhookom;
 
@@ -107,6 +113,10 @@ public class PlacanjeService
     {
         _ogranicenjeNaKorisnika = JeOsoblje() ? null : _trenutniKorisnik.ObaveznoKorisnikId();
 
+        // Placanje pripada poslovnici svoje rezervacije, pa uposlenik vidi ista
+        // placanja cije rezervacije vidi - ni jedno vise.
+        _ogranicenjeNaPoslovnicu = await _opseg.OgranicenjeAsync(ct);
+
         return await base.GetAsync(search, ct);
     }
 
@@ -122,6 +132,11 @@ public class PlacanjeService
         if (_ogranicenjeNaKorisnika.HasValue)
         {
             upit = upit.Where(x => x.Rezervacija.KorisnikId == _ogranicenjeNaKorisnika.Value);
+        }
+
+        if (_ogranicenjeNaPoslovnicu is { } poslovnicaUposlenika)
+        {
+            upit = upit.Where(x => x.Rezervacija.PoslovnicaId == poslovnicaUposlenika);
         }
 
         if (search.RezervacijaId.HasValue)
@@ -755,19 +770,28 @@ public class PlacanjeService
             .FirstOrDefaultAsync(x => x.Id == rezervacijaId, ct)
         ?? throw NotFoundException.Za("Rezervacija", rezervacijaId);
 
-    private record OsnovnoOPlacanju(int RezervacijaId, int KorisnikId, StatusPlacanja Status);
+    private record OsnovnoOPlacanju(int RezervacijaId, int KorisnikId, int PoslovnicaId, StatusPlacanja Status);
 
-    /// <summary>Klijent vidi i potvrdjuje samo svoja placanja. Provjera je prema tokenu.</summary>
+    /// <summary>
+    /// Ko smije vidjeti i potvrditi placanje. Klijent samo svoje, prema tokenu.
+    /// Uposlenik samo placanja rezervacija svoje poslovnice, a administrator sva.
+    /// Pokriva i dohvat po identifikatoru i potvrdu placanja.
+    /// </summary>
     private async Task<OsnovnoOPlacanju> ProvjeriVlasnistvoAsync(int placanjeId, CancellationToken ct)
     {
         var osnovno = await Context.Placanja
             .AsNoTracking()
             .Where(x => x.Id == placanjeId)
-            .Select(x => new OsnovnoOPlacanju(x.RezervacijaId, x.Rezervacija.KorisnikId, x.Status))
+            .Select(x => new OsnovnoOPlacanju(
+                x.RezervacijaId, x.Rezervacija.KorisnikId, x.Rezervacija.PoslovnicaId, x.Status))
             .FirstOrDefaultAsync(ct)
             ?? throw NotFoundException.Za(NazivEntiteta, placanjeId);
 
-        if (!JeOsoblje() && osnovno.KorisnikId != _trenutniKorisnik.ObaveznoKorisnikId())
+        if (JeOsoblje())
+        {
+            await _opseg.ObaveznoDozvoljenaAsync(osnovno.PoslovnicaId, ct);
+        }
+        else if (osnovno.KorisnikId != _trenutniKorisnik.ObaveznoKorisnikId())
         {
             throw new ForbiddenException("Mozete vidjeti samo svoja placanja.");
         }
