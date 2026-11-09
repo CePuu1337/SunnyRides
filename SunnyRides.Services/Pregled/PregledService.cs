@@ -4,6 +4,7 @@ using SunnyRides.Model.Enums;
 using SunnyRides.Services.Auth;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Database.Entities;
+using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Services.Pregled;
 
@@ -27,10 +28,14 @@ public class PregledService : IPregledService
         // Uposlenik vidi brojke svoje poslovnice, administrator cijele agencije.
         _poslovnicaId = await _opseg.OgranicenjeAsync(ct);
 
+        // "Danas" i "ovaj mjesec" su po vremenu agencije. UTC dan pocinje u 01:00 ili
+        // 02:00 po nasem vremenu, pa bi preuzimanje u 00:30 zavrsilo u rasporedu
+        // pogresnog dana, a naplata u ponoc prvog u proslom mjesecu.
         var sada = DateTime.UtcNow;
-        var pocetakMjeseca = new DateTime(sada.Year, sada.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var pocetakDana = sada.Date;
-        var krajDana = pocetakDana.AddDays(1);
+        var danas = LokalnoVrijeme.IzUtc(sada).Date;
+        var pocetakMjeseca = LokalnoVrijeme.UUtc(new DateTime(danas.Year, danas.Month, 1));
+        var pocetakDana = LokalnoVrijeme.UUtc(danas);
+        var krajDana = LokalnoVrijeme.UUtc(danas.AddDays(1));
 
         // Skup vozila koja su u ovom trenutku kod klijenata. Racuna se jednom i koristi
         // na tri mjesta - u metrikama i u oba presjeka - umjesto da se isti uslov pise
@@ -47,7 +52,7 @@ public class PregledService : IPregledService
         // Isti dio proslog mjeseca kao onaj koji je od ovog mjeseca protekao. Kraj se
         // odsijeca na pocetak tekuceg mjeseca da poredbeni period nikad ne zagazi u
         // njega - to se desava kad je prosli mjesec kraci od tekuceg.
-        var prethodniOd = pocetakMjeseca.AddMonths(-1);
+        var prethodniOd = LokalnoVrijeme.UUtc(new DateTime(danas.Year, danas.Month, 1).AddMonths(-1));
         var prethodniDo = prethodniOd.Add(sada - pocetakMjeseca);
         if (prethodniDo > pocetakMjeseca)
         {

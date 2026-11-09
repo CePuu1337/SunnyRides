@@ -72,7 +72,7 @@ public class IskoristenostFloteDokument : OsnovaDokumenta
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Najmova");
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Dana izdato");
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Iskorištenost");
-                zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Prihod");
+                zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Prihod bez depozita");
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Ocjena");
             });
 
@@ -128,7 +128,7 @@ public class IskoristenostFloteDokument : OsnovaDokumenta
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Najmova");
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Dana izdato");
                 zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Iskorištenost");
-                zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Prihod");
+                zaglavlje.Cell().Element(CelijaZaglavlja).AlignRight().Text("Prihod bez depozita");
             });
 
             foreach (var red in _podaci.PoTipuVozila)

@@ -39,7 +39,7 @@ public class StavkaFinansijskogDto
     public decimal Refundirano { get; set; }
     public decimal NetoPrihod { get; set; }
 
-    /// <summary>Naplaceno podijeljeno brojem rezervacija.</summary>
+    /// <summary>Prosjecna vrijednost najma bez depozita: najam, oprema i osiguranje placenih rezervacija.</summary>
     public decimal ProsjecnaVrijednostNajma { get; set; }
 }
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using SunnyRides.Model.DTOs;
@@ -7,6 +6,7 @@ using SunnyRides.Model.SearchObjects;
 using SunnyRides.Services.Database;
 using SunnyRides.Services.Exceptions;
 using SunnyRides.Services.Izvjestaji.Dokumenti;
+using SunnyRides.Services.Vrijeme;
 
 namespace SunnyRides.Services.Izvjestaji;
 
@@ -134,19 +134,51 @@ public class IzvjestajService : IIzvjestajService
     }
 
     /// <summary>
-    /// Prihod po vozilu iz **stvarno naplacenih** iznosa. Rezervacija nosi koliko je
-    /// trebalo naplatiti, a placanje koliko jeste.
+    /// Prihod po vozilu: stvarno naplaceno, minus povrati koji nisu odbijeni, minus
+    /// depozit najmova koji jos traju.
+    ///
+    /// Naplaceni iznos ukljucuje depozit, a depozit je novac klijenta koji se vraca.
+    /// Najam od 60 EUR sa depozitom od 100 EUR je 60 EUR prihoda, ne 160. Kad se
+    /// depozit vrati, povrat ga oduzme; dok najam jos traje, depozit jos nije vracen,
+    /// pa se oduzima posebno. Otkazivanje sa 50 % povrata ostavlja pola najma kao
+    /// prihod, a steta zadrzana iz depozita ostaje prihod tog vozila - oboje je
+    /// stvaran novac koji je agencija zadrzala.
+    ///
+    /// Odbijen ili ponisten povrat se ne oduzima: taj novac je i dalje kod agencije,
+    /// dok ga osoblje ne posalje ponovo.
+    ///
+    /// Tri vrste kretanja novca se spajaju u jedan niz (UNION ALL) i grupisu po vozilu
+    /// jednim upitom na bazi. Gledaju se rezervacije ciji se termin preklapa sa
+    /// periodom, isto kao za dane izdato.
     /// </summary>
     private async Task<Dictionary<int, decimal>> PrihodPoVoziluAsync(
         int? poslovnicaId, DateTime od, DateTime doDatuma, CancellationToken ct)
     {
-        var redovi = await _context.Placanja
-            .AsNoTracking()
+        var naplaceno = _context.Placanja
             .Where(x => x.Status == StatusPlacanja.Succeeded
                         && x.Rezervacija.DatumOd < doDatuma && x.Rezervacija.DatumDo > od
                         && (poslovnicaId == null || x.Rezervacija.PoslovnicaId == poslovnicaId))
-            .GroupBy(x => x.Rezervacija.VoziloId)
-            .Select(g => new { VoziloId = g.Key, Iznos = g.Sum(x => x.NaplaceniIznos ?? 0m) })
+            .Select(x => new { x.Rezervacija.VoziloId, Iznos = x.NaplaceniIznos ?? 0m });
+
+        var vraceno = _context.Refundi
+            .Where(x => x.Status != StatusPlacanja.Failed && x.Status != StatusPlacanja.Canceled
+                        && x.Placanje.Rezervacija.DatumOd < doDatuma && x.Placanje.Rezervacija.DatumDo > od
+                        && (poslovnicaId == null || x.Placanje.Rezervacija.PoslovnicaId == poslovnicaId))
+            .Select(x => new { x.Placanje.Rezervacija.VoziloId, Iznos = -x.Iznos });
+
+        // Potvrdjena placena rezervacija jos nije zatvorena povratom vozila, pa joj
+        // depozit jos nije vracen.
+        var depozitKodAgencije = _context.Rezervacije
+            .Where(x => x.Status == StatusRezervacije.Confirmed && x.IsPaid
+                        && x.DatumOd < doDatuma && x.DatumDo > od
+                        && (poslovnicaId == null || x.PoslovnicaId == poslovnicaId))
+            .Select(x => new { x.VoziloId, Iznos = -x.IznosDepozita });
+
+        var redovi = await naplaceno
+            .Concat(vraceno)
+            .Concat(depozitKodAgencije)
+            .GroupBy(x => x.VoziloId)
+            .Select(g => new { VoziloId = g.Key, Iznos = g.Sum(x => x.Iznos) })
             .ToListAsync(ct);
 
         return redovi.ToDictionary(x => x.VoziloId, x => x.Iznos);
@@ -220,18 +252,30 @@ public class IzvjestajService : IIzvjestajService
         var (od, doDatuma) = Period(search);
         var poslovnica = await NazivPoslovniceAsync(search.PoslovnicaId, ct);
 
+        // Mjesec se odredjuje po vremenu agencije, ne po UTC-u. Naplata 1. novembra u
+        // 00:30 je novembarska, iako je u UTC-u jos 31. oktobar. Baza vrijeme pretvara
+        // sama (AT TIME ZONE), pa grupisanje ostaje jedan upit na bazi.
+        var zona = LokalnoVrijeme.ZonaZaBazu;
+
         var naplate = await _context.Placanja
             .AsNoTracking()
             .Where(x => x.Status == StatusPlacanja.Succeeded
                         && x.DatumKreiranja >= od && x.DatumKreiranja < doDatuma
                         && (search.PoslovnicaId == null || x.Rezervacija.PoslovnicaId == search.PoslovnicaId))
-            .GroupBy(x => new
+            .Select(x => new
             {
-                x.DatumKreiranja.Year,
-                x.DatumKreiranja.Month,
+                Lokalno = EF.Functions.AtTimeZone(EF.Functions.AtTimeZone(x.DatumKreiranja, "UTC"), zona),
+                x.RezervacijaId,
                 x.Rezervacija.PoslovnicaId,
-                Poslovnica = x.Rezervacija.Poslovnica.Naziv
+                Poslovnica = x.Rezervacija.Poslovnica.Naziv,
+                Naplaceno = x.NaplaceniIznos ?? 0m,
+
+                // Vrijednost najma bez depozita, za prosjek. Rezervacija ima najvise
+                // jedno uspjesno placanje (filtrirani jedinstveni indeks), pa se ne
+                // broji dvaput.
+                VrijednostNajma = x.Rezervacija.UkupanIznos - x.Rezervacija.IznosDepozita
             })
+            .GroupBy(x => new { x.Lokalno.Year, x.Lokalno.Month, x.PoslovnicaId, x.Poslovnica })
             .Select(g => new
             {
                 g.Key.Year,
@@ -239,61 +283,49 @@ public class IzvjestajService : IIzvjestajService
                 g.Key.PoslovnicaId,
                 g.Key.Poslovnica,
 
-                // Broj razlicitih rezervacija, ne broj placanja: jedna rezervacija moze
-                // imati vise pokusaja naplate, a izvjestaj broji najmove.
+                // Broj razlicitih rezervacija, ne broj placanja - izvjestaj broji najmove.
                 BrojRezervacija = g.Select(x => x.RezervacijaId).Distinct().Count(),
-                Naplaceno = g.Sum(x => x.NaplaceniIznos ?? 0m)
+                Naplaceno = g.Sum(x => x.Naplaceno),
+                VrijednostNajmova = g.Sum(x => x.VrijednostNajma)
             })
             .ToListAsync(ct);
 
         // Povrat koji je odbijen ili ponisten nije novac koji je otisao, pa se ne broji.
+        // Povrat se knjizi u mjesecu u kojem je napravljen, bez obzira na to kad je
+        // rezervacija placena - zato povrati imaju svoje redove, ne samo dodatak naplati.
         var povrati = await _context.Refundi
             .AsNoTracking()
             .Where(x => x.DatumKreiranja >= od && x.DatumKreiranja < doDatuma
                         && x.Status != StatusPlacanja.Failed && x.Status != StatusPlacanja.Canceled
                         && (search.PoslovnicaId == null
                             || x.Placanje.Rezervacija.PoslovnicaId == search.PoslovnicaId))
-            .GroupBy(x => new
+            .Select(x => new
             {
-                x.DatumKreiranja.Year,
-                x.DatumKreiranja.Month,
-                x.Placanje.Rezervacija.PoslovnicaId
+                Lokalno = EF.Functions.AtTimeZone(EF.Functions.AtTimeZone(x.DatumKreiranja, "UTC"), zona),
+                x.Placanje.Rezervacija.PoslovnicaId,
+                Poslovnica = x.Placanje.Rezervacija.Poslovnica.Naziv,
+                x.Iznos
             })
-            .Select(g => new { g.Key.Year, g.Key.Month, g.Key.PoslovnicaId, Iznos = g.Sum(x => x.Iznos) })
+            .GroupBy(x => new { x.Lokalno.Year, x.Lokalno.Month, x.PoslovnicaId, x.Poslovnica })
+            .Select(g => new
+            {
+                g.Key.Year,
+                g.Key.Month,
+                g.Key.PoslovnicaId,
+                g.Key.Poslovnica,
+                Iznos = g.Sum(x => x.Iznos)
+            })
             .ToListAsync(ct);
 
-        var povratiPoKljucu = povrati.ToDictionary(
-            x => (x.Year, x.Month, x.PoslovnicaId), x => x.Iznos);
-
-        var stavke = naplate
-            .Select(x =>
-            {
-                povratiPoKljucu.TryGetValue((x.Year, x.Month, x.PoslovnicaId), out var refundirano);
-
-                return new StavkaFinansijskogDto
-                {
-                    Godina = x.Year,
-                    Mjesec = x.Month,
-                    Period = NazivMjeseca(x.Year, x.Month),
-                    PoslovnicaId = x.PoslovnicaId,
-                    Poslovnica = x.Poslovnica,
-                    BrojRezervacija = x.BrojRezervacija,
-                    Naplaceno = x.Naplaceno,
-                    Refundirano = refundirano,
-                    NetoPrihod = x.Naplaceno - refundirano,
-                    ProsjecnaVrijednostNajma = x.BrojRezervacija > 0
-                        ? Math.Round(x.Naplaceno / x.BrojRezervacija, 2)
-                        : 0m
-                };
-            })
-            .OrderBy(x => x.Godina)
-            .ThenBy(x => x.Mjesec)
-            .ThenBy(x => x.Poslovnica)
-            .ToList();
-
-        var ukupnoRezervacija = stavke.Sum(x => x.BrojRezervacija);
-        var ukupnoNaplaceno = stavke.Sum(x => x.Naplaceno);
-        var ukupnoRefundirano = stavke.Sum(x => x.Refundirano);
+        var (stavke, zbir) = RedoviFinansijskog.Sastavi(
+            naplate
+                .Select(x => new NaplataMjeseca(
+                    x.Year, x.Month, x.PoslovnicaId, x.Poslovnica,
+                    x.BrojRezervacija, x.Naplaceno, x.VrijednostNajmova))
+                .ToList(),
+            povrati
+                .Select(x => new PovratMjeseca(x.Year, x.Month, x.PoslovnicaId, x.Poslovnica, x.Iznos))
+                .ToList());
 
         return new FinansijskiPregledDto
         {
@@ -302,16 +334,7 @@ public class IzvjestajService : IIzvjestajService
             Poslovnica = poslovnica,
             GenerisanoUtc = DateTime.UtcNow,
             Stavke = stavke,
-            Zbir = new ZbirFinansijskogDto
-            {
-                BrojRezervacija = ukupnoRezervacija,
-                Naplaceno = ukupnoNaplaceno,
-                Refundirano = ukupnoRefundirano,
-                NetoPrihod = ukupnoNaplaceno - ukupnoRefundirano,
-                ProsjecnaVrijednostNajma = ukupnoRezervacija > 0
-                    ? Math.Round(ukupnoNaplaceno / ukupnoRezervacija, 2)
-                    : 0m
-            }
+            Zbir = zbir
         };
     }
 
@@ -335,22 +358,34 @@ public class IzvjestajService : IIzvjestajService
 
     // --- pomocno -----------------------------------------------------------
 
+    /// <summary>
+    /// Period izvjestaja kao par UTC trenutaka [od, do), gdje su granice ponoc po
+    /// vremenu agencije.
+    ///
+    /// Aplikacija salje prvi i zadnji dan perioda, oba ukljucena, kao lokalnu ponoc
+    /// pretvorenu u UTC. Zadnji dan mora uci cijeli, pa je gornja granica ponoc dana
+    /// poslije njega.
+    /// </summary>
     private static (DateTime Od, DateTime Do) Period(IzvjestajSearchObject search)
     {
-        var doDatuma = (search.Do ?? DateTime.UtcNow.Date.AddDays(1)).Date;
-        var od = (search.Od ?? doDatuma.AddDays(-PodrazumijevanoDana)).Date;
+        var danas = LokalnoVrijeme.IzUtc(DateTime.UtcNow).Date;
 
-        if (doDatuma <= od)
+        var zadnjiDan = search.Do.HasValue ? LokalnoVrijeme.LokalniDatum(search.Do.Value) : danas;
+        var prviDan = search.Od.HasValue
+            ? LokalnoVrijeme.LokalniDatum(search.Od.Value)
+            : zadnjiDan.AddDays(1 - PodrazumijevanoDana);
+
+        if (zadnjiDan < prviDan)
         {
-            throw new BusinessException("Kraj perioda mora biti poslije pocetka.");
+            throw new BusinessException("Kraj perioda ne moze biti prije pocetka.");
         }
 
-        if ((doDatuma - od).TotalDays > MaksimalnoDana)
+        if ((zadnjiDan - prviDan).TotalDays + 1 > MaksimalnoDana)
         {
             throw new BusinessException($"Period izvjestaja ne moze biti duzi od {MaksimalnoDana} dana.");
         }
 
-        return (od, doDatuma);
+        return (LokalnoVrijeme.UUtc(prviDan), LokalnoVrijeme.UUtc(zadnjiDan.AddDays(1)));
     }
 
     private async Task<string?> NazivPoslovniceAsync(int? poslovnicaId, CancellationToken ct)
@@ -369,17 +404,4 @@ public class IzvjestajService : IIzvjestajService
 
     private static double Postotak(double dio, double cjelina) =>
         cjelina > 0 ? Math.Round(100 * dio / cjelina, 1) : 0;
-
-    private static string NazivMjeseca(int godina, int mjesec)
-    {
-        string[] mjeseci =
-        {
-            "januar", "februar", "mart", "april", "maj", "juni",
-            "juli", "august", "septembar", "oktobar", "novembar", "decembar"
-        };
-
-        var naziv = mjeseci[Math.Clamp(mjesec, 1, 12) - 1];
-
-        return string.Create(CultureInfo.InvariantCulture, $"{naziv} {godina}");
-    }
 }

@@ -67,7 +67,9 @@ public abstract class OsnovaDokumenta : IDocument
 
                 red.ConstantItem(200).AlignRight().Column(desno =>
                 {
-                    desno.Item().Text($"Period: {Od:dd.MM.yyyy.} - {Do.AddDays(-1):dd.MM.yyyy.}");
+                    // Od i Do su UTC trenuci lokalne ponoci; Do je ponoc poslije zadnjeg dana.
+                    desno.Item().Text(
+                        $"Period: {LokalnoVrijeme.Datum(Od)} - {LokalnoVrijeme.Datum(Do.AddDays(-1))}");
                     desno.Item().Text($"Poslovnica: {Poslovnica ?? "sve poslovnice"}");
                 });
             });

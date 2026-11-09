@@ -17,6 +17,13 @@ public static class LokalnoVrijeme
 
     private static readonly TimeZoneInfo? Zona = UcitajZonu();
 
+    /// <summary>
+    /// Naziv zone kakav razumije SQL Server u <c>AT TIME ZONE</c> - on koristi Windows
+    /// nazive ("Central European Standard Time"), a ne IANA ("Europe/Sarajevo").
+    /// Kad zona nije poznata, "UTC", pa se grupisanje po mjesecu radi po UTC-u.
+    /// </summary>
+    public static string ZonaZaBazu { get; } = NazivZoneZaBazu();
+
     /// <summary>UTC vrijeme iz baze u vremenu agencije.</summary>
     public static DateTime IzUtc(DateTime utc)
     {
@@ -24,6 +31,31 @@ public static class LokalnoVrijeme
 
         return Zona is null ? kaoUtc : TimeZoneInfo.ConvertTimeFromUtc(kaoUtc, Zona);
     }
+
+    /// <summary>Lokalni datum i vrijeme agencije (bez oznake zone) pretvoreno u UTC.</summary>
+    public static DateTime UUtc(DateTime lokalno)
+    {
+        var bezZone = DateTime.SpecifyKind(lokalno, DateTimeKind.Unspecified);
+
+        return Zona is null
+            ? DateTime.SpecifyKind(bezZone, DateTimeKind.Utc)
+            : TimeZoneInfo.ConvertTimeToUtc(bezZone, Zona);
+    }
+
+    /// <summary>
+    /// Kalendarski dan agencije kojem pripada vrijednost iz zahtjeva.
+    ///
+    /// Aplikacija salje lokalnu ponoc pretvorenu u UTC: 1. oktobar postaje
+    /// "30.09. 22:00Z". Odsijecanje sata od toga dalo bi 30. septembar. Zato se UTC
+    /// vrijednost prvo vraca u lokalno vrijeme, pa se uzima datum. Vrijednost bez
+    /// oznake zone (npr. "2026-10-01" iz Swaggera) je vec lokalni datum.
+    /// </summary>
+    public static DateTime LokalniDatum(DateTime vrijednost) => vrijednost.Kind switch
+    {
+        DateTimeKind.Utc => IzUtc(vrijednost).Date,
+        DateTimeKind.Local => IzUtc(vrijednost.ToUniversalTime()).Date,
+        _ => vrijednost.Date
+    };
 
     /// <summary>Npr. "30.09.2026. 16:00".</summary>
     public static string DatumIVrijeme(DateTime utc) =>
@@ -43,6 +75,21 @@ public static class LokalnoVrijeme
 
     /// <summary>Prazno kad je zona poznata; inace se uz vrijeme pise da je u UTC-u.</summary>
     private static string Oznaka => Zona is null ? " (UTC)" : string.Empty;
+
+    private static string NazivZoneZaBazu()
+    {
+        if (Zona is null)
+        {
+            return "UTC";
+        }
+
+        if (!Zona.HasIanaId)
+        {
+            return Zona.Id;
+        }
+
+        return TimeZoneInfo.TryConvertIanaIdToWindowsId(Zona.Id, out var windows) ? windows : "UTC";
+    }
 
     private static TimeZoneInfo? UcitajZonu()
     {

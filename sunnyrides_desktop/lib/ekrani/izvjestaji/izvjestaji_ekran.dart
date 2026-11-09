@@ -359,7 +359,7 @@ class _PregledFlote extends StatelessWidget {
               ('Najmova', Formati.broj(podaci.zbir.brojNajmova)),
               ('Dana izdato', podaci.zbir.danaIzdato.toStringAsFixed(1)),
               ('Iskorištenost', Formati.postotak(podaci.zbir.iskoristenost)),
-              ('Prihod', Formati.novac(podaci.zbir.prihod)),
+              ('Prihod bez depozita', Formati.novac(podaci.zbir.prihod)),
               (
                 'Prosječna ocjena',
                 podaci.zbir.prosjecnaOcjena == null
@@ -383,7 +383,7 @@ class _PregledFlote extends StatelessWidget {
                       'NAJMOVA',
                       'DANA',
                       'ISKORIŠTENOST',
-                      'PRIHOD',
+                      'PRIHOD BEZ DEPOZITA',
                       'OCJENA',
                     ],
                     redovi: [
@@ -438,7 +438,7 @@ class _PregledFinansija extends StatelessWidget {
               ('Refundirano', Formati.novac(podaci.zbir.refundirano)),
               ('Neto prihod', Formati.novac(podaci.zbir.netoPrihod)),
               (
-                'Prosječan najam',
+                'Prosječan najam bez depozita',
                 Formati.novac(podaci.zbir.prosjecnaVrijednostNajma),
               ),
             ],
