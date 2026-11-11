@@ -342,7 +342,9 @@ class _Tabela extends StatelessWidget {
                 DataColumn(label: Text('REGISTRACIJA')),
                 DataColumn(label: Text('TIP')),
                 DataColumn(label: Text('KATEGORIJA')),
+                DataColumn(label: Text('KUBIKAŽA')),
                 DataColumn(label: Text('POSLOVNICA')),
+                DataColumn(label: Text('OCJENA')),
                 DataColumn(label: Text('DNEVNO')),
                 DataColumn(label: Text('DEPOZIT')),
                 DataColumn(label: Text('STANJE')),
@@ -371,7 +373,7 @@ class _Tabela extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${vozilo.godinaProizvodnje}. · ${vozilo.pogon}',
+                                  '${vozilo.godinaProizvodnje}.',
                                   style: const TextStyle(
                                     color: Boje.tekstPrigusen,
                                     fontSize: 11.5,
@@ -385,6 +387,8 @@ class _Tabela extends StatelessWidget {
                       DataCell(Text(vozilo.registarskaOznaka)),
                       DataCell(Text(vozilo.tipVozilaNaziv ?? '')),
                       DataCell(Text(vozilo.kategorijaDozvoleOznaka ?? '')),
+                      // Za električna vozila kubikaža je nula, pa se prikazuje snaga.
+                      DataCell(Text(vozilo.pogon)),
                       DataCell(
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,21 +405,10 @@ class _Tabela extends StatelessWidget {
                           ],
                         ),
                       ),
+                      DataCell(_Ocjena(vozilo: vozilo)),
                       DataCell(Text(Formati.novac(vozilo.dnevnaTarifa))),
                       DataCell(Text(Formati.novac(vozilo.iznosDepozita))),
-                      DataCell(
-                        vozilo.aktivno
-                            ? const StatusnaPilula(
-                                tekst: 'Aktivno',
-                                pozadina: Boje.uspjehPozadina,
-                                bojaTeksta: Boje.uspjehTekst,
-                              )
-                            : const StatusnaPilula(
-                                tekst: 'Deaktivirano',
-                                pozadina: Boje.neutralnoPozadina,
-                                bojaTeksta: Boje.neutralnoTekst,
-                              ),
-                      ),
+                      DataCell(_Stanje(vozilo: vozilo)),
                       DataCell(
                         Row(
                           children: [
@@ -444,6 +437,77 @@ class _Tabela extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _Ocjena extends StatelessWidget {
+  const _Ocjena({required this.vozilo});
+
+  final Vozilo vozilo;
+
+  @override
+  Widget build(BuildContext context) {
+    final ocjena = vozilo.prosjecnaOcjena;
+
+    if (ocjena == null) {
+      return const Text('—', style: TextStyle(color: Boje.tekstPrigusen));
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.star_rounded, size: 16, color: Boje.upozorenjeTekst),
+        const SizedBox(width: 2),
+        Text(
+          ocjena.toStringAsFixed(1).replaceAll('.', ','),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        Text(
+          ' (${vozilo.brojRecenzija})',
+          style: const TextStyle(color: Boje.tekstPrigusen, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+/// Tri stanja: u ponudi, privremeno na servisu, i trajno povučeno iz ponude.
+/// Vozilo na servisu je aktivno, ali se ne može iznajmiti dok blokada traje - bez
+/// posebne oznake izgledalo bi isto kao slobodno.
+class _Stanje extends StatelessWidget {
+  const _Stanje({required this.vozilo});
+
+  final Vozilo vozilo;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!vozilo.aktivno) {
+      return const StatusnaPilula(
+        tekst: 'Deaktivirano',
+        pozadina: Boje.neutralnoPozadina,
+        bojaTeksta: Boje.neutralnoTekst,
+      );
+    }
+
+    final naServisuDo = vozilo.naServisuDo;
+
+    if (naServisuDo != null) {
+      return Tooltip(
+        message: vozilo.razlogBlokade ?? 'Blokada vozila',
+        child: StatusnaPilula(
+          tekst: 'Na servisu do ${Formati.danIMjesec(naServisuDo)}',
+          pozadina: Boje.upozorenjePozadina,
+          bojaTeksta: Boje.upozorenjeTekst,
+          ikona: Icons.build_outlined,
+        ),
+      );
+    }
+
+    return const StatusnaPilula(
+      tekst: 'Aktivno',
+      pozadina: Boje.uspjehPozadina,
+      bojaTeksta: Boje.uspjehTekst,
     );
   }
 }

@@ -146,6 +146,11 @@ public class VoziloService
         await DodajTarifeAsync(rezultat.Items, _danCijene, ct);
         DodajUdaljenosti(rezultat.Items, udaljenosti);
 
+        if (!_pretragaKlijenta)
+        {
+            await BlokadeVozila.DopuniAsync(Context, rezultat.Items, DateTime.UtcNow, ct);
+        }
+
         return rezultat;
     }
 
@@ -329,6 +334,11 @@ public class VoziloService
         var vozilo = await base.GetByIdAsync(id, ct);
 
         await DodajOcjeneAsync(new[] { vozilo }, ct);
+
+        if (JeOsoblje())
+        {
+            await BlokadeVozila.DopuniAsync(Context, new[] { vozilo }, DateTime.UtcNow, ct);
+        }
 
         return vozilo;
     }

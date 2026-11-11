@@ -70,4 +70,14 @@ public class VoziloDto
 
     /// <summary>Broj recenzija iza prosjeka. Bez njega ocjena 5,0 iz jedne recenzije izgleda isto kao iz pedeset.</summary>
     public int BrojRecenzija { get; set; }
+
+    /// <summary>
+    /// Do kada traje blokada (servis, kvar) koja je aktivna u ovom trenutku. Prazno kad
+    /// vozilo nije blokirano. Puni se samo za osoblje - klijent blokirano vozilo
+    /// ionako ne vidi, a razlog je interni podatak agencije.
+    /// </summary>
+    public DateTime? NaServisuDo { get; set; }
+
+    /// <summary>Razlog te blokade, za oznaku u listi vozila na desktopu.</summary>
+    public string? RazlogBlokade { get; set; }
 }

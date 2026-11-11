@@ -28,6 +28,10 @@ class Vozilo {
     this.poslovnicaNaziv,
     this.gradNaziv,
     this.thumbnailUrl,
+    this.prosjecnaOcjena,
+    this.brojRecenzija = 0,
+    this.naServisuDo,
+    this.razlogBlokade,
   });
 
   final int id;
@@ -55,6 +59,15 @@ class Vozilo {
   final String? poslovnicaNaziv;
   final String? gradNaziv;
   final String? thumbnailUrl;
+
+  /// Prazno kad vozilo još nije ocijenjeno - nula bi se čitala kao loša ocjena.
+  final double? prosjecnaOcjena;
+  final int brojRecenzija;
+
+  /// Do kada traje blokada (servis, kvar) koja je aktivna sada. Računa je server;
+  /// prazno kad vozilo nije blokirano.
+  final DateTime? naServisuDo;
+  final String? razlogBlokade;
 
   /// Kubikaza, a za elektricna vozila snaga - njima je kubikaza nula, pa bi "0 ccm"
   /// izgledalo kao da podatak nedostaje.
@@ -92,6 +105,10 @@ class Vozilo {
       poslovnicaNaziv: json['poslovnicaNaziv']?.toString(),
       gradNaziv: json['gradNaziv']?.toString(),
       thumbnailUrl: json['thumbnailUrl']?.toString(),
+      prosjecnaOcjena: citajDoubleIliNista(json['prosjecnaOcjena']),
+      brojRecenzija: citajInt(json['brojRecenzija']),
+      naServisuDo: citajDatumIliNista(json['naServisuDo']),
+      razlogBlokade: json['razlogBlokade']?.toString(),
     );
   }
 }
