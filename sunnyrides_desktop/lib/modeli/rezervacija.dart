@@ -7,6 +7,7 @@ class UpitRezervacija {
     this.velicinaStranice = 12,
     this.broj,
     this.klijent,
+    this.vozilo,
     this.status,
     this.poslovnicaId,
     this.periodOd,
@@ -18,6 +19,9 @@ class UpitRezervacija {
   final int velicinaStranice;
   final String? broj;
   final String? klijent;
+
+  /// Registarska oznaka, model ili marka vozila.
+  final String? vozilo;
   final StatusRezervacije? status;
   final int? poslovnicaId;
   final DateTime? periodOd;
@@ -28,6 +32,7 @@ class UpitRezervacija {
     int? stranica,
     String? broj,
     String? klijent,
+    String? vozilo,
     StatusRezervacije? status,
     int? poslovnicaId,
     DateTime? periodOd,
@@ -43,6 +48,7 @@ class UpitRezervacija {
       velicinaStranice: velicinaStranice,
       broj: broj ?? this.broj,
       klijent: klijent ?? this.klijent,
+      vozilo: vozilo ?? this.vozilo,
       status: ocistiStatus ? null : (status ?? this.status),
       poslovnicaId: ocistiPoslovnicu
           ? null
@@ -61,6 +67,7 @@ class UpitRezervacija {
       'orderBy': '-datumKreiranja',
       if (broj != null && broj!.isNotEmpty) 'broj': broj,
       if (klijent != null && klijent!.isNotEmpty) 'klijent': klijent,
+      if (vozilo != null && vozilo!.isNotEmpty) 'vozilo': vozilo,
       if (status != null) 'status': status!.vrijednost,
       if (poslovnicaId != null) 'poslovnicaId': poslovnicaId,
       if (periodOd != null) 'periodOd': periodOd,

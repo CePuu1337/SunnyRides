@@ -152,6 +152,17 @@ public class RezervacijaService
             upit = upit.Where(x => x.Vozilo.RegistarskaOznaka.Contains(search.RegistarskaOznaka));
         }
 
+        // Uposlenik vozilo trazi onako kako ga zna - po tablici ili po nazivu.
+        if (!string.IsNullOrWhiteSpace(search.Vozilo))
+        {
+            var vozilo = search.Vozilo.Trim();
+
+            upit = upit.Where(x =>
+                x.Vozilo.RegistarskaOznaka.Contains(vozilo)
+                || x.Vozilo.ModelVozila.Naziv.Contains(vozilo)
+                || x.Vozilo.ModelVozila.Marka.Naziv.Contains(vozilo));
+        }
+
         if (search.VoziloId.HasValue)
         {
             upit = upit.Where(x => x.VoziloId == search.VoziloId.Value);

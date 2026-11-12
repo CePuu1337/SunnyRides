@@ -6,6 +6,7 @@ import '../../modeli/definicija_sifrarnika.dart';
 import '../../servisi/sifrarnik_servis.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/paginator.dart';
+import '../../widgeti/polja.dart';
 import '../../widgeti/sadrzaj.dart';
 import 'poslovnica_forma.dart';
 import 'sifrarnik_forma.dart';
@@ -49,6 +50,7 @@ class _SifrarniciEkranStanje extends State<SifrarniciEkran> {
   DefinicijaSifrarnika _odabrani = _sviSifrarnici.first;
   Strana<Map<String, dynamic>> _strana = Strana.prazna();
   int _stranica = 0;
+  String _pretraga = '';
 
   static const _velicinaStranice = 20;
 
@@ -74,6 +76,8 @@ class _SifrarniciEkranStanje extends State<SifrarniciEkran> {
         _odabrani.putanja,
         stranica: _stranica,
         velicinaStranice: _velicinaStranice,
+        parametarPretrage: _odabrani.parametarPretrage,
+        pretraga: _pretraga,
       );
 
       if (!mounted) {
@@ -100,6 +104,7 @@ class _SifrarniciEkranStanje extends State<SifrarniciEkran> {
     setState(() {
       _odabrani = definicija;
       _stranica = 0;
+      _pretraga = '';
       _strana = Strana.prazna();
     });
 
@@ -202,14 +207,35 @@ class _SifrarniciEkranStanje extends State<SifrarniciEkran> {
                 dijete: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.all(Razmaci.karticaUnutra),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        // Kljuc po sifarniku: pri prelasku na drugi sifarnik polje
+                        // se isprazni, umjesto da stari tekst filtrira novu listu.
+                        child: PoljePretrage(
+                          key: ValueKey(_odabrani.putanja),
+                          natpis: _odabrani.natpisPretrage,
+                          sirina: 280,
+                          naPromjenu: (tekst) {
+                            _pretraga = tekst.trim();
+                            _stranica = 0;
+                            _ucitaj();
+                          },
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 1),
                     Expanded(
                       child: Sadrzaj(
                         ucitavanje: _ucitavanje,
                         greska: _greska,
                         naPonovniPokusaj: _ucitaj,
                         dijete: _strana.jePrazna
-                            ? const PrazanPopis(
-                                poruka: 'Ovaj šifarnik je prazan.',
+                            ? PrazanPopis(
+                                poruka: _pretraga.isEmpty
+                                    ? 'Ovaj šifarnik je prazan.'
+                                    : 'Nema zapisa za „$_pretraga".',
                                 ikona: Icons.list_alt_outlined,
                               )
                             : _Tabela(

@@ -13,6 +13,9 @@ public class RezervacijaSearchObject : BaseSearchObject
 
     public string? RegistarskaOznaka { get; set; }
 
+    /// <summary>Dio registarske oznake, naziva modela ili marke vozila.</summary>
+    public string? Vozilo { get; set; }
+
     public int? VoziloId { get; set; }
     public int? PoslovnicaId { get; set; }
 

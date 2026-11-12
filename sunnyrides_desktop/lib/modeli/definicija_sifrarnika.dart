@@ -77,10 +77,18 @@ class DefinicijaSifrarnika {
     required this.kolone,
     required this.polja,
     this.jednina,
+    this.parametarPretrage = 'naziv',
+    this.natpisPretrage = 'Naziv',
   });
 
   final String naziv;
   final String? jednina;
+
+  /// Parametar po kojem server pretražuje ovaj šifarnik, i natpis polja za pretragu.
+  /// Većina se traži po nazivu; kategorija dozvole nema naziv nego oznaku, a pravilo
+  /// kategorije se prepoznaje po kategoriji i tipu vozila.
+  final String parametarPretrage;
+  final String natpisPretrage;
   final String putanja;
   final String opis;
   final List<KolonaSifrarnika> kolone;
@@ -303,6 +311,8 @@ class DefinicijaSifrarnika {
       naziv: 'Kategorije dozvola',
       jednina: 'kategoriju',
       putanja: SifrarnikServis.kategorijeDozvola,
+      parametarPretrage: 'oznaka',
+      natpisPretrage: 'Oznaka',
       opis: 'Oznake kategorija vozačkih dozvola',
       kolone: [
         KolonaSifrarnika(kljuc: 'oznaka', natpis: 'OZNAKA', sirina: 120),
@@ -327,6 +337,8 @@ class DefinicijaSifrarnika {
       naziv: 'Pravila kategorija',
       jednina: 'pravilo',
       putanja: SifrarnikServis.pravilaKategorija,
+      parametarPretrage: 'tekst',
+      natpisPretrage: 'Kategorija ili tip vozila',
       opis: 'Šta koja kategorija smije voziti i od koliko godina',
       kolone: [
         KolonaSifrarnika(

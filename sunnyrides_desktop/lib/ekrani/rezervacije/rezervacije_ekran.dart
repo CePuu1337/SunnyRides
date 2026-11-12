@@ -220,6 +220,12 @@ class _Filteri extends StatelessWidget {
             naPromjenu: (tekst) =>
                 naPromjenu(upit.kopija(klijent: tekst, stranica: 0)),
           ),
+          PoljePretrage(
+            natpis: 'Vozilo (tablica ili model)',
+            sirina: 230,
+            naPromjenu: (tekst) =>
+                naPromjenu(upit.kopija(vozilo: tekst, stranica: 0)),
+          ),
           SizedBox(
             width: 180,
             child: DropdownButtonFormField<StatusRezervacije?>(

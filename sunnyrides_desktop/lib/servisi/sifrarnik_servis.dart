@@ -66,10 +66,14 @@ class SifrarnikCrudServis {
 
   final ApiKlijent _klijent;
 
+  /// Stranica šifarnika. Pretraga ide na server, pod parametrom koji šifarnik
+  /// razumije (npr. `naziv` ili `oznaka`), a ne filtrira se u aplikaciji.
   Future<Strana<Map<String, dynamic>>> lista(
     String putanja, {
     int stranica = 0,
     int velicinaStranice = 20,
+    String? parametarPretrage,
+    String? pretraga,
   }) async {
     final odgovor = await _klijent.get(
       putanja,
@@ -77,6 +81,10 @@ class SifrarnikCrudServis {
         'page': stranica,
         'pageSize': velicinaStranice,
         'includeTotalCount': true,
+        if (parametarPretrage != null &&
+            pretraga != null &&
+            pretraga.isNotEmpty)
+          parametarPretrage: pretraga,
       },
     );
 

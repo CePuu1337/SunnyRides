@@ -51,6 +51,16 @@ public class PravilaKategorijeService
             upit = upit.Where(x => x.TipVozilaId == search.TipVozilaId.Value);
         }
 
+        // Pravilo nema svoj naziv - prepoznaje se po kategoriji i tipu vozila, pa se
+        // po njima i trazi.
+        if (!string.IsNullOrWhiteSpace(search.Tekst))
+        {
+            var tekst = search.Tekst.Trim();
+
+            upit = upit.Where(x =>
+                x.KategorijaDozvole.Oznaka.Contains(tekst) || x.TipVozila.Naziv.Contains(tekst));
+        }
+
         return upit;
     }
 
