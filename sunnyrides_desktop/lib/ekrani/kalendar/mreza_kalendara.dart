@@ -17,6 +17,7 @@ class MrezaKalendara extends StatelessWidget {
     required this.bufferSati,
     required this.redovi,
     required this.naRezervaciju,
+    required this.naBlokadu,
     required this.naSlobodanDan,
   });
 
@@ -26,6 +27,9 @@ class MrezaKalendara extends StatelessWidget {
   final double bufferSati;
   final List<RedKalendara> redovi;
   final ValueChanged<int> naRezervaciju;
+
+  /// Klik na blok blokade otvara njene detalje, sa izmjenom i uklanjanjem.
+  final void Function(RedKalendara red, int blokadaId) naBlokadu;
   final void Function(RedKalendara red, DateTime dan) naSlobodanDan;
 
   static const sirinaVozila = 250.0;
@@ -224,7 +228,7 @@ class MrezaKalendara extends StatelessWidget {
                   ),
                 ),
               ),
-            _blok(blok, x(blok.od), x(blok.doDatuma)),
+            _blok(red, blok, x(blok.od), x(blok.doDatuma)),
           ],
         ],
       ),
@@ -255,7 +259,28 @@ class MrezaKalendara extends StatelessWidget {
     );
   }
 
-  Widget _blok(BlokKalendara blok, double lijevo, double desno) {
+  /// Rezervacija otvara detalje rezervacije, blokada detalje blokade.
+  VoidCallback? _naKlik(RedKalendara red, BlokKalendara blok) {
+    final rezervacijaId = blok.rezervacijaId;
+    final blokadaId = blok.blokadaId;
+
+    if (rezervacijaId != null) {
+      return () => naRezervaciju(rezervacijaId);
+    }
+
+    if (blokadaId != null) {
+      return () => naBlokadu(red, blokadaId);
+    }
+
+    return null;
+  }
+
+  Widget _blok(
+    RedKalendara red,
+    BlokKalendara blok,
+    double lijevo,
+    double desno,
+  ) {
     final sirina = desno - lijevo;
 
     if (sirina < 1) {
@@ -276,11 +301,11 @@ class MrezaKalendara extends StatelessWidget {
         message: _opis(blok),
         waitDuration: const Duration(milliseconds: 300),
         child: MouseRegion(
-          cursor: blok.jeBlokada ? MouseCursor.defer : SystemMouseCursors.click,
+          cursor: _naKlik(red, blok) == null
+              ? MouseCursor.defer
+              : SystemMouseCursors.click,
           child: GestureDetector(
-            onTap: blok.rezervacijaId == null
-                ? null
-                : () => naRezervaciju(blok.rezervacijaId!),
+            onTap: _naKlik(red, blok),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: Razmaci.s),
               alignment: Alignment.centerLeft,

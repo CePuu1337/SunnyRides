@@ -11,6 +11,7 @@ import '../../widgeti/kartica.dart';
 import '../../widgeti/polja.dart';
 import '../../widgeti/sadrzaj.dart';
 import '../rezervacije/rezervacija_detalji.dart';
+import 'blokada_dijalog.dart';
 import 'mreza_kalendara.dart';
 import 'rucni_unos_dijalog.dart';
 
@@ -124,6 +125,20 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
     );
 
     if (promijenjeno == true) {
+      _ucitaj();
+    }
+  }
+
+  Future<void> _otvoriBlokadu(RedKalendara red, int blokadaId) async {
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => BlokadaDijalog(blokadaId: blokadaId, vozilo: red),
+    );
+
+    // Osvjezava se uvijek: i izmjena i uklanjanje mijenjaju kalendar, a i zamjena ili
+    // otkazivanje pogodjene rezervacije kad izmjena na kraju nije sacuvana.
+    if (mounted) {
       _ucitaj();
     }
   }
@@ -259,6 +274,7 @@ class _KalendarEkranStanje extends State<KalendarEkran> {
                           bufferSati: _kalendar!.bufferSati,
                           redovi: _kalendar!.vozila,
                           naRezervaciju: _otvoriRezervaciju,
+                          naBlokadu: _otvoriBlokadu,
                           naSlobodanDan: _rucniUnos,
                         ),
                 ),

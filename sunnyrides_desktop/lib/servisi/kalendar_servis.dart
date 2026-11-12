@@ -133,4 +133,32 @@ class KalendarServis {
       },
     );
   }
+
+  Future<BlokadaVozila> blokada(int id) async {
+    final odgovor = await _klijent.get('/api/blokade/$id');
+
+    return BlokadaVozila.izJsona(odgovor as Map<String, dynamic>);
+  }
+
+  /// Izmjena perioda ili razloga. Vozilo se ne mijenja - blokada drugog vozila je
+  /// druga blokada.
+  Future<void> izmijeniBlokadu(
+    int id, {
+    required DateTime od,
+    required DateTime doDatuma,
+    required String razlog,
+  }) async {
+    await _klijent.put(
+      '/api/blokade/$id',
+      tijelo: {
+        'datumOd': od.toUtc().toIso8601String(),
+        'datumDo': doDatuma.toUtc().toIso8601String(),
+        'razlog': razlog,
+      },
+    );
+  }
+
+  Future<void> ukloniBlokadu(int id) async {
+    await _klijent.delete('/api/blokade/$id');
+  }
 }

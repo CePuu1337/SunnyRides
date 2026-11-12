@@ -4,11 +4,9 @@ import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../modeli/kalendar.dart';
 import '../../servisi/kalendar_servis.dart';
-import '../../servisi/rezervacija_servis.dart';
 import '../../widgeti/dijalog_forme.dart';
 import '../../widgeti/obavjestenje.dart';
-import '../rezervacije/otkazivanje_dijalog.dart';
-import 'zamjena_vozila_dijalog.dart';
+import 'pogodjene_rezervacije.dart';
 
 /// Sta je dijalog na kraju uradio. Kalendar po ovome zna sta da javi korisniku.
 enum IshodUnosa { rezervacija, blokada }
@@ -142,76 +140,27 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
     super.dispose();
   }
 
-  /// Kraj blokade kakav ce stvarno biti upisan.
-  ///
-  /// Kad blokada preklapa rezervaciju, a skracivanje je ukljuceno, blokada se
-  /// zaustavlja na pocetku te rezervacije. Vozilo je tada nedostupno sve do termina
-  /// koji je vec obecan nekom drugom - a sta ce sa tim terminom odlucuje uposlenik
-  /// telefonom, ne forma umjesto njega.
-  DateTime get _stvarniKrajBlokade {
-    if (!_skratiDoRezervacije || _pogodjene.isEmpty) {
-      return _blokadaDo;
-    }
-
-    final prva = _pogodjene
-        .map((x) => x.datumOd.toLocal())
-        .reduce((a, b) => a.isBefore(b) ? a : b);
-
-    return prva.isBefore(_blokadaDo) ? prva : _blokadaDo;
-  }
+  DateTime get _stvarniKrajBlokade => krajBlokade(
+    doDatuma: _blokadaDo,
+    pogodjene: _pogodjene,
+    skrati: _skratiDoRezervacije,
+  );
 
   bool get _blokadaImaSmisla => _stvarniKrajBlokade.isAfter(_blokadaOd);
 
   /// Pogodjena rezervacija prelazi na drugo vozilo. Poslije zamjene vise ne stoji na
   /// ovom vozilu, pa se lista pogodjenih ucitava iznova.
   Future<void> _zamijeniVozilo(PogodjenaRezervacija rezervacija) async {
-    final zamijenjeno = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => ZamjenaVozilaDijalog(rezervacija: rezervacija),
-    );
-
-    if (zamijenjeno != true || !mounted) {
-      return;
+    if (await zamijeniVoziloPogodjene(context, rezervacija) && mounted) {
+      await _provjeriPogodjene();
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Rezervacija ${rezervacija.broj} je prebačena na zamjensko vozilo.',
-        ),
-      ),
-    );
-
-    await _provjeriPogodjene();
   }
 
-  /// Otkazivanje od strane agencije, uz puni povrat. Ide kroz isti dijalog kao sa
-  /// ekrana rezervacija, pa uposlenik prije potvrde vidi tacan iznos povrata.
   Future<void> _otkaziRezervaciju(PogodjenaRezervacija pogodjena) async {
     try {
-      final rezervacija = await RezervacijaServis(context.read<ApiKlijent>())
-          .detalji(pogodjena.id);
-
-      if (!mounted) {
-        return;
+      if (await otkaziPogodjenu(context, pogodjena) && mounted) {
+        await _provjeriPogodjene();
       }
-
-      final otkazano = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => OtkazivanjeDijalog(rezervacija: rezervacija),
-      );
-
-      if (otkazano != true || !mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Rezervacija ${pogodjena.broj} je otkazana.')),
-      );
-
-      await _provjeriPogodjene();
     } on ApiGreska catch (greska) {
       if (!mounted) {
         return;
@@ -607,8 +556,6 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
   }
 
   Widget _blokada() {
-    final skraceno = _stvarniKrajBlokade != _blokadaDo;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -619,12 +566,12 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
         const SizedBox(height: Razmaci.xl),
         const _Naslov('Period nedostupnosti'),
         RedPolja(
-          lijevo: _PoljeTrenutka(
+          lijevo: PoljeTrenutka(
             natpis: 'Od',
             vrijednost: _blokadaOd,
             naPritisak: () => _odaberiTrenutakBlokade(pocetak: true),
           ),
-          desno: _PoljeTrenutka(
+          desno: PoljeTrenutka(
             natpis: 'Do',
             vrijednost: _blokadaDo,
             naPritisak: () => _odaberiTrenutakBlokade(pocetak: false),
@@ -648,56 +595,17 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
           ),
         ),
         const SizedBox(height: Razmaci.s),
-        if (_provjeravam)
-          const Row(
-            children: [
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: Razmaci.m),
-              Text(
-                'Provjeravam koje rezervacije ovo pogađa…',
-                style: TextStyle(color: Boje.tekstPrigusen, fontSize: 12.5),
-              ),
-            ],
-          )
-        else if (_pogodjene.isEmpty)
-          Obavjestenje.uspjeh(
-            'U tom periodu nema nijedne rezervacije na ovom vozilu.',
-          )
-        else ...[
-          Obavjestenje.upozorenje(
-            'U tom periodu ${_pogodjene.length == 1 ? 'postoji rezervacija' : 'postoje ${_pogodjene.length} rezervacije'} '
-            'na ovom vozilu. Blokada ih ne otkazuje sama: svaku možete prebaciti na '
-            'zamjensko vozilo koje klijent smije voziti, ili otkazati uz puni povrat. '
-            'Klijent o oba dobija obavještenje i email.',
-          ),
-          const SizedBox(height: Razmaci.m),
-          CheckboxListTile(
-            value: _skratiDoRezervacije,
-            onChanged: (novo) =>
-                setState(() => _skratiDoRezervacije = novo ?? false),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Skrati blokadu do prve rezervacije'),
-            subtitle: Text(
-              skraceno
-                  ? 'Blokada će trajati do ${Formati.datumIVrijeme(_stvarniKrajBlokade)}, '
-                        'kad počinje prva rezervacija.'
-                  : 'Blokada se završava prije prve rezervacije, pa nema šta da se skrati.',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
-          const SizedBox(height: Razmaci.m),
-          for (final rezervacija in _pogodjene)
-            _PogodjenaKartica(
-              rezervacija: rezervacija,
-              naZamjenu: () => _zamijeniVozilo(rezervacija),
-              naOtkazivanje: () => _otkaziRezervaciju(rezervacija),
-            ),
-        ],
+        PogodjeneRezervacije(
+          provjeravam: _provjeravam,
+          pogodjene: _pogodjene,
+          skrati: _skratiDoRezervacije,
+          krajBlokade: _stvarniKrajBlokade,
+          trazeniKraj: _blokadaDo,
+          naSkracivanje: (skrati) =>
+              setState(() => _skratiDoRezervacije = skrati),
+          naZamjenu: _zamijeniVozilo,
+          naOtkazivanje: _otkaziRezervaciju,
+        ),
         const SizedBox(height: Razmaci.l),
         const Divider(),
         const SizedBox(height: Razmaci.s),
@@ -741,12 +649,12 @@ class _RucniUnosDijalogStanje extends State<RucniUnosDijalog> {
         const SizedBox(height: Razmaci.xl),
         const _Naslov('Termin'),
         RedPolja(
-          lijevo: _PoljeTrenutka(
+          lijevo: PoljeTrenutka(
             natpis: 'Preuzimanje',
             vrijednost: _od,
             naPritisak: () => _odaberiTrenutak(pocetak: true),
           ),
-          desno: _PoljeTrenutka(
+          desno: PoljeTrenutka(
             natpis: 'Vraćanje',
             vrijednost: _do,
             naPritisak: () => _odaberiTrenutak(pocetak: false),
@@ -1008,33 +916,6 @@ class _BiracKlijentaStanje extends State<_BiracKlijenta> {
   }
 }
 
-class _PoljeTrenutka extends StatelessWidget {
-  const _PoljeTrenutka({
-    required this.natpis,
-    required this.vrijednost,
-    required this.naPritisak,
-  });
-
-  final String natpis;
-  final DateTime vrijednost;
-  final VoidCallback naPritisak;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: naPritisak,
-      borderRadius: BorderRadius.circular(Zaobljenja.polje),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: natpis,
-          suffixIcon: const Icon(Icons.event_outlined, size: 18),
-        ),
-        child: Text(Formati.datumIVrijeme(vrijednost)),
-      ),
-    );
-  }
-}
-
 class _RedOpreme extends StatelessWidget {
   const _RedOpreme({
     required this.vrsta,
@@ -1162,100 +1043,3 @@ class _RedIznosa extends StatelessWidget {
 /// Telefon i email su tu jer blokada nikoga ne obavjestava sama - uposlenik koji
 /// vozilo skida iz ponude mora imati koga nazvati, odmah, bez trazenja po drugim
 /// ekranima.
-class _PogodjenaKartica extends StatelessWidget {
-  const _PogodjenaKartica({
-    required this.rezervacija,
-    required this.naZamjenu,
-    required this.naOtkazivanje,
-  });
-
-  final PogodjenaRezervacija rezervacija;
-  final VoidCallback naZamjenu;
-  final VoidCallback naOtkazivanje;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: Razmaci.s),
-      padding: const EdgeInsets.all(Razmaci.m),
-      decoration: BoxDecoration(
-        color: Boje.platno,
-        borderRadius: BorderRadius.circular(Zaobljenja.dugme),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          rezervacija.broj,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: Razmaci.s),
-                        StatusnaPilula.rezervacija(rezervacija.status),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${Formati.datumIVrijeme(rezervacija.datumOd)} – '
-                      '${Formati.datumIVrijeme(rezervacija.datumDo)}',
-                      style: const TextStyle(
-                        color: Boje.tekstPrigusen,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: Razmaci.m),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    rezervacija.klijentImePrezime ?? '',
-                    style: const TextStyle(fontSize: 12.5),
-                  ),
-                  Text(
-                    rezervacija.klijentTelefon ??
-                        rezervacija.klijentEmail ??
-                        '',
-                    style: const TextStyle(
-                      color: Boje.tekstPrigusen,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: Razmaci.s),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton.icon(
-                onPressed: naOtkazivanje,
-                icon: const Icon(Icons.cancel_outlined, size: 17),
-                label: const Text('Otkaži uz puni povrat'),
-              ),
-              const SizedBox(width: Razmaci.s),
-              OutlinedButton.icon(
-                onPressed: naZamjenu,
-                icon: const Icon(Icons.swap_horiz, size: 17),
-                label: const Text('Zamijeni vozilo'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}

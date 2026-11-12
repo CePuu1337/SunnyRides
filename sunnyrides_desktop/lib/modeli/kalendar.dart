@@ -71,6 +71,7 @@ class BlokKalendara {
     this.status,
     this.drziDo,
     this.razlog,
+    this.blokadaId,
   });
 
   final VrstaBlokaKalendara? vrsta;
@@ -84,6 +85,9 @@ class BlokKalendara {
   final DateTime? drziDo;
 
   final String? razlog;
+
+  /// Postoji samo za blok blokade; po njemu se otvaraju detalji blokade.
+  final int? blokadaId;
 
   bool get jeBlokada => vrsta == VrstaBlokaKalendara.blokada;
 
@@ -102,6 +106,42 @@ class BlokKalendara {
           : StatusRezervacije.izBroja(citajInt(json['status'])),
       drziDo: citajDatumIliNista(json['drziDo']),
       razlog: json['razlog']?.toString(),
+      blokadaId: citajIntIliNista(json['blokadaId']),
+    );
+  }
+}
+
+/// Jedna blokada vozila - servis, kvar ili drugi razlog nedostupnosti.
+class BlokadaVozila {
+  const BlokadaVozila({
+    required this.id,
+    required this.voziloId,
+    required this.datumOd,
+    required this.datumDo,
+    required this.razlog,
+    required this.datumKreiranja,
+    this.kreiraoKorisnikIme,
+  });
+
+  final int id;
+  final int voziloId;
+  final DateTime datumOd;
+  final DateTime datumDo;
+  final String razlog;
+  final DateTime datumKreiranja;
+
+  /// Ko je blokadu unio. Ostaje isti i kad je kasnije neko drugi izmijeni.
+  final String? kreiraoKorisnikIme;
+
+  factory BlokadaVozila.izJsona(Map<String, dynamic> json) {
+    return BlokadaVozila(
+      id: citajInt(json['id']),
+      voziloId: citajInt(json['voziloId']),
+      datumOd: citajDatum(json['datumOd']),
+      datumDo: citajDatum(json['datumDo']),
+      razlog: json['razlog']?.toString() ?? '',
+      datumKreiranja: citajDatum(json['datumKreiranja']),
+      kreiraoKorisnikIme: json['kreiraoKorisnikIme']?.toString(),
     );
   }
 }
