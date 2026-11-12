@@ -447,6 +447,10 @@ broj manji.
 | ocjena | „Visoko ocijenjeno: 4,6 od 5, iz 12 recenzija." |
 | popularnost | „Jedno od najtraženijih vozila: 8 najmova u zadnja tri mjeseca." |
 
+Cijena u rečenici je ona koju klijent plaća na dan, sa sezonom iz cjenovnika, ista kao na
+kartici vozila. Bodovanje cjenovnog ranga i dalje poredi osnovne dnevne tarife vozila,
+jer su i najmovi iz historije zapisani po njima, pa se porede iste vrste brojeva.
+
 ### Kada se pretraga bilježi
 
 `HistorijaPretrageService.ZabiljeziAsync` se poziva iz `VoziloService.GetAsync`, iz

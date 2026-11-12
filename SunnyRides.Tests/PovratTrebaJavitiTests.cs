@@ -5,7 +5,7 @@ using Xunit;
 namespace SunnyRides.Tests;
 
 /// <summary>
-/// Kad klijent dobija poruku o povratu. Primjer iz reviewa: Stripe vrati povrat sa
+/// Kad klijent dobija poruku o povratu. Primjer: Stripe vrati povrat sa
 /// statusom "failed", a klijent ipak dobije "Povrat sredstava je izvrsen".
 /// </summary>
 public class PovratTrebaJavitiTests

@@ -1,9 +1,10 @@
 # SunnyRides — desktop aplikacija
 
 Windows aplikacija za administratore i uposlenike agencije: pregled poslovanja, vozila,
-rezervacije, kalendar flote sa blokadama i zamjenom vozila, primopredaja, verifikacija
+rezervacije, kalendar flote sa blokadama i zamjenom vozila, primopredaja, zalihe opreme
+po poslovnicama, plaćanja i povrati (sa ponavljanjem odbijenog povrata), verifikacija
 vozačkih dozvola, recenzije, obavijesti, korisnici, šifarnici, cjenovnik i PDF
-izvještaji.
+izvještaji. Uposlenik vidi i mijenja samo podatke svoje poslovnice.
 
 Zajednički dio (API klijent, modeli, tema, SignalR veza) je u paketu
 `../sunnyrides_core`.

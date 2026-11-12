@@ -4,9 +4,9 @@ using Xunit;
 namespace SunnyRides.Tests;
 
 /// <summary>
-/// Cijena koju klijent vidi uz vozilo i po kojoj se filtrira pretraga. Primjer iz
-/// reviewa: vozilo od 40 EUR u sezoni sa mnoziocem 1,3 kosta 52 EUR, pa ne smije
-/// proci filter "do 45 EUR".
+/// Cijena koju klijent vidi uz vozilo i po kojoj se filtrira pretraga. Primjer:
+/// vozilo od 40 EUR u sezoni sa mnoziocem 1,3 kosta 52 EUR, pa ne smije proci
+/// filter "do 45 EUR".
 /// </summary>
 public class EfektivnaTarifaTests
 {

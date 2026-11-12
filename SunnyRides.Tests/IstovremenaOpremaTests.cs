@@ -4,7 +4,7 @@ using Xunit;
 namespace SunnyRides.Tests;
 
 /// <summary>
-/// Koliko komada opreme rezervacije drze u isto vrijeme. Primjer iz reviewa:
+/// Koliko komada opreme rezervacije drze u isto vrijeme. Primjer:
 /// poslovnica ima dvije kacige, dvije su vec rezervisane za isti vikend, pa treca
 /// rezervacija za taj vikend ne smije proci.
 /// </summary>

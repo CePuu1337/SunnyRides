@@ -1,9 +1,10 @@
 # SunnyRides — mobilna aplikacija
 
-Android aplikacija za klijente: preporuke, pretraga slobodnih vozila sa filterima i
-ukupnom cijenom za termin, rezervacija sa opremom i osiguranjem, plaćanje kroz Stripe
-PaymentSheet, otkazivanje sa obračunom povrata, vozačka dozvola, recenzije, profil,
-reset zaboravljene lozinke i obavještenja u realnom vremenu.
+Android aplikacija za klijente: registracija sa izborom grada i prijavom vozačke
+dozvole, preporuke, pretraga slobodnih vozila sa filterima i ukupnom cijenom za termin,
+rezervacija sa opremom slobodnom u terminu, osiguranjem i uslovima otkazivanja, plaćanje
+kroz Stripe PaymentSheet, otkazivanje sa obračunom povrata, recenzije, profil, reset
+zaboravljene lozinke i obavještenja u realnom vremenu.
 
 Zajednički dio (API klijent, modeli, tema, SignalR veza) je u paketu
 `../sunnyrides_core`.

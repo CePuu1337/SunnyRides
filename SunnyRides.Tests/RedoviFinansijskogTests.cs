@@ -4,7 +4,7 @@ using Xunit;
 namespace SunnyRides.Tests;
 
 /// <summary>
-/// Redovi finansijskog pregleda. Primjer iz reviewa: najam placen u septembru i
+/// Redovi finansijskog pregleda. Primjer: najam placen u septembru i
 /// otkazan u oktobru, bez drugih naplata te poslovnice u oktobru - povrat mora imati
 /// svoj red u oktobru i uci u zbir.
 /// </summary>

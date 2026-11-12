@@ -15,7 +15,7 @@ namespace SunnyRides.Services.Flota;
 /// Periodi u kojima vozilo nije dostupno za najam.
 ///
 /// Blokada je, sa stanovista dostupnosti, ista stvar kao potvrdjena rezervacija -
-/// vozilo je zauzeto. Zato ce je AvailabilityService u fazi 9 citati istim upitom
+/// vozilo je zauzeto. Zato je AvailabilityService cita istim upitom
 /// kojim cita i rezervacije, a ne kao poseban slucaj.
 /// </summary>
 public class BlokadaVozilaService

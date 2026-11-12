@@ -1,3 +1,4 @@
+using System.Globalization;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using SunnyRides.Model;
@@ -571,14 +572,23 @@ public class RecommenderService : IRecommenderService
         return new HistorijaKorisnika(najmova, ocjena);
     }
 
+    /// <summary>
+    /// Broj sa decimalnim zarezom, kao svuda u aplikaciji. Ne oslanja se na jezik
+    /// servera - u Docker kontejneru je to invariant, pa bi pisalo "4.6" umjesto "4,6".
+    /// </summary>
+    private static string Decimalno(IFormattable broj, string format) =>
+        broj.ToString(format, CultureInfo.InvariantCulture).Replace('.', ',');
+
     private static string ObrazloziHeuristiku(RezultatBodovanja rezultat, VoziloDto vozilo) =>
         rezultat.Signal switch
         {
             SignalPreporuke.Tip =>
                 $"Najčešće birate {(vozilo.TipVozilaNaziv ?? "ovaj tip vozila").ToLowerInvariant()}.",
 
+            // Cijena u recenici je ona sa kartice: sto klijent placa na dan, sa sezonom.
+            // Osnovna tarifa vozila bi se razlikovala od broja odmah iznad nje.
             SignalPreporuke.Cijena =>
-                $"Cijena {vozilo.DnevnaTarifa:0.00} EUR po danu je u rangu koji obično tražite.",
+                $"Cijena {Decimalno(vozilo.Tarifa?.DnevnaCijena ?? vozilo.DnevnaTarifa, "0.00")} EUR po danu je u rangu koji obično tražite.",
 
             SignalPreporuke.Lokacija =>
                 $"Vozilo je u poslovnici {vozilo.PoslovnicaNaziv}, u gradu u kojem najčešće tražite.",
@@ -591,7 +601,7 @@ public class RecommenderService : IRecommenderService
 
             SignalPreporuke.Ocjena =>
                 rezultat.BrojOcjena > 0
-                    ? $"Visoko ocijenjeno: {rezultat.BayesovaOcjena:0.0} od 5, iz {rezultat.BrojOcjena} recenzija."
+                    ? $"Visoko ocijenjeno: {Decimalno(rezultat.BayesovaOcjena, "0.0")} od 5, iz {rezultat.BrojOcjena} recenzija."
                     : "Jedno od bolje ocijenjenih vozila u floti.",
 
             _ => rezultat.BrojNajmova > 0
