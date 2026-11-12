@@ -69,6 +69,21 @@ class Formati {
     return DateFormat('dd.MM.').format(trenutak.toLocal());
   }
 
+  static const _daniUSedmici = <String>[
+    'ponedjeljak',
+    'utorak',
+    'srijeda',
+    'četvrtak',
+    'petak',
+    'subota',
+    'nedjelja',
+  ];
+
+  /// Naziv dana na našem jeziku, npr. "petak". Isti razlog kao za mjesece - bez
+  /// učitavanja podataka o jeziku za sedam riječi.
+  static String danUSedmici(DateTime trenutak) =>
+      _daniUSedmici[trenutak.toLocal().weekday - 1];
+
   /// Naziv mjeseca na nasem jeziku. DateFormat bi ga ispisao engleski dok se ne
   /// ucitaju podaci o jeziku, a za dvanaest rijeci to ne vrijedi vuci.
   static String mjesec(DateTime trenutak) => _mjeseci[trenutak.toLocal().month - 1];

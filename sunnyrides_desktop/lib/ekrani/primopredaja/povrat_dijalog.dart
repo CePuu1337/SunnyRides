@@ -113,17 +113,21 @@ class _PovratDijalogStanje extends State<PovratDijalog> {
     }
   }
 
+  /// Uposlenik bira dan, a misli "do kraja tog dana": vozilo nedostupno do petka
+  /// ne smije se u petak ponuditi klijentima. Picker vraća ponoć na početku dana,
+  /// pa se ona pretvara u kraj dana prije slanja. Tako i današnji dan ima smisla -
+  /// sa ponoći bi bio u prošlosti i server bi povrat odbio.
   Future<void> _odaberiBlokadu() async {
     final datum = await showDatePicker(
       context: context,
       initialDate: _blokirajDo ?? DateTime.now().add(const Duration(days: 3)),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Vozilo je nedostupno do',
+      helpText: 'Vozilo je nedostupno do kraja dana',
     );
 
     if (datum != null) {
-      setState(() => _blokirajDo = datum);
+      setState(() => _blokirajDo = KalendarskiDani.krajDana(datum));
     }
   }
 
@@ -154,7 +158,10 @@ class _PovratDijalogStanje extends State<PovratDijalog> {
 
     final blokirajDo = _blokirajDo;
     if (blokirajDo != null) {
-      dijelovi.add('Vozilo ostaje nedostupno do ${Formati.datum(blokirajDo)}.');
+      dijelovi.add(
+        'Vozilo ostaje nedostupno do kraja dana, '
+        '${Formati.danUSedmici(blokirajDo)} ${Formati.datum(blokirajDo)}.',
+      );
     }
 
     return dijelovi.join(' ');
@@ -411,7 +418,7 @@ class _PovratDijalogStanje extends State<PovratDijalog> {
               borderRadius: BorderRadius.circular(Zaobljenja.polje),
               child: InputDecorator(
                 decoration: InputDecoration(
-                  labelText: 'Vozilo nedostupno do (nije obavezno)',
+                  labelText: 'Vozilo nedostupno do kraja dana (nije obavezno)',
                   suffixIcon: _blokirajDo == null
                       ? const Icon(Icons.event_outlined, size: 18)
                       : IconButton(
@@ -423,7 +430,8 @@ class _PovratDijalogStanje extends State<PovratDijalog> {
                 child: Text(
                   _blokirajDo == null
                       ? 'Vozilo ostaje u ponudi'
-                      : Formati.datum(_blokirajDo!),
+                      : 'Do kraja dana: ${Formati.danUSedmici(_blokirajDo!)}, '
+                            '${Formati.danIMjesec(_blokirajDo!)}',
                 ),
               ),
             ),

@@ -54,5 +54,30 @@ void main() {
         expect(polozaj, closeTo(7.375, 0.0001));
       },
     );
+
+    // Blokada pri povratu vozila: izabran petak znaci da ni u petak vozilo nije
+    // slobodno, a ne da je blokirano samo do ponoci na pocetku petka.
+    test('kraj dana je zadnja sekunda tog dana', () {
+      final petak = DateTime(2026, 11, 20);
+
+      expect(
+        KalendarskiDani.krajDana(petak),
+        DateTime(2026, 11, 20, 23, 59, 59),
+      );
+    });
+
+    test('kraj dana ne zavisi od vremena iz pickera', () {
+      expect(
+        KalendarskiDani.krajDana(DateTime(2026, 11, 20, 14, 30)),
+        DateTime(2026, 11, 20, 23, 59, 59),
+      );
+    });
+
+    test('kraj dana promjene sata je i dalje taj dan', () {
+      final kraj = KalendarskiDani.krajDana(DateTime(2026, 10, 25));
+
+      expect(kraj.day, 25);
+      expect(kraj.hour, 23);
+    });
   });
 }

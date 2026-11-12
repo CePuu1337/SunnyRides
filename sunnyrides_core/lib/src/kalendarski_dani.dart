@@ -22,6 +22,15 @@ class KalendarskiDani {
     return DateTime(lokalno.year, lokalno.month, lokalno.day + dana);
   }
 
+  /// Posljednja sekunda dana, po lokalnom vremenu. Koristi se kad uposlenik bira
+  /// samo datum, a misli "cijeli taj dan" - npr. vozilo nedostupno do petka znaci
+  /// da ni u petak nije slobodno.
+  static DateTime krajDana(DateTime dan) {
+    final lokalno = dan.toLocal();
+
+    return DateTime(lokalno.year, lokalno.month, lokalno.day, 23, 59, 59);
+  }
+
   /// Ponoc ponedjeljka u sedmici kojoj dan pripada.
   static DateTime ponedjeljak(DateTime dan) {
     final pocetak = ponoc(dan);
