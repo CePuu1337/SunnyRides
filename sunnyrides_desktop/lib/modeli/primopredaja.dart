@@ -85,6 +85,7 @@ class Primopredaja {
     this.izvrsioKorisnikIme,
     this.opisStete,
     this.iznosStete,
+    this.unesenoNaknadno = false,
   });
 
   final int id;
@@ -92,6 +93,10 @@ class Primopredaja {
   final String? rezervacijaBroj;
   final TipPrimopredaje? tip;
   final DateTime datumVrijeme;
+
+  /// Zapis je unesen poslije stvarne primopredaje (uposlenik je zaboravio pa
+  /// dopisao). Tada se vrijeme primopredaje i vrijeme unosa razlikuju.
+  final bool unesenoNaknadno;
   final int kilometraza;
 
   /// Procenat punog rezervoara, od 0 do 100.
@@ -123,6 +128,7 @@ class Primopredaja {
       imaOstecenje: citajBool(json['imaOstecenje']),
       opisStete: json['opisStete']?.toString(),
       iznosStete: citajDoubleIliNista(json['iznosStete']),
+      unesenoNaknadno: citajBool(json['unesenoNaknadno']),
     );
   }
 }

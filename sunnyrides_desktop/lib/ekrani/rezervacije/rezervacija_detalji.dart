@@ -3,16 +3,19 @@ import 'package:provider/provider.dart';
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../../modeli/placanje.dart';
+import '../../modeli/primopredaja.dart';
 import '../../servisi/placanje_servis.dart';
+import '../../servisi/primopredaja_servis.dart';
 import '../../servisi/rezervacija_servis.dart';
 import '../../widgeti/kartica.dart';
 import '../../widgeti/sadrzaj.dart';
 import '../../widgeti/slicica.dart';
 import '../placanja/prikaz_placanja.dart';
 import 'otkazivanje_dijalog.dart';
+import 'prikaz_primopredaje.dart';
 
-/// Sve o jednoj rezervaciji: vozilo, klijent, period, obracun, placanja i povrati,
-/// i historija statusa.
+/// Sve o jednoj rezervaciji: vozilo, klijent, period, obracun, izdavanje i povrat
+/// vozila, placanja i povrati, i historija statusa.
 class RezervacijaDetalji extends StatefulWidget {
   const RezervacijaDetalji({super.key, required this.rezervacijaId});
 
@@ -25,9 +28,11 @@ class RezervacijaDetalji extends StatefulWidget {
 class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
   late final RezervacijaServis _servis;
   late final PlacanjeServis _placanjaServis;
+  late final PrimopredajaServis _primopredajaServis;
 
   Rezervacija? _rezervacija;
   List<Placanje> _placanja = const [];
+  List<Primopredaja> _primopredaje = const [];
   bool _ucitavanje = true;
   bool _promijenjeno = false;
   String? _greska;
@@ -39,6 +44,7 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
     final klijent = context.read<ApiKlijent>();
     _servis = RezervacijaServis(klijent);
     _placanjaServis = PlacanjeServis(klijent);
+    _primopredajaServis = PrimopredajaServis(klijent);
     _ucitaj();
   }
 
@@ -55,6 +61,7 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
           rezervacijaId: widget.rezervacijaId,
           velicinaStranice: 20,
         ),
+        _primopredajaServis.zaRezervaciju(widget.rezervacijaId),
       ]);
 
       if (!mounted) {
@@ -64,6 +71,7 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
       setState(() {
         _rezervacija = rezultati[0] as Rezervacija;
         _placanja = (rezultati[1] as Strana<Placanje>).stavke;
+        _primopredaje = rezultati[2] as List<Primopredaja>;
         _ucitavanje = false;
       });
     } on ApiGreska catch (greska) {
@@ -131,6 +139,8 @@ class _RezervacijaDetaljiStanje extends State<RezervacijaDetalji> {
                   : _Prikaz(
                       rezervacija: rezervacija,
                       placanja: _placanja,
+                      primopredaje: _primopredaje,
+                      primopredajaServis: _primopredajaServis,
                       naPonavljanje: _ponoviPovrat,
                     ),
             ),
@@ -206,11 +216,15 @@ class _Prikaz extends StatelessWidget {
   const _Prikaz({
     required this.rezervacija,
     required this.placanja,
+    required this.primopredaje,
+    required this.primopredajaServis,
     required this.naPonavljanje,
   });
 
   final Rezervacija rezervacija;
   final List<Placanje> placanja;
+  final List<Primopredaja> primopredaje;
+  final PrimopredajaServis primopredajaServis;
   final void Function(Placanje placanje, Povrat povrat) naPonavljanje;
 
   @override
@@ -228,6 +242,15 @@ class _Prikaz extends StatelessWidget {
                 naslov: 'Najam',
                 podnaslov: 'Vozilo, period i mjesto preuzimanja',
                 dijete: _Najam(rezervacija: rezervacija),
+              ),
+              const SizedBox(height: Razmaci.l),
+              Kartica(
+                naslov: 'Primopredaja',
+                podnaslov: 'Stanje vozila pri izdavanju i povratu',
+                dijete: PrikazPrimopredaje(
+                  primopredaje: primopredaje,
+                  servis: primopredajaServis,
+                ),
               ),
               const SizedBox(height: Razmaci.l),
               Kartica(

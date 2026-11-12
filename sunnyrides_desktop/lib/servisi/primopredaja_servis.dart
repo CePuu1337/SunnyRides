@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:sunnyrides_core/sunnyrides_core.dart';
 
 import '../modeli/primopredaja.dart';
@@ -33,6 +35,30 @@ class PrimopredajaServis {
   }
 
   /// Obracun za formu povrata. Nista ne upisuje, pa se moze zvati na svaku izmjenu.
+  /// Izdavanje i povrat jedne rezervacije - najviše po jedan zapis svakog tipa.
+  Future<List<Primopredaja>> zaRezervaciju(int rezervacijaId) async {
+    final odgovor = await _klijent.get(
+      '/api/primopredaje',
+      upit: {
+        'rezervacijaId': rezervacijaId,
+        'page': 0,
+        'pageSize': 10,
+        'includeTotalCount': false,
+      },
+    );
+
+    return Strana.izJsona(
+      odgovor as Map<String, dynamic>,
+      Primopredaja.izJsona,
+    ).stavke;
+  }
+
+  /// Sadržaj jedne fotografije. Fotografije štete su privatne, pa idu kroz
+  /// autorizovan endpoint koji provjerava poslovnicu, a ne kao javna putanja.
+  Future<Uint8List> fotografija(int id) {
+    return _klijent.bajtovi('/api/primopredaje/fotografije/$id');
+  }
+
   Future<ObracunPovrata> obracunPovrata(
     int rezervacijaId, {
     double? iznosStete,
